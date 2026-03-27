@@ -58,8 +58,18 @@
                     SizeChanged="PreviewCanvas_SizeChanged"/>
         </Border>
 
-        <!-- ═══════ SEPARATOR ═══════ -->
-        <Border Grid.Row="2" Height="1" Background="#333" Margin="12,4"/>
+        <!-- ═══════ OPTIONS ═══════ -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="12,4">
+            <CheckBox x:Name="ChkSegmentLines" Content="Draw segment divider lines"
+                      Foreground="{StaticResource AldtTextSecondary}"
+                      VerticalContentAlignment="Center" FontSize="11"
+                      IsChecked="False"
+                      Checked="ChkSegmentLines_Changed"
+                      Unchecked="ChkSegmentLines_Changed"/>
+            <TextBlock Text="  (Toggle 'R' per segment for road layers)"
+                       Foreground="{StaticResource AldtTextTertiary}"
+                       VerticalAlignment="Center" FontSize="10" Margin="12,0,0,0"/>
+        </StackPanel>
 
         <!-- ═══════ INPUT CONTROLS ═══════ -->
         <Grid Grid.Row="3" Margin="12,4,12,4">
@@ -92,11 +102,21 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding Display}"
                                                Foreground="#E0E0E0" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="X"
+                                    <Button Grid.Column="1" Content="{Binding RoadLabel}"
+                                            Width="22" Height="22" FontSize="10"
+                                            Background="{Binding RoadBg}"
+                                            Foreground="{Binding RoadFg}"
+                                            BorderThickness="0" Cursor="Hand"
+                                            Tag="{Binding Index}" Margin="2,0"
+                                            ToolTip="Toggle road layers for this segment"
+                                            Click="BtnToggleLeftRoad_Click"
+                                            Visibility="{Binding RoadVisible}"/>
+                                    <Button Grid.Column="2" Content="X"
                                             Width="22" Height="22" FontSize="10"
                                             Background="#442222" Foreground="#FF6B6B"
                                             BorderThickness="0" Cursor="Hand"
@@ -108,6 +128,12 @@
                     </ListBox>
 
                     <StackPanel Grid.Row="2" Margin="0,6,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Dist (ft)" Foreground="{StaticResource AldtTextSecondary}"
+                                       FontSize="10" Width="70"/>
+                            <TextBlock Text="Slope %" Foreground="{StaticResource AldtTextSecondary}"
+                                       FontSize="10" Width="70" Margin="6,0,0,0"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBox x:Name="TxtLeftDist" Width="70"
                                      Style="{StaticResource FluentTextBox}"
@@ -128,6 +154,10 @@
                                     Style="{StaticResource FluentSecondaryBtn}"
                                     Click="BtnAddLeftTypeD_Click" FontSize="11"
                                     ToolTip="Type D Mountable Curb — 0.5 ft"/>
+                            <Button Content="+ Valley (2')" Margin="6,0,0,0"
+                                    Style="{StaticResource FluentSecondaryBtn}"
+                                    Click="BtnAddLeftValley_Click" FontSize="11"
+                                    ToolTip="Valley Gutter — 2 ft"/>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -156,11 +186,21 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding Display}"
                                                Foreground="#E0E0E0" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="X"
+                                    <Button Grid.Column="1" Content="{Binding RoadLabel}"
+                                            Width="22" Height="22" FontSize="10"
+                                            Background="{Binding RoadBg}"
+                                            Foreground="{Binding RoadFg}"
+                                            BorderThickness="0" Cursor="Hand"
+                                            Tag="{Binding Index}" Margin="2,0"
+                                            ToolTip="Toggle road layers for this segment"
+                                            Click="BtnToggleRightRoad_Click"
+                                            Visibility="{Binding RoadVisible}"/>
+                                    <Button Grid.Column="2" Content="X"
                                             Width="22" Height="22" FontSize="10"
                                             Background="#442222" Foreground="#FF6B6B"
                                             BorderThickness="0" Cursor="Hand"
@@ -172,6 +212,12 @@
                     </ListBox>
 
                     <StackPanel Grid.Row="2" Margin="0,6,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Dist (ft)" Foreground="{StaticResource AldtTextSecondary}"
+                                       FontSize="10" Width="70"/>
+                            <TextBlock Text="Slope %" Foreground="{StaticResource AldtTextSecondary}"
+                                       FontSize="10" Width="70" Margin="6,0,0,0"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBox x:Name="TxtRightDist" Width="70"
                                      Style="{StaticResource FluentTextBox}"
@@ -192,6 +238,10 @@
                                     Style="{StaticResource FluentSecondaryBtn}"
                                     Click="BtnAddRightTypeD_Click" FontSize="11"
                                     ToolTip="Type D Mountable Curb — 0.5 ft"/>
+                            <Button Content="+ Valley (2')" Margin="6,0,0,0"
+                                    Style="{StaticResource FluentSecondaryBtn}"
+                                    Click="BtnAddRightValley_Click" FontSize="11"
+                                    ToolTip="Valley Gutter — 2 ft"/>
                         </StackPanel>
                     </StackPanel>
                 </Grid>

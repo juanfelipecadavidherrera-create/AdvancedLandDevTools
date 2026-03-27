@@ -55,7 +55,7 @@ namespace AdvancedLandDevTools.Commands
                 }
 
                 // 3. Draw the section as polylines at 1:1
-                DrawSection(doc.Database, profile, ppr.Value);
+                DrawSection(doc.Database, profile, ppr.Value, win.DrawSegmentLines);
 
                 ed.WriteMessage($"\n  Section \"{profile.Name}\" placed " +
                     $"({profile.LeftSegments.Count}L + {profile.RightSegments.Count}R segments).\n");
@@ -67,7 +67,8 @@ namespace AdvancedLandDevTools.Commands
             }
         }
 
-        private static void DrawSection(Database db, SectionProfile profile, Point3d insertPt)
+        private static void DrawSection(Database db, SectionProfile profile,
+            Point3d insertPt, bool drawSegmentLines)
         {
             var geo = SectionDrawerEngine.ComputePoints(profile);
 
@@ -120,6 +121,144 @@ namespace AdvancedLandDevTools.Commands
                 pl.ColorIndex = 4;
                 btr.AppendEntity(pl);
                 tx.AddNewlyCreatedDBObject(pl, true);
+            }
+
+            // Block outlines (closed polylines for curbs/gutters)
+            foreach (var block in geo.BlockOutlines)
+            {
+                if (block.Count < 3) continue;
+                var pl = new AcDbPolyline();
+                for (int i = 0; i < block.Count; i++)
+                {
+                    var p = block[i];
+                    pl.AddVertexAt(i,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y), 0, 0, 0);
+                }
+                pl.Closed = true;
+                pl.LayerId = layerId;
+                pl.ColorIndex = 8; // gray for concrete blocks
+                btr.AppendEntity(pl);
+                tx.AddNewlyCreatedDBObject(pl, true);
+            }
+
+            // ── Road structural layers (per-segment IsRoad) ────────────────
+            foreach (var region in geo.RoadRegions)
+            {
+                if (region.Count < 2) continue;
+
+                double[] offsets  = { 0.5, 2.0, 2.0 };
+                string[] patterns = { "SOLID", "GRAVEL", "ANSI31" };
+                double[] scales   = { 1.0, 0.5, 0.5 };
+                short[] colors    = { 8, 9, 8 };
+
+                double cumOffset = 0;
+                for (int layer = 0; layer < 3; layer++)
+                {
+                    double topOff = cumOffset;
+                    cumOffset += offsets[layer];
+                    double botOff = cumOffset;
+
+                    var boundary = new AcDbPolyline();
+                    int vtx = 0;
+
+                    // Top edge L→R
+                    foreach (var p in region)
+                        boundary.AddVertexAt(vtx++,
+                            new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - topOff), 0, 0, 0);
+
+                    // Bottom edge R→L
+                    for (int i = region.Count - 1; i >= 0; i--)
+                    {
+                        var p = region[i];
+                        boundary.AddVertexAt(vtx++,
+                            new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - botOff), 0, 0, 0);
+                    }
+                    boundary.Closed = true;
+                    boundary.LayerId = layerId;
+                    boundary.ColorIndex = colors[layer];
+                    btr.AppendEntity(boundary);
+                    tx.AddNewlyCreatedDBObject(boundary, true);
+
+                    try
+                    {
+                        var hatch = new Hatch();
+                        btr.AppendEntity(hatch);
+                        tx.AddNewlyCreatedDBObject(hatch, true);
+                        hatch.LayerId = layerId;
+                        hatch.ColorIndex = colors[layer];
+                        hatch.SetHatchPattern(HatchPatternType.PreDefined, patterns[layer]);
+                        hatch.PatternScale = scales[layer];
+                        hatch.Associative = false;
+                        var ids = new ObjectIdCollection { boundary.ObjectId };
+                        hatch.AppendLoop(HatchLoopTypes.Default, ids);
+                        hatch.EvaluateHatch(true);
+                    }
+                    catch { }
+
+                    // Bottom line
+                    var botLine = new AcDbPolyline();
+                    for (int i = 0; i < region.Count; i++)
+                    {
+                        var p = region[i];
+                        botLine.AddVertexAt(i,
+                            new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - botOff), 0, 0, 0);
+                    }
+                    botLine.LayerId = layerId;
+                    botLine.ColorIndex = 8;
+                    btr.AppendEntity(botLine);
+                    tx.AddNewlyCreatedDBObject(botLine, true);
+                }
+
+                // Vertical closing lines at region edges through all layers
+                var lPt = region[0];
+                var rPt = region[region.Count - 1];
+                foreach (var edgePt in new[] { lPt, rPt })
+                {
+                    var edgeLine = new Autodesk.AutoCAD.DatabaseServices.Line(
+                        new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y, 0),
+                        new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y - cumOffset, 0))
+                    {
+                        LayerId = layerId, ColorIndex = 8
+                    };
+                    btr.AppendEntity(edgeLine);
+                    tx.AddNewlyCreatedDBObject(edgeLine, true);
+                }
+            }
+
+            // Centerline — extends from section surface UPWARD by CL height
+            double surfaceY = geo.CenterlineTopY;
+            double clHeight = profile.CenterlineHeight;
+            double clTopAbove = surfaceY + clHeight;
+
+            var clLine = new Autodesk.AutoCAD.DatabaseServices.Line(
+                new Point3d(insertPt.X, insertPt.Y + surfaceY, 0),
+                new Point3d(insertPt.X, insertPt.Y + clTopAbove, 0))
+            {
+                LayerId = layerId,
+                ColorIndex = 2, // yellow
+                LinetypeScale = 0.5
+            };
+            btr.AppendEntity(clLine);
+            tx.AddNewlyCreatedDBObject(clLine, true);
+
+            // Segment divider lines (when checked) — skip at block boundaries
+            if (drawSegmentLines)
+            {
+                foreach (var bp in geo.SegmentBoundaries)
+                {
+                    // Skip divider lines at curb/gutter blocks — the block outline is enough
+                    if (bp.Type != Engine.SegmentType.Normal) continue;
+
+                    var divLine = new Autodesk.AutoCAD.DatabaseServices.Line(
+                        new Point3d(insertPt.X + bp.X, insertPt.Y + bp.Y, 0),
+                        new Point3d(insertPt.X + bp.X, insertPt.Y + clTopAbove, 0))
+                    {
+                        LayerId = layerId,
+                        ColorIndex = 8 // gray
+                    };
+                    btr.AppendEntity(divLine);
+                    tx.AddNewlyCreatedDBObject(divLine, true);
+                }
             }
 
             tx.Commit();

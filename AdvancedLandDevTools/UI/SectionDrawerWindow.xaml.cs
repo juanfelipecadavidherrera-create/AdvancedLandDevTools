@@ -16,6 +16,10 @@ namespace AdvancedLandDevTools.UI
         /// <summary>Set when user clicks "Draw in Model". The command reads this.</summary>
         public SectionProfile? ResultProfile { get; private set; }
 
+        /// <summary>Whether to draw vertical divider lines at each segment boundary.</summary>
+        public bool DrawSegmentLines { get; private set; }
+
+
         public SectionDrawerWindow()
         {
             InitializeComponent();
@@ -28,6 +32,10 @@ namespace AdvancedLandDevTools.UI
         {
             public int Index { get; set; }
             public string Display { get; set; } = "";
+            public string RoadLabel { get; set; } = "R";
+            public string RoadBg { get; set; } = "#333333";
+            public string RoadFg { get; set; } = "#666666";
+            public Visibility RoadVisible { get; set; } = Visibility.Visible;
         }
 
         // ── Add / Delete segments ────────────────────────────────────
@@ -73,6 +81,38 @@ namespace AdvancedLandDevTools.UI
         {
             _profile.RightSegments.Add(new SectionSegment
                 { HorizontalDistance = 0.5, Type = SegmentType.TypeD });
+            RefreshAll();
+        }
+
+        private void BtnToggleLeftRoad_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int idx && idx < _profile.LeftSegments.Count)
+            {
+                _profile.LeftSegments[idx].IsRoad = !_profile.LeftSegments[idx].IsRoad;
+                RefreshAll();
+            }
+        }
+
+        private void BtnToggleRightRoad_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int idx && idx < _profile.RightSegments.Count)
+            {
+                _profile.RightSegments[idx].IsRoad = !_profile.RightSegments[idx].IsRoad;
+                RefreshAll();
+            }
+        }
+
+        private void BtnAddLeftValley_Click(object sender, RoutedEventArgs e)
+        {
+            _profile.LeftSegments.Add(new SectionSegment
+                { HorizontalDistance = 2.0, Type = SegmentType.ValleyGutter });
+            RefreshAll();
+        }
+
+        private void BtnAddRightValley_Click(object sender, RoutedEventArgs e)
+        {
+            _profile.RightSegments.Add(new SectionSegment
+                { HorizontalDistance = 2.0, Type = SegmentType.ValleyGutter });
             RefreshAll();
         }
 
@@ -141,6 +181,7 @@ namespace AdvancedLandDevTools.UI
                 return;
             }
             ResultProfile = _profile;
+            DrawSegmentLines = ChkSegmentLines.IsChecked == true;
             DialogResult = true;
             Close();
         }
@@ -162,15 +203,24 @@ namespace AdvancedLandDevTools.UI
 
         private static void RebuildList(ListBox lb, List<SectionSegment> segs)
         {
-            lb.ItemsSource = segs.Select((s, i) => new SegItem
+            lb.ItemsSource = segs.Select((s, i) =>
             {
-                Index = i,
-                Display = s.Type switch
+                bool isSpecial = s.Type != SegmentType.Normal;
+                return new SegItem
                 {
-                    SegmentType.TypeF => $"#{i + 1}  Type F Curb & Gutter (2.0')",
-                    SegmentType.TypeD => $"#{i + 1}  Type D Curb (0.5')",
-                    _ => $"#{i + 1}  Dist: {s.HorizontalDistance:F1} ft   Slope: {s.SlopePercent:F1}%"
-                }
+                    Index = i,
+                    Display = s.Type switch
+                    {
+                        SegmentType.TypeF => $"#{i + 1}  Type F Curb & Gutter (2.0')",
+                        SegmentType.TypeD => $"#{i + 1}  Type D Curb (0.5')",
+                        SegmentType.ValleyGutter => $"#{i + 1}  Valley Gutter (2.0')",
+                        _ => $"#{i + 1}  Dist: {s.HorizontalDistance:F1} ft   Slope: {s.SlopePercent:F1}%"
+                    },
+                    RoadLabel = "R",
+                    RoadBg = s.IsRoad ? "#224422" : "#333333",
+                    RoadFg = s.IsRoad ? "#6BCB77" : "#666666",
+                    RoadVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible
+                };
             }).ToList();
         }
 
@@ -183,6 +233,9 @@ namespace AdvancedLandDevTools.UI
 
         // ── Canvas preview ───────────────────────────────────────────
 
+        private void ChkSegmentLines_Changed(object sender, RoutedEventArgs e)
+            => RefreshPreview();
+
         private void PreviewCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
             => RefreshPreview();
 
@@ -194,12 +247,19 @@ namespace AdvancedLandDevTools.UI
 
             var geo = SectionDrawerEngine.ComputePoints(_profile);
 
-            // Collect all points for bounding box
+            // CL extends ABOVE the section surface by CenterlineHeight
+            double surfaceY = geo.CenterlineTopY;     // where segments start
+            double clHeight = _profile.CenterlineHeight;
+            double clTopAbove = surfaceY + clHeight;   // top of CL above content
+
+            // Collect all points for bounding box (including block outlines + CL above)
             var all = new List<(double X, double Y)>();
             all.AddRange(geo.LeftPoints);
             all.AddRange(geo.RightPoints);
-            all.Add((0, 0));
-            all.Add((0, geo.CenterlineTopY));
+            all.Add((0, surfaceY));
+            all.Add((0, clTopAbove));
+            foreach (var block in geo.BlockOutlines)
+                all.AddRange(block);
 
             double minX = all.Min(p => p.X);
             double maxX = all.Max(p => p.X);
@@ -229,27 +289,53 @@ namespace AdvancedLandDevTools.UI
             // Grid lines (subtle)
             DrawGrid(minX, maxX, minY, maxY, scale, ToCanvas);
 
-            // Centerline (dashed gray)
-            var clBase = ToCanvas((0, 0));
-            var clTop = ToCanvas((0, geo.CenterlineTopY));
-            var centerLine = new Line
-            {
-                X1 = clBase.X, Y1 = clBase.Y,
-                X2 = clTop.X, Y2 = clTop.Y,
-                Stroke = new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)),
-                StrokeThickness = 1.5,
-                StrokeDashArray = new DoubleCollection { 4, 3 }
-            };
-            PreviewCanvas.Children.Add(centerLine);
-
-            // CL label
-            AddLabel("CL", clTop.X + 4, clTop.Y - 4, "#9E9E9E");
-
             // Left polyline (accent blue)
             DrawPolyline(geo.LeftPoints, "#60CDFF", ToCanvas, _profile.LeftSegments);
 
             // Right polyline (green)
             DrawPolyline(geo.RightPoints, "#6BCB77", ToCanvas, _profile.RightSegments);
+
+            // Block outlines (filled concrete shapes)
+            foreach (var block in geo.BlockOutlines)
+                DrawBlockOutline(block, ToCanvas);
+
+            // Centerline drawn LAST — from section surface UPWARD
+            var clBase = ToCanvas((0, surfaceY));
+            var clTop = ToCanvas((0, clTopAbove));
+            var centerLine = new Line
+            {
+                X1 = clBase.X, Y1 = clBase.Y,
+                X2 = clTop.X, Y2 = clTop.Y,
+                Stroke = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0x00)),
+                StrokeThickness = 2,
+                StrokeDashArray = new DoubleCollection { 6, 3 }
+            };
+            PreviewCanvas.Children.Add(centerLine);
+
+            // CL label (yellow, larger) — at the very top
+            AddLabel("CL", clTop.X - 6, clTop.Y - 20, "#FFFF00", 12);
+
+            // Segment divider lines in preview (if checkbox is checked)
+            if (ChkSegmentLines.IsChecked == true)
+            {
+                var divBrush = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+                foreach (var bp in geo.SegmentBoundaries)
+                {
+                    // Skip divider lines at block boundaries
+                    if (bp.Type != SegmentType.Normal) continue;
+
+                    var bpBase = ToCanvas((bp.X, bp.Y));
+                    var bpTop = ToCanvas((bp.X, clTopAbove));
+                    PreviewCanvas.Children.Add(new Line
+                    {
+                        X1 = bpBase.X, Y1 = bpBase.Y,
+                        X2 = bpTop.X, Y2 = bpTop.Y,
+                        Stroke = divBrush,
+                        StrokeThickness = 1,
+                        StrokeDashArray = new DoubleCollection { 4, 2 }
+                    });
+                }
+            }
         }
 
         private void DrawPolyline(List<(double X, double Y)> pts, string colorHex,
@@ -297,12 +383,34 @@ namespace AdvancedLandDevTools.UI
                 {
                     SegmentType.TypeF => "Type F  2.0'",
                     SegmentType.TypeD => "Type D  0.5'",
+                    SegmentType.ValleyGutter => "Valley  2.0'",
                     _ => $"{seg.SlopePercent:F1}%  {seg.HorizontalDistance:F1}'"
                 };
                 AddLabel(lbl, midPt.X, midPt.Y - 14, colorHex, 10);
 
                 ptIdx += subCount;
             }
+        }
+
+        private void DrawBlockOutline(List<(double X, double Y)> block,
+            Func<(double, double), Point> toCanvas)
+        {
+            if (block.Count < 3) return;
+
+            // Filled polygon with semi-transparent concrete color
+            var fill = new SolidColorBrush(Color.FromArgb(0x40, 0x90, 0x90, 0x90));
+            var stroke = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA));
+
+            var polygon = new Polygon
+            {
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = 1.2,
+                StrokeLineJoin = PenLineJoin.Miter
+            };
+            foreach (var pt in block)
+                polygon.Points.Add(toCanvas(pt));
+            PreviewCanvas.Children.Add(polygon);
         }
 
         private void DrawGrid(double minX, double maxX, double minY, double maxY,

@@ -269,11 +269,30 @@ namespace AdvancedLandDevTools.Engine
                         catch { continue; }
                         if (lbl == null) continue;
 
-                        // Use the invert computed at the user's original click point.
-                        // Re-interpolating from the label's bounding box is unreliable
-                        // because label text offset/style shifts the bbox away from the
-                        // actual pipe crossing, producing incorrect invert values.
-                        double invert = job.InvertAtClick;
+                        // Interpolate invert at the label's position on the pipe.
+                        // Use the bbox CENTER projected onto the pipe axis — this is
+                        // more reliable than bbox corners (which shift with text style).
+                        double invert = job.InvertAtClick; // fallback
+                        try
+                        {
+                            var ext = lbl.GeometricExtents;
+                            double cx = (ext.MinPoint.X + ext.MaxPoint.X) / 2.0;
+                            double cy = (ext.MinPoint.Y + ext.MaxPoint.Y) / 2.0;
+
+                            // Project bbox center onto the pipe axis
+                            double sx = job.PipeStartWCS.X, sy = job.PipeStartWCS.Y;
+                            double ex = job.PipeEndWCS.X,   ey = job.PipeEndWCS.Y;
+                            double pdx = ex - sx, pdy = ey - sy;
+                            double lenSq = pdx * pdx + pdy * pdy;
+
+                            if (lenSq > 1e-6)
+                            {
+                                double t = ((cx - sx) * pdx + (cy - sy) * pdy) / lenSq;
+                                t = Math.Max(0.0, Math.Min(1.0, t));
+                                invert = job.StartInvert + t * (job.EndInvert - job.StartInvert);
+                            }
+                        }
+                        catch { /* fallback to InvertAtClick */ }
 
                         // ── Open label for write ───────────────────────────────
                         lbl = (CivilDB.StationOffsetLabel)

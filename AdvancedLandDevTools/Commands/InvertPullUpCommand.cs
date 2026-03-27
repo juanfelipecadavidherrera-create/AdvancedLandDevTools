@@ -140,15 +140,10 @@ namespace AdvancedLandDevTools.Commands
             ed.WriteMessage($"\n  Clicked   : ({per.PickedPoint.X:F1}, {per.PickedPoint.Y:F1})  →  Interp inv: {result.InvertAtPoint:F3}'");
 
             // ── Step 6: Queue the label placement ─────────────────────────────
-            // Registers a two-level CommandEnded chain:
-            //   Level-1  → fires _AeccAddAlignOffLbl fully interactively
-            //              (user selects alignment, clicks pipe to place label)
-            //   Level-2  → finds new label, interpolates invert from its position,
-            //              applies chosen style, injects invert as text override
             string msg = InvertPullUpEngine.QueueLabelCommand(db, result, chosenLabelStyleId);
 
             ed.WriteMessage($"\n  {msg}");
-            ed.WriteMessage("\n=== DONE — Place the label to inject the invert elevation. ===\n");
+            ed.WriteMessage("\n=== DONE — Place labels on the pipe. Each gets its own interpolated invert. ===\n");
             }
             catch (System.Exception ex)
             {

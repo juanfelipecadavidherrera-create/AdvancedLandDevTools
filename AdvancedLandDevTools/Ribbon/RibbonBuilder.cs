@@ -553,9 +553,17 @@ namespace AdvancedLandDevTools.Ribbon
             };
             qaSource.Items.Add(btnAreaManager);
 
-            qaSource.Items.Add(new RibbonSeparator());
+            tab.Panels.Add(new RibbonPanel { Source = qaSource });
 
-            // ── Section Drawer button ────────────────────────────────────
+            // ═══════════════════════════════════════════════════════════════
+            //  Panel — Sections
+            // ═══════════════════════════════════════════════════════════════
+            var secSource = new RibbonPanelSource
+            {
+                Id    = "ALDT_PANEL_SECTIONS",
+                Title = "Sections"
+            };
+
             var btnSecDraw = new RibbonButton
             {
                 Id               = "ALDT_BTN_SECDRAW",
@@ -578,9 +586,9 @@ namespace AdvancedLandDevTools.Ribbon
                 LargeImage       = BuildButtonIcon("#00897B", "SD"),
                 Image            = BuildButtonIcon16("#00897B", "SD")
             };
-            qaSource.Items.Add(btnSecDraw);
+            secSource.Items.Add(btnSecDraw);
 
-            tab.Panels.Add(new RibbonPanel { Source = qaSource });
+            tab.Panels.Add(new RibbonPanel { Source = secSource });
 
             ribbon.Tabs.Add(tab);
         }
