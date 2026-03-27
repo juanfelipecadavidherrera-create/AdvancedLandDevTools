@@ -1,0 +1,93 @@
+<Window
+    x:Class="AdvancedLandDevTools.UI.InvertPullUpDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Invert Pull Up – Label Settings"
+    Width="460" Height="340"
+    MinWidth="420" MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="NoResize"
+    Background="#202020"
+    FontFamily="Segoe UI"
+    FontSize="13">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="FluentDarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Header bar -->
+        <Border DockPanel.Dock="Top" Height="52"
+                Background="{StaticResource AldtHeader}">
+            <StackPanel Orientation="Horizontal" Margin="20,0">
+                <Border Width="34" Height="34"
+                        Background="{StaticResource AldtAccentBtn}"
+                        CornerRadius="8"
+                        Margin="0,0,14,0">
+                    <TextBlock Text="I" Foreground="White" FontSize="17"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="ADVANCED LAND DEVELOPMENT TOOLS"
+                               Foreground="{StaticResource AldtAccent}" FontSize="9"
+                               FontWeight="SemiBold" Opacity="0.8"/>
+                    <TextBlock Text="Invert Pull Up – Label Settings"
+                               Foreground="White" FontSize="14"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Buttons pinned to bottom -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{StaticResource AldtHeader}"
+                Padding="20,12">
+            <Grid>
+                <TextBlock Text="After OK, click alignment then pipe in drawing."
+                           Foreground="{StaticResource AldtTextTertiary}"
+                           FontSize="11" VerticalAlignment="Center"
+                           HorizontalAlignment="Left"/>
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                    <Button Content="Cancel"
+                            Style="{StaticResource FluentSecondaryBtn}"
+                            Click="BtnCancel_Click"/>
+                    <Button Content="OK"
+                            Style="{StaticResource FluentPrimaryBtn}"
+                            Margin="10,0,0,0"
+                            Click="BtnOk_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Form fields -->
+        <Border Margin="20,18,20,0"
+                Style="{StaticResource FluentCard}">
+            <StackPanel>
+                <TextBlock Text="Station &amp; Offset Label Style"
+                           Style="{StaticResource FluentFieldLabel}"/>
+                <ComboBox x:Name="CmbLabelStyle"
+                          Style="{StaticResource FluentComboBox}"
+                          DisplayMemberPath="Name"
+                          SelectedValuePath="Id"
+                          Margin="0,0,0,16"/>
+
+                <TextBlock Text="Marker Style (optional)"
+                           Style="{StaticResource FluentFieldLabel}"/>
+                <ComboBox x:Name="CmbMarkerStyle"
+                          Style="{StaticResource FluentComboBox}"
+                          DisplayMemberPath="Name"
+                          SelectedValuePath="Id"/>
+            </StackPanel>
+        </Border>
+
+    </DockPanel>
+</Window>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advanced Land Development Tools — Help</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px 40px; line-height: 1.6; }
+  h1 { color: #60CDFF; border-bottom: 2px solid #0078D4; padding-bottom: 10px; }
+  h2 { color: #60CDFF; margin-top: 30px; }
+  h3 { color: #9E9E9E; margin-top: 20px; }
+  code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; color: #FFB74D; }
+  .cmd { background: #2d2d2d; border-left: 3px solid #0078D4; padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+  .cmd strong { color: #60CDFF; }
+  .cmd em { color: #9E9E9E; font-style: normal; font-size: 13px; }
+  .cmd .workflow { margin-top: 8px; padding-top: 8px; border-top: 1px solid #3a3a3a; }
+  .cmd .workflow strong { color: #FFB74D; font-size: 13px; }
+  .section { background: #252526; border: 1px solid #454545; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  a { color: #60CDFF; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th { background: #0078D4; color: white; padding: 10px 14px; text-align: left; }
+  td { padding: 8px 14px; border-bottom: 1px solid #454545; }
+  tr:hover { background: #2d2d2d; }
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #454545; color: #6d6d6d; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Advanced Land Development Tools v1.0</h1>
+<p>A productivity suite for Autodesk Civil 3D 2025/2026 designed for land development professionals. All commands are accessible from the <strong>Advanced Land Dev Tools</strong> ribbon tab or the floating Mini Toolbar.</p>
+
+<h2>Installation</h2>
+<div class="section">
+<p>The plugin installs automatically via the Autodesk App Store. After installation, restart Civil 3D. The <strong>Advanced Land Dev Tools</strong> ribbon tab will appear automatically.</p>
+<p>No manual DLL loading or <code>NETLOAD</code> commands are required.</p>
+</div>
+
+<h2>Licensing</h2>
+<div class="section">
+<p>The plugin includes a <strong>14-day free trial</strong> starting from the first use. During the trial, all commands are fully functional.</p>
+<p>After the trial period, purchase a license from the <a href="https://apps.autodesk.com">Autodesk App Store</a> to continue using the plugin. The license is verified automatically through your Autodesk account.</p>
+<p><strong>Offline use:</strong> If you have a valid license and lose internet connectivity, the plugin will continue working for up to 3 days before requiring a connection to re-verify.</p>
+</div>
+
+<h2>Commands</h2>
+
+<h3>Profile Views</h3>
+
+<div class="cmd">
+<strong>BULKSUR</strong> — Bulk Surface Profile Creator<br>
+Creating surface profiles one alignment at a time is one of the most repetitive tasks in land development. BULKSUR eliminates that bottleneck entirely. Select any number of alignments in your drawing, configure your station range, elevation range, and profile view style, then pick a single insertion point. The tool generates every surface profile and profile view in one batch, automatically spacing them vertically so they don't overlap. What normally takes 20–30 minutes of clicking through dialogs is reduced to a few seconds.
+<div class="workflow"><strong>Workflow:</strong> Select alignments → configure settings in dialog → pick insertion point → all profile views are created and stacked automatically.</div>
+</div>
+
+<div class="cmd">
+<strong>GETPARENT</strong> — Get Parent Alignment<br>
+When working in a drawing with dozens of profile views, it's easy to lose track of which alignment a particular profile view belongs to. GETPARENT solves this instantly. Click any profile view and the tool identifies its parent alignment, highlights it in the drawing, and reports its name and station range in the command line. This is especially useful in large subdivision projects where profile views may have been moved or regrouped far from their source alignments.
+<div class="workflow"><strong>Workflow:</strong> Click any profile view → parent alignment is selected and its name and station range are reported.</div>
+</div>
+
+<div class="cmd">
+<strong>PIPEMAGIC</strong> — Pipe Crossing Projection<br>
+Projecting pipe networks into profile views is a critical but tedious step in utility coordination. PIPEMAGIC automates it completely. Select one or more profile views and the tool scans all pipe networks in the drawing — both gravity and pressure — detects which ones cross each alignment, and projects them into the corresponding profile view automatically. No need to manually identify crossings or run the projection dialog for each network one by one. This is invaluable for drainage reviews, utility conflict detection, and construction plan preparation.
+<div class="workflow"><strong>Workflow:</strong> Select one or more profile views → all crossing pipe networks (gravity and pressure) are detected and projected automatically.</div>
+</div>
+
+<div class="cmd">
+<strong>MARKLINES</strong> — Mark Crossing Lines<br>
+Utility lines, right-of-way boundaries, easements, and other linear features drawn as lines or polylines in plan view often need to be referenced in profile views. MARKLINES finds every point where selected lines or polylines cross an alignment and draws a full-height vertical marker line at that station in the profile view. This gives you instant visual reference for where utilities or boundaries cross your road or corridor — without manually measuring stations or placing lines by hand.
+<div class="workflow"><strong>Workflow:</strong> Select layers containing lines/polylines → pick a profile view → vertical markers are drawn at every crossing station.</div>
+</div>
+
+<h3>Alignments</h3>
+
+<div class="cmd">
+<strong>ALIGNDEPLOY</strong> — Alignment Deploy<br>
+In subdivision and site layout work, you often need to place the same cross alignment (like a driveway, cul-de-sac, or side street template) at regular intervals along a main road alignment. ALIGNDEPLOY automates this repetitive placement. Select your main alignment and a cross alignment, specify the interval, and the tool places rotated copies of the cross alignment at each station along the main alignment, properly oriented perpendicular to the road centerline. This dramatically speeds up preliminary layout for lot access, drainage crossings, or any repeating cross-pattern.
+<div class="workflow"><strong>Workflow:</strong> Select main alignment → select cross alignment → enter interval → copies are deployed along the main alignment at the specified spacing.</div>
+</div>
+
+<h3>Pipes</h3>
+
+<div class="cmd">
+<strong>INVERTPULLUP</strong> — Invert Pull Up<br>
+During construction plan reviews and field coordination, engineers frequently need to know the exact invert elevation at a specific point along a pipe — not just at the structures. INVERTPULLUP makes this a one-click operation. Click any gravity or pressure pipe, then click the point along it where you need the invert. The tool calculates the precise elevation using linear interpolation between the pipe's start and end inverts, then places a station-offset label directly in the drawing with the calculated value. This eliminates manual slope calculations and reduces the risk of field errors.
+<div class="workflow"><strong>Workflow:</strong> Click a pipe → click a point on that pipe → invert elevation is calculated and a station-offset label is placed automatically.</div>
+</div>
+
+<div class="cmd">
+<strong>CHANGEELEVATION</strong> — Change Pipe Elevation<br>
+When designing or adjusting pipe networks, you sometimes need to make a pipe segment perfectly level — matching both ends to the same invert elevation. CHANGEELEVATION simplifies this. Select any gravity or pressure pipe and the tool displays both the start and end invert elevations. Choose which elevation to apply, and the tool sets both ends to that value, making the pipe level. This is particularly useful for adjusting stub-outs, lateral connections, or correcting pipe segments during design iterations.
+<div class="workflow"><strong>Workflow:</strong> Select a pipe → view start and end inverts → choose which elevation to apply to both ends → pipe is leveled.</div>
+</div>
+
+<h3>Property Information</h3>
+
+<div class="cmd">
+<strong>FLOODZONE</strong> — FEMA Flood Zone Lookup<br>
+Knowing the FEMA flood zone designation for a property is one of the first things required in any land development project. It determines building elevation requirements, insurance obligations, and permitting conditions. FLOODZONE queries the FEMA National Flood Hazard Layer (NFHL) in real time based on a point you pick in the drawing. It returns the flood zone designation (e.g., AE, X, AH), base flood elevation (BFE), whether the location is in a Special Flood Hazard Area (SFHA), and the FIRM panel number. You can optionally place the results as an MText label directly in the drawing for reference.
+<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → FEMA data is queried live → flood zone, BFE, SFHA status, and FIRM panel are reported → optionally place a label.</div>
+</div>
+
+<div class="cmd">
+<strong>FLOODCRITERIA</strong> — County Flood Criteria<br>
+In Miami-Dade County, development permits require that finished floor elevations meet the county's Flood Criteria — a dataset separate from FEMA maps. FLOODCRITERIA queries the Miami-Dade County Flood Criteria 2022 dataset and reports the minimum finished floor elevation (in ft NGVD) for the location you pick. This saves a trip to the county's GIS portal and ensures you have the correct regulatory elevation early in design.
+<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → Miami-Dade County Flood Criteria is queried → minimum finished floor elevation is reported.</div>
+</div>
+
+<div class="cmd">
+<strong>SECTIONLOOKUP</strong> — PLSS Section Lookup<br>
+Legal descriptions and permit applications in Florida frequently require the PLSS (Public Land Survey System) section, township, and range. SECTIONLOOKUP queries the South Florida Water Management District (SFWMD) PLSS service and returns the Section number, Township, Range, and the combined SSTTRR code for any point you pick in the drawing. This eliminates the need to look up this information on separate GIS websites or paper maps.
+<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → SFWMD PLSS service is queried → Section, Township, Range, and SSTTRR code are reported.</div>
+</div>
+
+<div class="cmd">
+<strong>GROUNDWATER</strong> — Water Table Lookup<br>
+Groundwater elevation is a critical design parameter for stormwater management, foundation design, and exfiltration trench sizing. GROUNDWATER queries the Miami-Dade County Groundwater Level dataset (based on USGS model projections) and returns the water table elevation at the picked point in both NAVD 88 and NGVD 29 datums. Having both values readily available avoids datum conversion errors that can lead to costly design mistakes.
+<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → groundwater level is queried → elevation is reported in both NAVD 88 and NGVD 29.</div>
+</div>
+
+<h3>Areas</h3>
+
+<div class="cmd">
+<strong>AREAMANAGER</strong> — Area Manager<br>
+Tracking areas across a land development project — impervious surfaces, pervious areas, lakes, building footprints — is essential for stormwater calculations, zoning compliance, and permit applications. The Area Manager is a dockable palette (similar to Toolspace) that stays open while you work. Create a project, then add areas by selecting hatches or closed polylines in your drawing. Each area is stored with its name, square footage, layer, and boundary coordinates. You can organize areas into custom categories (e.g., "Impervious", "Pervious", "Lake") and rename them at any time. If a hatch is deleted from the drawing, the data is preserved — click Redraw to recreate it at its original location and zoom to it. Export a complete area report to CSV with per-category subtotals for easy integration into permit applications and engineering calculations. All project data is saved locally and persists across Civil 3D sessions.
+<div class="workflow"><strong>Workflow:</strong> Type <code>AREAMANAGER</code> → create/select a project → click Add Area → select a hatch or closed boundary → area is stored and displayed → rename, categorize, redraw, or export as needed.</div>
+</div>
+
+<h3>Quick Access</h3>
+
+<div class="cmd">
+<strong>ALDTTOOLBAR</strong> — Toggle Mini Toolbar<br>
+The Mini Toolbar is a compact floating panel that gives you one-click access to every ALDT command without switching ribbon tabs. It stays on top of the drawing area, so you can keep working in any Civil 3D ribbon tab (Home, Modify, Analyze, etc.) and still have all ALDT tools within reach. Drag the toolbar anywhere on screen to reposition it. Click the X button to close it, or type <code>ALDTTOOLBAR</code> again to toggle it back. The toolbar is organized by category — Profiles, Alignments, Pipes, Info, and Layout — with color-coded icons for fast visual identification.
+<div class="workflow"><strong>Workflow:</strong> Type <code>ALDTTOOLBAR</code> or click the Mini Toolbar button on the ribbon → toolbar appears → click any icon to run the command → drag to reposition.</div>
+</div>
+
+<h2>System Requirements</h2>
+<div class="section">
+<table>
+<tr><th>Requirement</th><th>Detail</th></tr>
+<tr><td>Host Application</td><td>Autodesk Civil 3D 2025 or 2026</td></tr>
+<tr><td>Operating System</td><td>Windows 10/11 (64-bit)</td></tr>
+<tr><td>Runtime</td><td>.NET 8.0 (included with Civil 3D 2025+)</td></tr>
+<tr><td>Internet</td><td>Required for property information lookups (FEMA, County, Groundwater, PLSS) and license verification</td></tr>
+</table>
+</div>
+
+<h2>Support</h2>
+<div class="section">
+<p>For questions, bug reports, or feature requests:</p>
+<p>Email: <a href="mailto:juanfcadavidherrera21@gmail.com">juanfcadavidherrera21@gmail.com</a></p>
+</div>
+
+<div class="footer">
+<p>&copy; 2026 Juan Felipe Cadavid. All rights reserved.<br>
+Advanced Land Development Tools is proprietary software. Unauthorized distribution is prohibited.</p>
+</div>
+
+</body>
+</html>

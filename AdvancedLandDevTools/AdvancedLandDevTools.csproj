@@ -1,0 +1,133 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>AdvancedLandDevTools</AssemblyName>
+    <RootNamespace>AdvancedLandDevTools</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Optimize>true</Optimize>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>Juan Felipe Cadavid</Company>
+    <Product>Advanced Land Development Tools</Product>
+    <Description>Civil 3D 2026 Productivity Suite – Bulk Surface Profiles, Align Deploy, Pipe Magic, Invert Pull Up, Flood Zone Lookup</Description>
+    <Copyright>© 2026 Juan Felipe Cadavid. All rights reserved. Unauthorized distribution or commercialization is prohibited.</Copyright>
+    <!--
+      MSB3277: suppress the Microsoft.VisualBasic version conflict warning.
+      AutoCAD ships a newer VisualBasic assembly than .NET 8 SDK; the AutoCAD
+      version is always used at runtime so this mismatch is harmless.
+    -->
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <!-- Copy NuGet DLLs (Newtonsoft.Json) to output so post-build can bundle them -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      ══════════════════════════════════════════════════════════════
+      Civil 3D 2026 Assembly Paths
+      Matches your install at D:\AutoCAD 2026\
+      Override via env var:  set ACADDIR=D:\AutoCAD 2026
+      ══════════════════════════════════════════════════════════════
+    -->
+    <AcadDir Condition="'$(AcadDir)'==''">D:\AutoCAD 2026</AcadDir>
+    <!--
+      Bundle output folder — assembles the .bundle structure.
+      During development, it goes straight to ApplicationPlugins
+      so you just Build → restart Civil 3D. No extra steps.
+
+      For installer packaging, change this to:
+        $(ProjectDir)..\Publish\AdvancedLandDevTools.bundle
+    -->
+    <BundleDir>$(APPDATA)\Autodesk\ApplicationPlugins\AdvancedLandDevTools.bundle</BundleDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ── Newtonsoft.Json (for FEMA NFHL REST API parsing in FloodZone) ── -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
+      <IncludeAssets>all</IncludeAssets>
+      <PrivateAssets>none</PrivateAssets>
+    </PackageReference>
+    <!-- WPF-UI removed: its implicit default styles override ComboBox/ListView
+         templates and make items invisible. FluentDarkTheme.xaml handles all styling. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ── AutoCAD Core ── -->
+    <Reference Include="AcDbMgd">
+      <HintPath>$(AcadDir)\AcDbMgd.dll</HintPath>
+      <Private>false</Private>  <!-- NEVER copy local – use Civil 3D's version -->
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(AcadDir)\AcMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(AcadDir)\AcCoreMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ── Ribbon / UI ── -->
+    <Reference Include="AdWindows">
+      <HintPath>$(AcadDir)\AdWindows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ── Civil 3D Database ── -->
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(AcadDir)\AeccDbMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ── Civil 3D Pressure Pipes (required for PressurePipe type) ── -->
+    <Reference Include="AeccPressurePipesMgd">
+      <HintPath>$(AcadDir)\AeccPressurePipesMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ── AEC Base (required by Civil 3D) ── -->
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(AcadDir)\AecBaseMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    ══════════════════════════════════════════════════════════════
+    Post-Build: Assemble the .bundle folder
+    ══════════════════════════════════════════════════════════════
+    After a successful build, this copies the DLL + manifest into
+    the standard Autodesk bundle layout:
+
+      Publish\AdvancedLandDevTools.bundle\
+          PackageContents.xml
+          Contents\
+              AdvancedLandDevTools.dll
+
+    For development: You can also point this at the live
+    ApplicationPlugins folder by changing BundleDir above.
+  -->
+  <Target Name="AssembleBundle" AfterTargets="Build">
+    <MakeDir Directories="$(BundleDir)\Contents" />
+    <Copy SourceFiles="$(ProjectDir)PackageContents.xml" DestinationFolder="$(BundleDir)" SkipUnchangedFiles="true" />
+    <!-- DLL -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BundleDir)\Contents" SkipUnchangedFiles="true" />
+    <!-- .NET 8 requires runtimeconfig.json to load the assembly -->
+    <Copy SourceFiles="$(TargetDir)$(TargetName).runtimeconfig.json" DestinationFolder="$(BundleDir)\Contents" SkipUnchangedFiles="true" Condition="Exists('$(TargetDir)$(TargetName).runtimeconfig.json')" />
+    <!-- deps.json for dependency resolution -->
+    <Copy SourceFiles="$(TargetDir)$(TargetName).deps.json" DestinationFolder="$(BundleDir)\Contents" SkipUnchangedFiles="true" Condition="Exists('$(TargetDir)$(TargetName).deps.json')" />
+    <!-- Newtonsoft.Json.dll – must ship with the plugin (not in Civil 3D) -->
+    <Copy SourceFiles="$(TargetDir)Newtonsoft.Json.dll" DestinationFolder="$(BundleDir)\Contents" SkipUnchangedFiles="true" Condition="Exists('$(TargetDir)Newtonsoft.Json.dll')" />
+    <!-- WPF-UI removed — implicit styles conflicted with FluentDarkTheme.xaml -->
+    <!-- Help file for Autodesk App Store -->
+    <Copy SourceFiles="$(ProjectDir)Help.htm" DestinationFolder="$(BundleDir)\Contents" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)Help.htm')" />
+    <Message Importance="high" Text="✓ Bundle assembled: $(BundleDir)" />
+  </Target>
+
+</Project>

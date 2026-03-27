@@ -1,0 +1,425 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ══════════════════════════════════════════════════════════════
+         ALDT Fluent Dark Theme — Windows 11 inspired
+         Applied to all plugin windows/UserControls
+         ══════════════════════════════════════════════════════════════ -->
+
+    <!-- ── System Color Overrides (for native controls/popups) ──── -->
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}"        Color="#202020"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}"    Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"     Color="#0078D4"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
+
+    <!-- ── Core Palette ─────────────────────────────────────────── -->
+    <Color x:Key="AldtBgColor">#202020</Color>
+    <Color x:Key="AldtCardColor">#2D2D2D</Color>
+    <Color x:Key="AldtSurfaceColor">#383838</Color>
+    <Color x:Key="AldtBorderColor">#454545</Color>
+    <Color x:Key="AldtAccentColor">#60CDFF</Color>
+    <Color x:Key="AldtAccentBtnColor">#0078D4</Color>
+    <Color x:Key="AldtAccentHoverColor">#429CE3</Color>
+    <Color x:Key="AldtTextColor">#FFFFFF</Color>
+    <Color x:Key="AldtTextSecondaryColor">#9E9E9E</Color>
+    <Color x:Key="AldtTextTertiaryColor">#6D6D6D</Color>
+    <Color x:Key="AldtErrorColor">#FF6B6B</Color>
+    <Color x:Key="AldtSuccessColor">#6BCB77</Color>
+    <Color x:Key="AldtHeaderColor">#1A1A1A</Color>
+
+    <!-- ── Brush Resources ──────────────────────────────────────── -->
+    <SolidColorBrush x:Key="AldtBg"            Color="{StaticResource AldtBgColor}"/>
+    <SolidColorBrush x:Key="AldtCard"          Color="{StaticResource AldtCardColor}"/>
+    <SolidColorBrush x:Key="AldtSurface"       Color="{StaticResource AldtSurfaceColor}"/>
+    <SolidColorBrush x:Key="AldtBorder"        Color="{StaticResource AldtBorderColor}"/>
+    <SolidColorBrush x:Key="AldtAccent"        Color="{StaticResource AldtAccentColor}"/>
+    <SolidColorBrush x:Key="AldtAccentBtn"     Color="{StaticResource AldtAccentBtnColor}"/>
+    <SolidColorBrush x:Key="AldtAccentHover"   Color="{StaticResource AldtAccentHoverColor}"/>
+    <SolidColorBrush x:Key="AldtText"          Color="{StaticResource AldtTextColor}"/>
+    <SolidColorBrush x:Key="AldtTextSecondary" Color="{StaticResource AldtTextSecondaryColor}"/>
+    <SolidColorBrush x:Key="AldtTextTertiary"  Color="{StaticResource AldtTextTertiaryColor}"/>
+    <SolidColorBrush x:Key="AldtError"         Color="{StaticResource AldtErrorColor}"/>
+    <SolidColorBrush x:Key="AldtSuccess"       Color="{StaticResource AldtSuccessColor}"/>
+    <SolidColorBrush x:Key="AldtHeader"        Color="{StaticResource AldtHeaderColor}"/>
+
+    <!-- ── Section Title ────────────────────────────────────────── -->
+    <Style x:Key="FluentSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize"     Value="12"/>
+        <Setter Property="FontWeight"   Value="SemiBold"/>
+        <Setter Property="Foreground"   Value="{StaticResource AldtAccent}"/>
+        <Setter Property="Margin"       Value="0,0,0,8"/>
+    </Style>
+
+    <!-- ── Field Label ──────────────────────────────────────────── -->
+    <Style x:Key="FluentFieldLabel" TargetType="TextBlock">
+        <Setter Property="FontSize"     Value="12"/>
+        <Setter Property="Foreground"   Value="{StaticResource AldtTextSecondary}"/>
+        <Setter Property="Margin"       Value="0,0,0,4"/>
+    </Style>
+
+    <!-- ── Hint Text ────────────────────────────────────────────── -->
+    <Style x:Key="FluentHint" TargetType="TextBlock">
+        <Setter Property="FontSize"     Value="11"/>
+        <Setter Property="Foreground"   Value="{StaticResource AldtTextTertiary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin"       Value="0,6,0,0"/>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         TEXTBOX — Fluent rounded input
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentTextBox" TargetType="TextBox">
+        <Setter Property="MinHeight"                  Value="34"/>
+        <Setter Property="Padding"                    Value="3,0"/>
+        <Setter Property="FontSize"                   Value="13"/>
+        <Setter Property="Foreground"                 Value="{StaticResource AldtText}"/>
+        <Setter Property="CaretBrush"                 Value="{StaticResource AldtText}"/>
+        <Setter Property="VerticalContentAlignment"   Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd"
+                            Background="{StaticResource AldtSurface}"
+                            BorderBrush="{StaticResource AldtBorder}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush">
+                                <Setter.Value>
+                                    <SolidColorBrush Color="#606060"/>
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AldtAccentBtn}"/>
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="1,1,1,2"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         BUTTON — Primary (accent fill)
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentPrimaryBtn" TargetType="Button">
+        <Setter Property="Foreground"      Value="White"/>
+        <Setter Property="FontWeight"      Value="SemiBold"/>
+        <Setter Property="FontSize"        Value="13"/>
+        <Setter Property="Padding"         Value="24,8"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{StaticResource AldtAccentBtn}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AldtAccentHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value><SolidColorBrush Color="#005A9E"/></Setter.Value>
+                            </Setter>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value><SolidColorBrush Color="#404040"/></Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground">
+                                <Setter.Value><SolidColorBrush Color="#6D6D6D"/></Setter.Value>
+                            </Setter>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         BUTTON — Secondary (subtle fill)
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentSecondaryBtn" TargetType="Button">
+        <Setter Property="Foreground"      Value="{StaticResource AldtTextSecondary}"/>
+        <Setter Property="FontSize"        Value="13"/>
+        <Setter Property="Padding"         Value="20,8"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{StaticResource AldtSurface}"
+                            BorderBrush="{StaticResource AldtBorder}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value><SolidColorBrush Color="#424242"/></Setter.Value>
+                            </Setter>
+                            <Setter Property="Foreground" Value="{StaticResource AldtText}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background">
+                                <Setter.Value><SolidColorBrush Color="#353535"/></Setter.Value>
+                            </Setter>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         COMBOBOX — Fluent dark styled
+         ════════════════════════════════════════════════════════════ -->
+    <ControlTemplate x:Key="FluentComboBoxToggle" TargetType="ToggleButton">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="28"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="Bd" Grid.ColumnSpan="2"
+                    Background="{StaticResource AldtSurface}"
+                    BorderBrush="{StaticResource AldtBorder}"
+                    BorderThickness="1" CornerRadius="6"/>
+            <Path x:Name="Arrow" Grid.Column="1"
+                  Fill="{StaticResource AldtTextSecondary}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Data="M 0 0 L 5 5 L 10 0 Z"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush">
+                    <Setter.Value><SolidColorBrush Color="#606060"/></Setter.Value>
+                </Setter>
+                <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource AldtText}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AldtAccentBtn}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="FluentComboBox" TargetType="ComboBox">
+        <Setter Property="Height"           Value="34"/>
+        <Setter Property="Foreground"       Value="{StaticResource AldtText}"/>
+        <Setter Property="FontSize"         Value="13"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Background"  Value="#2D2D2D"/>
+                    <Setter Property="Foreground"  Value="#FFFFFF"/>
+                    <Setter Property="Padding"     Value="10,7"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                        Padding="{TemplateBinding Padding}"
+                                        CornerRadius="4" Margin="2,1">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="Bd" Property="Background">
+                                            <Setter.Value><SolidColorBrush Color="#383838"/></Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background">
+                                            <Setter.Value><SolidColorBrush Color="#424242"/></Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="ToggleButton"
+                                      Template="{StaticResource FluentComboBoxToggle}"
+                                      Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      ClickMode="Press"/>
+                        <ContentPresenter x:Name="ContentSite"
+                                          IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="10,3,28,3"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Left"/>
+                        <Popup x:Name="Popup" Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True" Focusable="False"
+                               PopupAnimation="Fade">
+                            <Grid x:Name="DropDown" SnapsToDevicePixels="True"
+                                  MinWidth="{TemplateBinding ActualWidth}"
+                                  MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <Border Background="#2D2D2D"
+                                        BorderBrush="{StaticResource AldtBorder}"
+                                        BorderThickness="1" CornerRadius="8"
+                                        Padding="0,4">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="16" Opacity="0.4"
+                                                          ShadowDepth="4" Color="Black"/>
+                                    </Border.Effect>
+                                    <ScrollViewer Margin="2" SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         CHECKBOX — Fluent styled
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentCheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground"  Value="{StaticResource AldtText}"/>
+        <Setter Property="FontSize"    Value="13"/>
+        <Setter Property="Padding"     Value="8,2"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border x:Name="Box" Width="20" Height="20"
+                                CornerRadius="4"
+                                Background="{StaticResource AldtSurface}"
+                                BorderBrush="{StaticResource AldtBorder}"
+                                BorderThickness="1.5">
+                            <Path x:Name="Check" Data="M 3 8 L 7 12 L 14 4"
+                                  Stroke="White" StrokeThickness="2"
+                                  Visibility="Collapsed"
+                                  VerticalAlignment="Center"
+                                  HorizontalAlignment="Center"
+                                  Margin="1"/>
+                        </Border>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{StaticResource AldtAccentBtn}"/>
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource AldtAccentBtn}"/>
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush">
+                                <Setter.Value><SolidColorBrush Color="#707070"/></Setter.Value>
+                            </Setter>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         CARD — Fluent elevated card container
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentCard" TargetType="Border">
+        <Setter Property="Background"       Value="{StaticResource AldtCard}"/>
+        <Setter Property="BorderBrush"      Value="{StaticResource AldtBorder}"/>
+        <Setter Property="BorderThickness"  Value="1"/>
+        <Setter Property="CornerRadius"     Value="8"/>
+        <Setter Property="Padding"          Value="16,14"/>
+        <Setter Property="Margin"           Value="0,0,0,12"/>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         DATAGRID — Fluent dark DataGrid
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentDataGrid" TargetType="DataGrid">
+        <Setter Property="Background"             Value="{StaticResource AldtCard}"/>
+        <Setter Property="Foreground"              Value="{StaticResource AldtText}"/>
+        <Setter Property="BorderBrush"             Value="{StaticResource AldtBorder}"/>
+        <Setter Property="BorderThickness"         Value="1"/>
+        <Setter Property="RowBackground">
+            <Setter.Value><SolidColorBrush Color="#2D2D2D"/></Setter.Value>
+        </Setter>
+        <Setter Property="AlternatingRowBackground">
+            <Setter.Value><SolidColorBrush Color="#333333"/></Setter.Value>
+        </Setter>
+        <Setter Property="GridLinesVisibility"     Value="Horizontal"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource AldtBorder}"/>
+        <Setter Property="HeadersVisibility"       Value="Column"/>
+        <Setter Property="SelectionMode"           Value="Single"/>
+        <Setter Property="AutoGenerateColumns"     Value="False"/>
+        <Setter Property="CanUserAddRows"          Value="False"/>
+        <Setter Property="CanUserDeleteRows"       Value="False"/>
+        <Setter Property="CanUserResizeRows"       Value="False"/>
+        <Setter Property="CanUserReorderColumns"   Value="False"/>
+        <Setter Property="IsReadOnly"              Value="False"/>
+    </Style>
+
+    <Style x:Key="FluentColumnHeader" TargetType="DataGridColumnHeader">
+        <Setter Property="Background"   Value="{StaticResource AldtHeader}"/>
+        <Setter Property="Foreground"   Value="{StaticResource AldtAccent}"/>
+        <Setter Property="FontWeight"   Value="SemiBold"/>
+        <Setter Property="FontSize"     Value="12"/>
+        <Setter Property="Padding"      Value="10,8"/>
+        <Setter Property="BorderBrush"  Value="{StaticResource AldtBorder}"/>
+        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+    </Style>
+
+    <Style x:Key="FluentDataGridCell" TargetType="DataGridCell">
+        <Setter Property="Background"      Value="Transparent"/>
+        <Setter Property="Foreground"       Value="{StaticResource AldtText}"/>
+        <Setter Property="BorderThickness"  Value="0"/>
+        <Setter Property="Padding"          Value="8,6"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background">
+                    <Setter.Value><SolidColorBrush Color="#0078D4" Opacity="0.3"/></Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════
+         LISTVIEW — Fluent dark ListView
+         ════════════════════════════════════════════════════════════ -->
+    <Style x:Key="FluentListView" TargetType="ListView">
+        <Setter Property="Background"       Value="Transparent"/>
+        <Setter Property="Foreground"        Value="{StaticResource AldtText}"/>
+        <Setter Property="BorderThickness"   Value="0"/>
+    </Style>
+
+</ResourceDictionary>

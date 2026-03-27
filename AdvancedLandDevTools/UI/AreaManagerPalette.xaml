@@ -1,0 +1,360 @@
+<UserControl
+    x:Class="AdvancedLandDevTools.UI.AreaManagerPalette"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:AdvancedLandDevTools.UI"
+    Background="#202020" MinWidth="280">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="FluentDarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <local:NonEmptyToVisibilityConverter x:Key="NonEmptyVis"/>
+
+            <!-- Inline button style for toolbar-size action buttons -->
+            <Style x:Key="ActionBtn" TargetType="Button">
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Margin" Value="0,0,4,0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="#383838" BorderBrush="#454545"
+                                    BorderThickness="1" CornerRadius="5" Padding="10,5">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#424242"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#606060"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#353535"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Bd" Property="Background" Value="#2A2A2A"/>
+                                    <Setter Property="Foreground" Value="#555555"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Small icon button (for row actions) -->
+            <Style x:Key="SmallIconBtn" TargetType="Button">
+                <Setter Property="Foreground" Value="#9E9E9E"/>
+                <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Width" Value="26"/>
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="4">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#383838"/>
+                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Delete icon button (red hover) -->
+            <Style x:Key="DeleteIconBtn" TargetType="Button">
+                <Setter Property="Foreground" Value="#9E9E9E"/>
+                <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Width" Value="26"/>
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="4">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#33FF6B6B"/>
+                                    <Setter Property="Foreground" Value="#FF6B6B"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Category dropdown toggle button (dark) -->
+            <ControlTemplate x:Key="CatDropdownToggle" TargetType="ToggleButton">
+                <Border x:Name="Bd" Background="#383838" BorderBrush="#454545"
+                        BorderThickness="1" CornerRadius="4">
+                    <Grid>
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="6,0,18,0"/>
+                        <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="9"
+                                   Foreground="#9E9E9E" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   Margin="0,0,5,0"/>
+                    </Grid>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="#606060"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <!-- Category dropdown (compact, dark) -->
+            <Style x:Key="CatDropdown" TargetType="ComboBox">
+                <Setter Property="Height" Value="22"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="#FFB74D"/>
+                <Setter Property="Background" Value="#383838"/>
+                <Setter Property="BorderBrush" Value="#454545"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="6,2"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ComboBox">
+                            <Grid>
+                                <ToggleButton x:Name="ToggleButton"
+                                              Template="{StaticResource CatDropdownToggle}"
+                                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                              Focusable="False"
+                                              ClickMode="Press"/>
+                                <ContentPresenter x:Name="ContentSite"
+                                                  IsHitTestVisible="False"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                  Margin="6,0,18,0"
+                                                  TextBlock.Foreground="#FFB74D"
+                                                  TextBlock.FontSize="11"/>
+                                <Popup x:Name="Popup"
+                                       Placement="Bottom"
+                                       IsOpen="{TemplateBinding IsDropDownOpen}"
+                                       AllowsTransparency="True"
+                                       Focusable="False"
+                                       PopupAnimation="Slide">
+                                    <Border Background="#2D2D2D" BorderBrush="#454545" BorderThickness="1"
+                                            CornerRadius="4" Padding="2" MinWidth="{TemplateBinding ActualWidth}">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="10" Opacity="0.4" ShadowDepth="2" Color="Black"/>
+                                        </Border.Effect>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="160">
+                                            <StackPanel IsItemsHost="True"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemContainerStyle">
+                    <Setter.Value>
+                        <Style TargetType="ComboBoxItem">
+                            <Setter Property="Background" Value="#2D2D2D"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                            <Setter Property="Padding" Value="8,4"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ComboBoxItem">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                Padding="{TemplateBinding Padding}" CornerRadius="3" Margin="2,1">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsHighlighted" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#383838"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#424242"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- ══════════════════════════════════════════════════════════════
+             HEADER — Project selector
+             ══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="#1A1A1A" Padding="10,8" BorderBrush="#454545" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                               Foreground="#60CDFF" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="Area Manager" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#60CDFF" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="TxtProjectName" Grid.Column="0"
+                             Style="{StaticResource FluentTextBox}"
+                             ToolTip="Type a project name, then press Enter or click +"
+                             KeyDown="TxtProjectName_KeyDown"/>
+
+                    <Button Grid.Column="1" Content="&#xE70D;" Style="{StaticResource SmallIconBtn}"
+                            FontSize="12" Width="30" Height="30" Margin="2,0,0,0"
+                            ToolTip="Load existing project" Click="BtnShowProjects_Click"/>
+
+                    <Button Grid.Column="2" Content="&#xE710;" Style="{StaticResource SmallIconBtn}"
+                            FontSize="14" Width="30" Height="30" Margin="2,0,0,0"
+                            ToolTip="Create / Load project" Click="BtnLoadProject_Click"/>
+
+                    <Button Grid.Column="3" Content="&#xE74D;" Style="{StaticResource DeleteIconBtn}"
+                            FontSize="14" Width="30" Height="30" Margin="2,0,0,0"
+                            ToolTip="Delete project" Click="BtnDeleteProject_Click"/>
+                </Grid>
+
+                <Popup x:Name="ProjectPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=TxtProjectName}"
+                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                    <Border Background="#2D2D2D" BorderBrush="#454545" BorderThickness="1"
+                            CornerRadius="6" Padding="4" MinWidth="200" MaxHeight="200">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="12" Opacity="0.4" ShadowDepth="3" Color="Black"/>
+                        </Border.Effect>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="ProjectList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="ProjItem" Background="Transparent" CornerRadius="4"
+                                                Padding="10,6" Margin="0,1" Cursor="Hand"
+                                                MouseLeftButtonUp="ProjectItem_Click">
+                                            <TextBlock Text="{Binding}" Foreground="#FFFFFF" FontSize="12"/>
+                                        </Border>
+                                        <DataTemplate.Triggers>
+                                            <Trigger SourceName="ProjItem" Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ProjItem" Property="Background" Value="#383838"/>
+                                            </Trigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
+            </StackPanel>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             ACTION BAR
+             ══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="#252526" Padding="8,6" BorderBrush="#454545" BorderThickness="0,0,0,1">
+            <WrapPanel>
+                <Button x:Name="BtnAddArea" Style="{StaticResource ActionBtn}" Click="BtnAddArea_Click"
+                        ToolTip="Select a hatch or closed boundary to add">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock Text="Add Area" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button x:Name="BtnAddCategory" Style="{StaticResource ActionBtn}" Click="BtnAddCategory_Click"
+                        ToolTip="Create a new category">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8EC;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock Text="Category" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button x:Name="BtnExport" Style="{StaticResource ActionBtn}" Click="BtnExport_Click"
+                        ToolTip="Export area report to CSV">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xEDE1;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock Text="Export" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </WrapPanel>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             SUMMARY BAR
+             ══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="#2D2D2D" Padding="10,5" BorderBrush="#454545" BorderThickness="0,0,0,1">
+            <TextBlock x:Name="TxtSummary" Text="No project loaded" Foreground="#9E9E9E" FontSize="11"/>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             CATEGORY INPUT POPUP (overlay inside the panel)
+             ══════════════════════════════════════════════════════════════ -->
+        <Popup x:Name="CategoryPopup" Placement="Center" PlacementTarget="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+               StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#2D2D2D" BorderBrush="#60CDFF" BorderThickness="1"
+                    CornerRadius="8" Padding="16" MinWidth="260">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20" Opacity="0.6" ShadowDepth="4" Color="Black"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="New Category" FontSize="13" FontWeight="SemiBold"
+                               Foreground="#60CDFF" Margin="0,0,0,8"/>
+                    <TextBox x:Name="TxtCategoryName" Style="{StaticResource FluentTextBox}"
+                             KeyDown="TxtCategoryName_KeyDown"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Cancel" Style="{StaticResource ActionBtn}" Click="BtnCancelCategory_Click"/>
+                        <Button Content="Create" Style="{StaticResource ActionBtn}" Click="BtnConfirmCategory_Click"
+                                Margin="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             RENAME POPUP
+             ══════════════════════════════════════════════════════════════ -->
+        <Popup x:Name="RenamePopup" Placement="Center" PlacementTarget="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+               StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#2D2D2D" BorderBrush="#60CDFF" BorderThickness="1"
+                    CornerRadius="8" Padding="16" MinWidth="260">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20" Opacity="0.6" ShadowDepth="4" Color="Black"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Rename Area" FontSize="13" FontWeight="SemiBold"
+                               Foreground="#60CDFF" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TxtRenameOldName" FontSize="11" Foreground="#9E9E9E" Margin="0,0,0,8"/>
+                    <TextBox x:Name="TxtRenameName" Style="{StaticResource FluentTextBox}"
+                             KeyDown="TxtRenameName_KeyDown"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Cancel" Style="{StaticResource ActionBtn}" Click="BtnCancelRename_Click"/>
+                        <Button Content="Rename" Style="{StaticResource ActionBtn}" Click="BtnConfirmRename_Click"
+                                Margin="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             AREA LIST — grouped by category
+             ══════════════════════════════════════════════════════════════ -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Background="#202020">
+            <StackPanel x:Name="GroupedAreaPanel" Margin="6"/>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

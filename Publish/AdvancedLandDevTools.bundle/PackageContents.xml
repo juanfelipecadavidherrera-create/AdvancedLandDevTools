@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  ══════════════════════════════════════════════════════════════════
+  PackageContents.xml  –  Autodesk Application Bundle Manifest
+  ══════════════════════════════════════════════════════════════════
+
+  DEPLOYMENT:
+    %APPDATA%\Autodesk\ApplicationPlugins\AdvancedLandDevTools.bundle\
+        PackageContents.xml
+        Contents\
+            AdvancedLandDevTools.dll
+-->
+<ApplicationPackage
+    SchemaVersion="1.0"
+    AppVersion="1.0.0"
+    AutodeskProduct="AutoCAD"
+    Name="Advanced Land Development Tools"
+    Description="Productivity suite for Civil 3D land development: Bulk Surface Profile Creator, Align Deploy, Pipe Magic, and Invert Pull Up."
+    Author="Advanced Land Dev Tools"
+    HelpFile=""
+    SupportedLocales="Enu"
+    AppNameSpace="com.advlanddevtools.civil3d"
+    ProductCode="{11AD019F-A9FB-4B14-B30E-B2D0A2D5A51B}"
+    UpgradeCode="{CA5BEAD8-A09C-4C3D-A782-5C195BF26BB7}">
+
+  <CompanyDetails
+      Name="Advanced Land Dev Tools"
+      Url=""
+      Email=""/>
+
+  <RuntimeRequirements
+      OS="Win64"
+      Platform="AutoCAD*"
+      SeriesMin="R25.0"
+      SeriesMax="R26.0"/>
+
+  <Components Description="Main plugin assembly">
+    <RuntimeRequirements
+        OS="Win64"
+        Platform="AutoCAD*"
+        SeriesMin="R25.0"
+        SeriesMax="R26.0"/>
+    <ComponentEntry
+        AppName="AdvancedLandDevTools"
+        Version="1.0.0"
+        ModuleName="./Contents/AdvancedLandDevTools.dll"
+        AppDescription="Advanced Land Development Tools for Civil 3D 2026"
+        LoadOnCommandInvocation="false"
+        LoadOnAutoCADStartup="true"
+        AppType=".Net"/>
+  </Components>
+
+</ApplicationPackage>

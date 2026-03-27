@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+  <ItemGroup><Reference Include="AcDbMgd"><HintPath>D:\AutoCAD 2026\AcDbMgd.dll</HintPath><Private>false</Private></Reference></ItemGroup>
+</Project>

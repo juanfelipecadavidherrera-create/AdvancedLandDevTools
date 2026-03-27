@@ -1,0 +1,119 @@
+<Window
+    x:Class="AdvancedLandDevTools.UI.MarkLinesDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Advanced Land Development Tools – Mark Lines"
+    Width="440" Height="540"
+    MinWidth="380" MinHeight="420"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResizeWithGrip"
+    Background="#202020"
+    FontFamily="Segoe UI"
+    FontSize="13">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="FluentDarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Header ─────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="{StaticResource AldtHeader}"
+                Padding="20,14">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="36" Height="36"
+                        Background="{StaticResource AldtAccentBtn}"
+                        CornerRadius="8"
+                        Margin="0,0,14,0">
+                    <TextBlock Text="M" Foreground="White" FontSize="18"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="ADVANCED LAND DEVELOPMENT TOOLS"
+                               Foreground="{StaticResource AldtAccent}" FontSize="9"
+                               FontWeight="SemiBold" Opacity="0.8"/>
+                    <TextBlock Text="Mark Lines"
+                               Foreground="White" FontSize="15"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Filter box ─────────────────────────────────────────── -->
+        <Border Grid.Row="1" Padding="16,12,16,0">
+            <TextBox x:Name="TxtFilter"
+                     Style="{StaticResource FluentTextBox}"
+                     TextChanged="TxtFilter_TextChanged"/>
+        </Border>
+
+        <!-- ── Select All / Deselect All ──────────────────────────── -->
+        <Border Grid.Row="2" Padding="16,10,16,6">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="Select All"
+                        Style="{StaticResource FluentSecondaryBtn}"
+                        Padding="14,6" FontSize="12"
+                        Margin="0,0,8,0"
+                        Click="BtnSelectAll_Click"/>
+                <Button Content="Deselect All"
+                        Style="{StaticResource FluentSecondaryBtn}"
+                        Padding="14,6" FontSize="12"
+                        Click="BtnDeselectAll_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Layer list ─────────────────────────────────────────── -->
+        <Border Grid.Row="3" Margin="16,4,16,8"
+                Style="{StaticResource FluentCard}"
+                Padding="4,4">
+            <ListView x:Name="LstLayers"
+                      Style="{StaticResource FluentListView}"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                  Style="{StaticResource FluentCheckBox}"
+                                  Margin="4,2">
+                            <TextBlock Text="{Binding Name}"
+                                       Foreground="{StaticResource AldtText}"/>
+                        </CheckBox>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Border>
+
+        <!-- ── Footer (OK / Cancel) ──────────────────────────────── -->
+        <Border Grid.Row="4" Background="{StaticResource AldtHeader}"
+                Padding="16,12">
+            <Grid>
+                <TextBlock Text="Select layers to mark, then pick a profile view."
+                           Foreground="{StaticResource AldtTextTertiary}"
+                           FontSize="11" VerticalAlignment="Center"
+                           HorizontalAlignment="Left"/>
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right">
+                    <Button Content="Cancel"
+                            Style="{StaticResource FluentSecondaryBtn}"
+                            IsCancel="True"
+                            Click="BtnCancel_Click"/>
+                    <Button Content="OK"
+                            Style="{StaticResource FluentPrimaryBtn}"
+                            IsDefault="True" Margin="10,0,0,0"
+                            Click="BtnOk_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
