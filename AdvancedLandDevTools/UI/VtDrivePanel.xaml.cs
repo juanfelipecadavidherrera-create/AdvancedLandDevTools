@@ -27,6 +27,8 @@ namespace AdvancedLandDevTools.UI
         public event Action? CancelRequested;
         /// <summary>Raised when user clicks Accept Path (exit edit mode).</summary>
         public event Action? AcceptRequested;
+        /// <summary>Raised when user clicks Place Detail Block.</summary>
+        public event Action? PlaceBlockRequested;
 
         private readonly List<VehEntry> _vehicles;
 
@@ -124,5 +126,8 @@ namespace AdvancedLandDevTools.UI
 
         private void BtnAccept_Click(object sender, RoutedEventArgs e)
             => AcceptRequested?.Invoke();
+
+        private void BtnPlaceBlock_Click(object sender, RoutedEventArgs e)
+            => PlaceBlockRequested?.Invoke();
     }
 }
