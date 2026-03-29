@@ -194,7 +194,19 @@
 
             <!-- Vehicle info -->
             <TextBlock x:Name="TxtVehicleInfo" Foreground="#999" FontSize="9"
-                       Margin="0,4,0,8" TextWrapping="Wrap"/>
+                       Margin="0,4,0,4" TextWrapping="Wrap"/>
+
+            <!-- Place Detail Block button -->
+            <Button x:Name="BtnPlaceBlock" Style="{StaticResource DarkBtn}"
+                    Margin="0,2,0,8" HorizontalContentAlignment="Center"
+                    Click="BtnPlaceBlock_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE8B5;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                               Foreground="#60CDFF" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="Place Detail Block" FontSize="11"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
 
             <Border Height="1" Background="#333" Margin="0,0,0,8"/>
 

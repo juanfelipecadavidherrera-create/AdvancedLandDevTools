@@ -566,6 +566,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         internal static bool _finishFlag;
         internal static bool _cancelFlag;
         internal static bool _acceptFlag;
+        internal static bool _placeBlockFlag;
 
         [CommandMethod("VTDRIVE", CommandFlags.Modal)]
         public void Execute()
@@ -582,12 +583,13 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 Database db = doc.Database;
 
                 // ── Show WPF panel ───────────────────────────────────
-                _undoFlag = _finishFlag = _cancelFlag = _acceptFlag = false;
+                _undoFlag = _finishFlag = _cancelFlag = _acceptFlag = _placeBlockFlag = false;
                 _panel = new VtDrivePanel();
                 _panel.UndoRequested += () => { _undoFlag = true; };
                 _panel.FinishRequested += () => { _finishFlag = true; };
                 _panel.CancelRequested += () => { _cancelFlag = true; };
                 _panel.AcceptRequested += () => { _acceptFlag = true; };
+                _panel.PlaceBlockRequested += () => { _placeBlockFlag = true; };
                 _panel.Show();
 
                 try { RunDrive(ed, db); }
@@ -672,6 +674,16 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                     if (_panel != null) _speedMph = _panel.SpeedMph;
 
                     var jr = ed.Drag(jig);
+
+                    // ── Place Detail Block (interrupted from panel) ──
+                    if (_placeBlockFlag)
+                    {
+                        _placeBlockFlag = false;
+                        HandlePlaceBlock(ed, db, sel);
+                        _panel?.SetStatus("Block placed. Continue driving...", "#66BB6A");
+                        continue;
+                    }
+
                     if (jr.Status == PromptStatus.OK)
                     {
                         if (waypoints.Count > 1 && jig.IsInUndoZone)
@@ -711,6 +723,65 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 // ── Auto-enter live edit mode via panel ──────────────
                 _panel?.EnterEditMode();
                 LiveEditLoop(ed, db, vehicle, waypoints, sections, sel.Item2, ref gid);
+        }
+
+        // ── Place vehicle detail block ───────────────────────────────
+        /// <summary>
+        /// Prompts the user to pick an insertion point, creates (or reuses)
+        /// a detailed vehicle block definition, and inserts it into model space.
+        /// </summary>
+        private static void HandlePlaceBlock(
+            Editor ed, Database db,
+            (string, string, string, bool, int) sel)
+        {
+            // Re-read the selected vehicle from the panel in case it changed
+            var s = _panel?.SelectedVehicle ?? sel;
+
+            VehicleUnit vehicle;
+            ArticulatedVehicle? artic = null;
+            string symbol = s.Item2;    // Symbol
+            string category = s.Item3;  // Category
+            if (s.Item4) // IsArticulated
+            {
+                artic = VehicleLibrary.ArticulatedVehicles[s.Item5];
+                vehicle = artic.LeadUnit;
+            }
+            else
+            {
+                vehicle = VehicleLibrary.SingleUnits[s.Item5];
+            }
+
+            // Ask for insertion point
+            var ppo = new PromptPointOptions("\n  Pick insertion point for vehicle detail block: ")
+            {
+                AllowNone = true
+            };
+            var pr = ed.GetPoint(ppo);
+            if (pr.Status != PromptStatus.OK) return;
+
+            // Ask for rotation
+            var pao = new PromptAngleOptions("\n  Rotation angle <0>: ")
+            {
+                AllowNone = true,
+                DefaultValue = 0.0,
+                UseDefaultValue = true,
+                BasePoint = pr.Value,
+                UseBasePoint = true
+            };
+            var ar = ed.GetAngle(pao);
+            double rotation = ar.Status == PromptStatus.OK ? ar.Value : 0.0;
+
+            using var tx = db.TransactionManager.StartTransaction();
+            var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
+            var ms = (BlockTableRecord)tx.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            VtLayerManager.EnsureLayers(db, tx);
+
+            var blockId = VtVehicleBlockWriter.EnsureBlockDef(
+                db, tx, vehicle, symbol, category, artic);
+            VtVehicleBlockWriter.InsertBlock(db, tx, ms, blockId, pr.Value, rotation);
+
+            tx.Commit();
+            ed.WriteMessage($"\n  Vehicle detail block [{symbol}] placed.\n");
         }
 
         // ── Draw permanent entities ──────────────────────────────────

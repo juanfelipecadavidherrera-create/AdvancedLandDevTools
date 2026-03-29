@@ -17,6 +17,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         public const string PARKING      = "VT-PARKING";
         public const string ADA          = "VT-ADA";
         public const string LABELS       = "VT-LABELS";
+        public const string DETAIL       = "VT-DETAIL";
 
         private static readonly (string Name, short ColorIndex)[] _layers = new[]
         {
@@ -29,6 +30,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
             (PARKING,     (short)7),   // White
             (ADA,         (short)30),  // Orange
             (LABELS,      (short)2),   // Yellow
+            (DETAIL,      (short)5),   // Blue (vehicle detail blocks)
         };
 
         /// <summary>
