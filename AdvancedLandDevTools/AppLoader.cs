@@ -24,6 +24,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(ChangeElevationCommand))]
 [assembly: CommandClass(typeof(MarkLinesCommand))]
 [assembly: CommandClass(typeof(GroundwaterCommand))]
+[assembly: CommandClass(typeof(GroundwaterMayCommand))]
 [assembly: CommandClass(typeof(VpCutCommand))]
 [assembly: CommandClass(typeof(VtSweepCommand))]
 [assembly: CommandClass(typeof(VtParkCommand))]
@@ -137,7 +138,8 @@ namespace AdvancedLandDevTools
                 "\n║    FLOODZONE       – FEMA Flood Zone Lookup             ║" +
                 "\n║    FLOODCRITERIA   – MDC County Flood Criteria          ║" +
                 "\n║    SECTIONLOOKUP   – PLSS Township/Range/Section        ║" +
-                "\n║    GROUNDWATER     – Water Table Lookup                 ║" +
+                "\n║    GWMAY           – Water Table (Avg May)              ║" +
+                "\n║    GWOCT           – Water Table (October 2040)         ║" +
                 "\n║  Areas:                                                 ║" +
                 "\n║    AREAMANAGER     – Area Manager Palette               ║" +
                 "\n║  Viewports:                                             ║" +
