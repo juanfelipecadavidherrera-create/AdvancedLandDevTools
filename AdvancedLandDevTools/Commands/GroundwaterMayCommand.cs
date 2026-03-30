@@ -6,10 +6,10 @@ using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace AdvancedLandDevTools.Commands
 {
-    public class GroundwaterCommand
+    public class GroundwaterMayCommand
     {
-        [CommandMethod("GWOCT", CommandFlags.Modal)]
-        public void GroundwaterOctober()
+        [CommandMethod("GWMAY", CommandFlags.Modal)]
+        public void GroundwaterMay()
         {
             try
             {
@@ -20,23 +20,23 @@ namespace AdvancedLandDevTools.Commands
             var ed = doc.Editor;
             ed.WriteMessage("\n");
             ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
-            ed.WriteMessage("  Advanced Land Development Tools  |  Water Table Oct 2040\n");
+            ed.WriteMessage("  Advanced Land Development Tools  |  Water Table May Avg \n");
             ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
 
             PromptPointResult ppr = ed.GetPoint(
-                "\n  Select point for groundwater level lookup (October 2040): ");
+                "\n  Select point for groundwater level lookup (Average May): ");
             if (ppr.Status != PromptStatus.OK)
             {
                 ed.WriteMessage("\n  Command cancelled.\n");
                 return;
             }
 
-            GroundwaterEngine.LookupAtPoint(doc, ppr.Value);
+            GroundwaterMayEngine.LookupAtPoint(doc, ppr.Value);
             }
             catch (System.Exception ex)
             {
                 var d = AcApp.DocumentManager.MdiActiveDocument;
-                d?.Editor.WriteMessage($"\n[ALDT ERROR] GWOCT: {ex.Message}\n");
+                d?.Editor.WriteMessage($"\n[ALDT ERROR] GWMAY: {ex.Message}\n");
             }
         }
     }

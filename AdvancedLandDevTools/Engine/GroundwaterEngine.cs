@@ -41,7 +41,7 @@ namespace AdvancedLandDevTools.Engine
                             $"X={pickedPoint.X:F3}, Y={pickedPoint.Y:F3}");
 
             // Convert drawing coords to WGS84
-            if (!ConvertToLatLon(doc, pickedPoint, out double lat, out double lon))
+            if (!GroundwaterCoords.ConvertToLatLon(doc, pickedPoint, out double lat, out double lon))
             {
                 ed.WriteMessage("\n  ** Could not convert coordinates to Lat/Lon.");
                 ed.WriteMessage("\n  Make sure your drawing has a valid coordinate system assigned.");
@@ -50,7 +50,7 @@ namespace AdvancedLandDevTools.Engine
             }
 
             ed.WriteMessage($"\n  Converted to WGS84: Lat={lat:F6}, Lon={lon:F6}");
-            ed.WriteMessage("\n  Querying MDC Groundwater Level service...");
+            ed.WriteMessage("\n  Querying MDC Groundwater Level (October 2040) service...");
 
             // Query MDC MapServer
             double navd88;
@@ -66,12 +66,12 @@ namespace AdvancedLandDevTools.Engine
 
             ed.WriteMessage("\n");
             ed.WriteMessage("\n  ╔══════════════════════════════════════════════════╗");
-            ed.WriteMessage("\n  ║       GROUNDWATER LEVEL LOOKUP RESULTS          ║");
+            ed.WriteMessage("\n  ║       GROUNDWATER LEVEL — OCTOBER 2040           ║");
             ed.WriteMessage("\n  ╠══════════════════════════════════════════════════╣");
             ed.WriteMessage($"\n  ║  NAVD 88:   {navd88,8:F2} ft                        ║");
             ed.WriteMessage($"\n  ║  NGVD 29:   {ngvd29,8:F2} ft                        ║");
             ed.WriteMessage("\n  ╠══════════════════════════════════════════════════╣");
-            ed.WriteMessage("\n  ║  Dataset: Groundwater Level May 2040            ║");
+            ed.WriteMessage("\n  ║  Dataset: Groundwater Level October 2040        ║");
             ed.WriteMessage("\n  ║  Source:  MDC / USGS Groundwater Model (UMD)    ║");
             ed.WriteMessage("\n  ║  Conversion: NGVD = NAVD + 1.52 ft             ║");
             ed.WriteMessage("\n  ╚══════════════════════════════════════════════════╝\n");
@@ -153,110 +153,5 @@ namespace AdvancedLandDevTools.Engine
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        //  Coordinate transformation (same pattern as FloodZoneEngine)
-        // ═══════════════════════════════════════════════════════════════════
-        private static bool ConvertToLatLon(Document doc, Point3d drawingPoint,
-                                            out double lat, out double lon)
-        {
-            lat = 0; lon = 0;
-
-            try
-            {
-                using (var tr = doc.Database.TransactionManager.StartTransaction())
-                {
-                    var civilDoc = Autodesk.Civil.ApplicationServices.CivilDocument
-                        .GetCivilDocument(doc.Database);
-
-                    string drawingCS = civilDoc.Settings.DrawingSettings
-                        .UnitZoneSettings.CoordinateSystemCode;
-
-                    if (string.IsNullOrEmpty(drawingCS))
-                    {
-                        doc.Editor.WriteMessage(
-                            "\n  WARNING: No coordinate system assigned to drawing.");
-                        doc.Editor.WriteMessage(
-                            "\n  Falling back to approximate State Plane FL East conversion.");
-                        tr.Commit();
-                        return ConvertStatePlaneApprox(
-                            drawingPoint.X, drawingPoint.Y, out lat, out lon);
-                    }
-
-                    doc.Editor.WriteMessage($"\n  Drawing coordinate system: {drawingCS}");
-
-                    bool ok = TransformViaGeolocation(drawingCS, drawingPoint, out lat, out lon);
-                    tr.Commit();
-
-                    if (ok) return true;
-
-                    doc.Editor.WriteMessage(
-                        "\n  Geolocation API unavailable. Using approximate conversion.");
-                    return ConvertStatePlaneApprox(
-                        drawingPoint.X, drawingPoint.Y, out lat, out lon);
-                }
-            }
-            catch (System.Exception ex)
-            {
-                doc.Editor.WriteMessage($"\n  Transform exception: {ex.Message}");
-                doc.Editor.WriteMessage("\n  Falling back to approximate conversion.");
-                return ConvertStatePlaneApprox(
-                    drawingPoint.X, drawingPoint.Y, out lat, out lon);
-            }
-        }
-
-        private static bool TransformViaGeolocation(string drawingCS, Point3d pt,
-                                                     out double lat, out double lon)
-        {
-            lat = 0; lon = 0;
-            try
-            {
-                var asm = System.Reflection.Assembly.Load("Autodesk.Geolocation");
-                if (asm == null) return false;
-
-                var csType = asm.GetType("Autodesk.Geolocation.CoordinateSystem");
-                var txType = asm.GetType("Autodesk.Geolocation.CoordinateSystemTransformer");
-                if (csType == null || txType == null) return false;
-
-                object sourceCRS = System.Activator.CreateInstance(csType, drawingCS)!;
-                object targetCRS = System.Activator.CreateInstance(csType, "LL84")!;
-                object transformer = System.Activator.CreateInstance(txType, sourceCRS, targetCRS)!;
-
-                var transformMethod = txType.GetMethod("Transform",
-                    new[] { typeof(Point3d) });
-                if (transformMethod == null) return false;
-
-                object result = transformMethod.Invoke(transformer, new object[] { pt })!;
-                Point3d tgt = (Point3d)result;
-                lon = tgt.X;
-                lat = tgt.Y;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool ConvertStatePlaneApprox(
-            double eastingFt, double northingFt, out double lat, out double lon)
-        {
-            double eastingM  = eastingFt  * 0.3048006096;
-            double northingM = northingFt * 0.3048006096;
-
-            double falseEastingM   = 200000.0;
-            double centralMeridian = -81.0;
-            double latOrigin       = 24.333333333;
-
-            double dE = eastingM - falseEastingM;
-            double dN = northingM;
-
-            double metersPerDegreeLat = 110920.0;
-            double metersPerDegreeLon = 99960.0;
-
-            lat = latOrigin + (dN / metersPerDegreeLat);
-            lon = centralMeridian + (dE / metersPerDegreeLon);
-
-            return true;
-        }
     }
 }

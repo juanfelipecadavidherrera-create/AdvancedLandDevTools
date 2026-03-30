@@ -399,21 +399,22 @@ namespace AdvancedLandDevTools.Ribbon
 
             fzSource.Items.Add(new RibbonSeparator());
 
-            // ── Groundwater Level button ──────────────────────────────────
-            var btnGroundwater = new RibbonButton
+            // ── Water Table — Avg May button ─────────────────────────────
+            var btnGwMay = new RibbonButton
             {
-                Id               = "ALDT_BTN_GROUNDWATER",
-                Name             = "Water Table",
-                Text             = "Water\nTable",
-                Description      = "Click a point in the drawing to query MDC Groundwater " +
-                                   "Level data. Returns elevation in NAVD 88 and NGVD 29.",
+                Id               = "ALDT_BTN_GWMAY",
+                Name             = "Water Table May",
+                Text             = "Water Table\nMay",
+                Description      = "Click a point to query the MDC Average May Groundwater " +
+                                   "Level contours. Returns interpolated elevation in NAVD 88 and NGVD 29.",
                 ToolTip          = BuildToolTip(
-                    "Groundwater Level Lookup",
+                    "Water Table — Avg May",
                     "Pick a point in the drawing. The tool queries the Miami-Dade County " +
-                    "Groundwater Level dataset (USGS model, May 2040 projection) and reports " +
-                    "the elevation in both NAVD 88 and NGVD 29.\n\nCommand:  GROUNDWATER"),
-                CommandHandler   = new RibbonCommandHandler("GROUNDWATER "),
-                CommandParameter = "GROUNDWATER ",
+                    "Average May Groundwater Level contour dataset, interpolates between " +
+                    "the two nearest contours, and reports the elevation in both NAVD 88 " +
+                    "and NGVD 29.\n\nCommand:  GWMAY"),
+                CommandHandler   = new RibbonCommandHandler("GWMAY "),
+                CommandParameter = "GWMAY ",
                 ShowText         = true,
                 ShowImage        = true,
                 Size             = RibbonItemSize.Large,
@@ -421,7 +422,33 @@ namespace AdvancedLandDevTools.Ribbon
                 LargeImage       = BuildGroundwaterIcon(32),
                 Image            = BuildGroundwaterIcon(16)
             };
-            fzSource.Items.Add(btnGroundwater);
+            fzSource.Items.Add(btnGwMay);
+
+            fzSource.Items.Add(new RibbonSeparator());
+
+            // ── Water Table — October 2040 button ────────────────────────
+            var btnGwOct = new RibbonButton
+            {
+                Id               = "ALDT_BTN_GWOCT",
+                Name             = "Water Table Oct",
+                Text             = "Water Table\nOct",
+                Description      = "Click a point to query the MDC October 2040 Groundwater " +
+                                   "Level raster. Returns elevation in NAVD 88 and NGVD 29.",
+                ToolTip          = BuildToolTip(
+                    "Water Table — October 2040",
+                    "Pick a point in the drawing. The tool queries the Miami-Dade County " +
+                    "Groundwater Level dataset (USGS model, October 2040 projection) and " +
+                    "reports the elevation in both NAVD 88 and NGVD 29.\n\nCommand:  GWOCT"),
+                CommandHandler   = new RibbonCommandHandler("GWOCT "),
+                CommandParameter = "GWOCT ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildGroundwaterIcon(32),
+                Image            = BuildGroundwaterIcon(16)
+            };
+            fzSource.Items.Add(btnGwOct);
 
             tab.Panels.Add(new RibbonPanel { Source = fzSource });
 
