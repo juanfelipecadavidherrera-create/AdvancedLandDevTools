@@ -310,6 +310,32 @@ namespace AdvancedLandDevTools.Ribbon
             };
             sfSource.Items.Add(btnLowRim);
 
+            sfSource.Items.Add(new RibbonSeparator());
+
+            // ── Block to Surface button ──────────────────────────────────
+            var btnB2S = new RibbonButton
+            {
+                Id               = "ALDT_BTN_BLOCKTOSURFACE",
+                Name             = "Block to Surface",
+                Text             = "Block to\nSurface",
+                Description      = "Read ELEV2 attribute from block references and add " +
+                                   "elevation points to a TIN surface at each block location.",
+                ToolTip          = BuildToolTip(
+                    "Block to Surface",
+                    "Select a TIN surface and a block reference. Finds all instances " +
+                    "of that block, reads their ELEV2 attribute for elevation, and " +
+                    "adds a surface point at each block's coordinates.\n\nCommand: BLOCKTOSURFACE"),
+                CommandHandler   = new RibbonCommandHandler("BLOCKTOSURFACE "),
+                CommandParameter = "BLOCKTOSURFACE ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildButtonIcon("#FF7043", "B2S"),
+                Image            = BuildButtonIcon16("#FF7043", "B2S")
+            };
+            sfSource.Items.Add(btnB2S);
+
             tab.Panels.Add(new RibbonPanel { Source = sfSource });
 
             // ══════════════════════════════════════════════════════════════════

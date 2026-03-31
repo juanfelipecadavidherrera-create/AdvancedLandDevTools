@@ -32,6 +32,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(VtDriveCommand))]
 [assembly: CommandClass(typeof(VtEditCommand))]
 [assembly: CommandClass(typeof(SectionDrawerCommand))]
+[assembly: CommandClass(typeof(BlockToSurfaceCommand))]
 
 namespace AdvancedLandDevTools
 {

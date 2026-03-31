@@ -211,6 +211,7 @@
             <Border Height="1" Background="#333" Margin="0,0,0,8"/>
 
             <!-- Speed -->
+            <!-- Start Run button — shown initially, hidden once drive begins -->
             <TextBlock Text="SPEED" Foreground="#888" FontSize="9" FontWeight="SemiBold"
                        Margin="0,0,0,4"/>
             <Grid>
@@ -229,14 +230,40 @@
 
             <Border Height="1" Background="#333" Margin="0,8,0,8"/>
 
-            <!-- Mode / Status -->
+            <!-- Start Run panel — visible initially until drive begins -->
+            <StackPanel x:Name="PnlStart" Margin="0,0,0,4">
+                <TextBlock Foreground="#999" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Text="Select vehicle and speed above, then click Start Run."/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="BtnStartRun" Content="Start Run" Style="{StaticResource AccentBtn}"
+                            Grid.Column="0" Margin="0,0,4,0" Click="BtnStartRun_Click"/>
+                    <Button Content="Cancel" Style="{StaticResource DarkBtn}"
+                            Grid.Column="1" Margin="4,0,0,0" Click="BtnClose_Click"/>
+                </Grid>
+                <Button x:Name="BtnResume" Style="{StaticResource DarkBtn}"
+                        Margin="0,6,0,0" Click="BtnResume_Click">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                   Foreground="#FFB74D" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="Resume Previous Drive" FontSize="11"
+                                   Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!-- Mode / Status (hidden until drive starts) -->
             <TextBlock x:Name="TxtStatus" Foreground="#66BB6A" FontSize="11"
                        FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8"
-                       Text="Select vehicle, then click in drawing to place start point..."/>
+                       Visibility="Collapsed"
+                       Text="Click to place vehicle front axle..."/>
 
-            <!-- Action Buttons -->
+            <!-- Action Buttons (hidden until drive starts) -->
             <StackPanel x:Name="PnlActions" Orientation="Horizontal" HorizontalAlignment="Center"
-                        Margin="0,0,0,4">
+                        Margin="0,0,0,4" Visibility="Collapsed">
                 <Button x:Name="BtnUndo" Content="Undo" Style="{StaticResource DarkBtn}"
                         Width="70" Margin="0,0,6,0" Click="BtnUndo_Click" IsEnabled="False"/>
                 <Button x:Name="BtnFinish" Content="Finish" Style="{StaticResource AccentBtn}"

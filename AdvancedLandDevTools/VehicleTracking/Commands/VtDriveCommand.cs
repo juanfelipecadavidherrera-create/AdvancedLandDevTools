@@ -567,6 +567,8 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         internal static bool _cancelFlag;
         internal static bool _acceptFlag;
         internal static bool _placeBlockFlag;
+        internal static bool _startRunFlag;
+        internal static bool _resumeFlag;
 
         [CommandMethod("VTDRIVE", CommandFlags.Modal)]
         public void Execute()
@@ -582,17 +584,68 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 VtPathReactor.Hook(doc);
                 Database db = doc.Database;
 
-                // ── Show WPF panel ───────────────────────────────────
-                _undoFlag = _finishFlag = _cancelFlag = _acceptFlag = _placeBlockFlag = false;
+                // ── Show WPF panel (setup mode) ──────────────────────
+                _undoFlag = _finishFlag = _cancelFlag = _acceptFlag = _placeBlockFlag = _startRunFlag = _resumeFlag = false;
                 _panel = new VtDrivePanel();
                 _panel.UndoRequested += () => { _undoFlag = true; };
                 _panel.FinishRequested += () => { _finishFlag = true; };
                 _panel.CancelRequested += () => { _cancelFlag = true; };
                 _panel.AcceptRequested += () => { _acceptFlag = true; };
                 _panel.PlaceBlockRequested += () => { _placeBlockFlag = true; };
+                _panel.StartRunRequested += () => { _startRunFlag = true; };
+                _panel.ResumeRequested += () => { _resumeFlag = true; };
                 _panel.Show();
 
-                try { RunDrive(ed, db); }
+                // ── Setup phase: wait for Start Run, Resume, Place Block, or Cancel ──
+                ed.WriteMessage("\n  Panel open — select vehicle & speed, then click Start Run or Resume.\n");
+                while (!_startRunFlag && !_cancelFlag && !_resumeFlag)
+                {
+                    var pko = new PromptKeywordOptions(
+                        "\n  [StartRun/Resume/PlaceBlock/Cancel] or use panel buttons: ",
+                        "StartRun Resume PlaceBlock Cancel")
+                    {
+                        AllowNone = true
+                    };
+                    var pkr = ed.GetKeywords(pko);
+
+                    if (_cancelFlag) break;
+                    if (_startRunFlag) break;
+                    if (_resumeFlag) break;
+
+                    if (_placeBlockFlag || (pkr.Status == PromptStatus.OK && pkr.StringResult == "PlaceBlock"))
+                    {
+                        _placeBlockFlag = false;
+                        var selEntry = _panel?.SelectedVehicle;
+                        if (selEntry != null)
+                        {
+                            HandlePlaceBlock(ed, db, selEntry.Value);
+                            ed.WriteMessage("\n  Block placed. Click Start Run or place another block.\n");
+                        }
+                        continue;
+                    }
+
+                    if (pkr.Status == PromptStatus.OK && pkr.StringResult == "Resume")
+                    { _resumeFlag = true; break; }
+
+                    if (pkr.Status == PromptStatus.OK && pkr.StringResult == "StartRun")
+                    { _startRunFlag = true; break; }
+
+                    if (pkr.Status == PromptStatus.OK && pkr.StringResult == "Cancel")
+                    { _cancelFlag = true; break; }
+
+                    if (pkr.Status == PromptStatus.Cancel)
+                    { _cancelFlag = true; break; }
+                }
+
+                if (_cancelFlag) { _panel?.Close(); _panel = null; return; }
+
+                try
+                {
+                    if (_resumeFlag)
+                        RunResume(ed, db);
+                    else
+                        RunDrive(ed, db);
+                }
                 finally { _panel?.Close(); _panel = null; }
             }
             catch (System.Exception ex)
@@ -723,6 +776,230 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 // ── Auto-enter live edit mode via panel ──────────────
                 _panel?.EnterEditMode();
                 LiveEditLoop(ed, db, vehicle, waypoints, sections, sel.Item2, ref gid);
+        }
+
+        // ── Resume a previous drive ─────────────────────────────────
+        private static void RunResume(Editor ed, Database db)
+        {
+            if (_panel == null) return;
+
+            // Find existing VTDRIVE groups
+            var drives = FindExistingDrives(db);
+            if (drives.Count == 0)
+            {
+                ed.WriteMessage("\n  No existing VTDRIVE paths found in drawing.\n");
+                _panel.SetStatus("No drives to resume.", "#FF6B6B");
+                return;
+            }
+
+            // Let user pick a drive path by clicking on it
+            _panel.SetStatus("Click on a drive path polyline to resume...");
+            var peo = new PromptEntityOptions("\n  Click on a VTDRIVE path polyline to resume: ");
+            peo.AllowObjectOnLockedLayer = true;
+            var per = ed.GetEntity(peo);
+            if (per.Status != PromptStatus.OK) return;
+
+            // Find which drive this entity belongs to
+            DriveInfo? found = null;
+            using (var tx = db.TransactionManager.StartTransaction())
+            {
+                var ent = tx.GetObject(per.ObjectId, OpenMode.ForRead) as Entity;
+                if (ent != null)
+                {
+                    var xd = ent.GetXDataForApplication(XDATA_APP);
+                    if (xd != null)
+                    {
+                        var vals = xd.AsArray();
+                        if (vals.Length >= 2)
+                        {
+                            string clickedGid = vals[1].Value.ToString() ?? "";
+                            found = drives.Find(d => d.Gid == clickedGid);
+                        }
+                    }
+                }
+                tx.Commit();
+            }
+
+            if (found == null)
+            {
+                ed.WriteMessage("\n  Selected entity is not part of a VTDRIVE path.\n");
+                return;
+            }
+
+            // Resolve vehicle from stored symbol
+            var lastWp = found.Waypoints[^1];
+            string vehSymbol = found.VehicleSymbol;
+            VehicleUnit? vehicle = null;
+            (string, string, string, bool, int) sel = default;
+
+            var displayList = VehicleLibrary.GetDisplayList();
+            for (int i = 0; i < displayList.Count; i++)
+            {
+                if (displayList[i].Item2 == vehSymbol)
+                {
+                    sel = displayList[i];
+                    vehicle = sel.Item4
+                        ? VehicleLibrary.ArticulatedVehicles[sel.Item5].LeadUnit
+                        : VehicleLibrary.SingleUnits[sel.Item5];
+                    break;
+                }
+            }
+            if (vehicle == null)
+            {
+                ed.WriteMessage($"\n  Vehicle '{vehSymbol}' not found in library.\n");
+                return;
+            }
+
+            ed.WriteMessage($"\n  Resuming drive: {found.Waypoints.Count} existing waypoints, vehicle={vehSymbol}");
+            ed.WriteMessage($"\n  Last position: ({lastWp.Position.X:F1}, {lastWp.Position.Y:F1}), heading={lastWp.Heading * 180 / Math.PI:F1}°\n");
+
+            _speedMph = _panel.SpeedMph;
+            _panel.SetStatus("Resuming — click to add waypoints. Enter to finish.", "#66BB6A");
+            _panel.EnableFinish(true);
+
+            // Start drive from last waypoint
+            var waypoints = new List<WaypointData> { lastWp };
+            var sections = new List<PathSection>();
+            var jig = new DriveJig3(vehicle, waypoints, sections);
+
+            while (true)
+            {
+                if (_cancelFlag) return;
+                if (_finishFlag) break;
+
+                if (_undoFlag)
+                {
+                    _undoFlag = false;
+                    if (waypoints.Count > 1)
+                    {
+                        waypoints.RemoveAt(waypoints.Count - 1);
+                        if (sections.Count > 0) sections.RemoveAt(sections.Count - 1);
+                        jig.Refresh(waypoints, sections);
+                        _panel?.SetStatus($"Undo. {waypoints.Count} waypoints.", "#FFB74D");
+                        _panel?.EnableUndo(waypoints.Count > 1);
+                    }
+                    continue;
+                }
+
+                if (_panel != null) _speedMph = _panel.SpeedMph;
+                var jr = ed.Drag(jig);
+
+                if (_placeBlockFlag)
+                {
+                    _placeBlockFlag = false;
+                    HandlePlaceBlock(ed, db, sel);
+                    _panel?.SetStatus("Block placed. Continue driving...", "#66BB6A");
+                    continue;
+                }
+
+                if (jr.Status == PromptStatus.OK)
+                {
+                    if (waypoints.Count > 1 && jig.IsInUndoZone)
+                    {
+                        waypoints.RemoveAt(waypoints.Count - 1);
+                        if (sections.Count > 0) sections.RemoveAt(sections.Count - 1);
+                        jig.Refresh(waypoints, sections);
+                        _panel?.SetStatus($"Undo. {waypoints.Count} waypoints.", "#FFB74D");
+                        _panel?.EnableUndo(waypoints.Count > 1);
+                        continue;
+                    }
+                    var ps = jig.PreviewSection;
+                    if (ps != null && !ps.IsError)
+                    {
+                        if (ps.WasClamped)
+                            _panel?.SetStatus("Max turn applied.", "#FFB74D");
+                        else
+                            _panel?.SetStatus($"Waypoint placed.", "#66BB6A");
+                        waypoints.Add(ps.End);
+                        sections.Add(ps);
+                        jig.Refresh(waypoints, sections);
+                        _panel?.EnableUndo(true);
+                    }
+                    continue;
+                }
+                break;
+            }
+
+            if (waypoints.Count < 2) return; // no new waypoints added
+
+            // Combine: old waypoints + new waypoints (skip first of new, it's the resume point)
+            var combinedWps = new List<WaypointData>(found.Waypoints);
+            for (int i = 1; i < waypoints.Count; i++)
+                combinedWps.Add(waypoints[i]);
+
+            // Re-solve all sections from scratch for the combined path
+            var combinedSections = new List<PathSection>();
+            for (int i = 1; i < combinedWps.Count; i++)
+            {
+                var prev = combinedWps[i - 1];
+                var cur = combinedWps[i];
+                var ps = SectionSolver.Solve(
+                    prev.Position, prev.Heading, cur.Position,
+                    vehicle, cur.IsReverse, _speedMph * 1.46667);
+                combinedSections.Add(ps);
+            }
+
+            // Erase old group
+            EraseGroup(db, found.Gid);
+
+            // Draw combined as one new group
+            string newGid = DrawFinal(db, vehicle, combinedWps, combinedSections, vehSymbol);
+            _panel?.SetStatus($"Drive resumed — {combinedWps.Count} total waypoints.", "#66BB6A");
+            ed.Regen();
+
+            _panel?.EnterEditMode();
+            LiveEditLoop(ed, db, vehicle, combinedWps, combinedSections, vehSymbol, ref newGid);
+        }
+
+        // ── Find existing VTDRIVE groups in the drawing ─────────────
+        internal class DriveInfo
+        {
+            public string Gid = "";
+            public string VehicleSymbol = "";
+            public List<WaypointData> Waypoints = new();
+        }
+
+        private static List<DriveInfo> FindExistingDrives(Database db)
+        {
+            var result = new List<DriveInfo>();
+            using var tx = db.TransactionManager.StartTransaction();
+
+            var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
+            var ms = (BlockTableRecord)tx.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+            foreach (ObjectId entId in ms)
+            {
+                try
+                {
+                    var ent = tx.GetObject(entId, OpenMode.ForRead);
+                    if (ent is not AcDbPolyline pl) continue;
+
+                    var xd = pl.GetXDataForApplication(XDATA_APP);
+                    if (xd == null) continue;
+
+                    var vals = xd.AsArray();
+                    // Path polyline has 4 XData values: appName, gid, vehSymbol, serializedWps
+                    if (vals.Length < 4) continue;
+
+                    string gid = vals[1].Value?.ToString() ?? "";
+                    string vehSym = vals[2].Value?.ToString() ?? "";
+                    string wpsData = vals[3].Value?.ToString() ?? "";
+
+                    if (string.IsNullOrEmpty(gid) || string.IsNullOrEmpty(wpsData)) continue;
+
+                    // Avoid duplicates (multiple entities share the same gid)
+                    if (result.Any(d => d.Gid == gid)) continue;
+
+                    var wps = DeserializeWps(wpsData);
+                    if (wps.Count < 2) continue;
+
+                    result.Add(new DriveInfo { Gid = gid, VehicleSymbol = vehSym, Waypoints = wps });
+                }
+                catch { }
+            }
+
+            tx.Commit();
+            return result;
         }
 
         // ── Place vehicle detail block ───────────────────────────────

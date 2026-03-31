@@ -29,6 +29,10 @@ namespace AdvancedLandDevTools.UI
         public event Action? AcceptRequested;
         /// <summary>Raised when user clicks Place Detail Block.</summary>
         public event Action? PlaceBlockRequested;
+        /// <summary>Raised when user clicks Start Run.</summary>
+        public event Action? StartRunRequested;
+        /// <summary>Raised when user clicks Resume Previous Drive.</summary>
+        public event Action? ResumeRequested;
 
         private readonly List<VehEntry> _vehicles;
 
@@ -93,7 +97,17 @@ namespace AdvancedLandDevTools.UI
             => DragMove();
 
         private void BtnClose_Click(object sender, RoutedEventArgs e)
-            => CancelRequested?.Invoke();
+        {
+            CancelRequested?.Invoke();
+            // Unblock the ed.GetKeywords prompt during setup phase
+            try
+            {
+                var doc = Autodesk.AutoCAD.ApplicationServices.Application
+                    .DocumentManager.MdiActiveDocument;
+                doc?.SendStringToExecute("\x03", true, false, false); // Ctrl+C = cancel prompt
+            }
+            catch { }
+        }
 
         private void CboVehicle_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
@@ -127,7 +141,56 @@ namespace AdvancedLandDevTools.UI
         private void BtnAccept_Click(object sender, RoutedEventArgs e)
             => AcceptRequested?.Invoke();
 
+        private void BtnStartRun_Click(object sender, RoutedEventArgs e)
+        {
+            // Switch from setup panel to drive panel
+            PnlStart.Visibility = Visibility.Collapsed;
+            TxtStatus.Visibility = Visibility.Visible;
+            PnlActions.Visibility = Visibility.Visible;
+            StartRunRequested?.Invoke();
+
+            // Send keyword to unblock the ed.GetKeywords prompt
+            try
+            {
+                var doc = Autodesk.AutoCAD.ApplicationServices.Application
+                    .DocumentManager.MdiActiveDocument;
+                doc?.SendStringToExecute("StartRun\n", true, false, false);
+            }
+            catch { }
+        }
+
+        private void BtnResume_Click(object sender, RoutedEventArgs e)
+        {
+            // Switch from setup panel to drive panel
+            PnlStart.Visibility = Visibility.Collapsed;
+            TxtStatus.Visibility = Visibility.Visible;
+            PnlActions.Visibility = Visibility.Visible;
+            ResumeRequested?.Invoke();
+
+            // Send keyword to unblock the ed.GetKeywords prompt
+            try
+            {
+                var doc = Autodesk.AutoCAD.ApplicationServices.Application
+                    .DocumentManager.MdiActiveDocument;
+                doc?.SendStringToExecute("Resume\n", true, false, false);
+            }
+            catch { }
+        }
+
         private void BtnPlaceBlock_Click(object sender, RoutedEventArgs e)
-            => PlaceBlockRequested?.Invoke();
+        {
+            PlaceBlockRequested?.Invoke();
+            // If in setup phase, unblock the ed.GetKeywords prompt
+            if (PnlStart.Visibility == Visibility.Visible)
+            {
+                try
+                {
+                    var doc = Autodesk.AutoCAD.ApplicationServices.Application
+                        .DocumentManager.MdiActiveDocument;
+                    doc?.SendStringToExecute("PlaceBlock\n", true, false, false);
+                }
+                catch { }
+            }
+        }
     }
 }

@@ -358,6 +358,31 @@
                 </Button.Template>
             </Button>
 
+            <!-- B2S — Orange (block to surface) -->
+            <Button Tag="BLOCKTOSURFACE " ToolTip="Block to Surface (BLOCKTOSURFACE)"
+                    Click="ToolButton_Click" Style="{x:Null}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Width="38" Height="34"
+                                Background="Transparent" CornerRadius="6"
+                                Margin="1" Cursor="Hand">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="15" Foreground="#FF7043"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="B2S" FontSize="7" Foreground="#FF7043"
+                                           HorizontalAlignment="Center" Margin="0,-1,0,0" Opacity="0.7"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33FF7043"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
             <!-- LR — Red/amber (lowest rim) -->
             <Button Tag="LOWRIM " ToolTip="Lowest Rim Elevation (LOWRIM)"
                     Click="ToolButton_Click" Style="{x:Null}">
@@ -465,8 +490,8 @@
                 </Button.Template>
             </Button>
 
-            <!-- WT — Cyan/water blue (water table) -->
-            <Button Tag="GROUNDWATER " ToolTip="Water Table (GROUNDWATER)"
+            <!-- GWMAY — Cyan/water (water table May) -->
+            <Button Tag="GWMAY " ToolTip="Water Table — Avg May (GWMAY)"
                     Click="ToolButton_Click" Style="{x:Null}">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
@@ -477,13 +502,38 @@
                                 <TextBlock Text="&#xE787;" FontFamily="Segoe MDL2 Assets"
                                            FontSize="15" Foreground="#29B6F6"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="Water" FontSize="7" Foreground="#29B6F6"
+                                <TextBlock Text="GWMay" FontSize="7" Foreground="#29B6F6"
                                            HorizontalAlignment="Center" Margin="0,-1,0,0" Opacity="0.7"/>
                             </StackPanel>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#3329B6F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- GWOCT — Blue/water (water table Oct) -->
+            <Button Tag="GWOCT " ToolTip="Water Table — Oct 2040 (GWOCT)"
+                    Click="ToolButton_Click" Style="{x:Null}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Width="38" Height="34"
+                                Background="Transparent" CornerRadius="6"
+                                Margin="1" Cursor="Hand">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE787;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="15" Foreground="#42A5F5"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="GWOct" FontSize="7" Foreground="#42A5F5"
+                                           HorizontalAlignment="Center" Margin="0,-1,0,0" Opacity="0.7"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3342A5F5"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -547,6 +597,38 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#3342A5F5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border Height="1" Background="#454545" Margin="2,4,2,4"/>
+
+            <!-- ── Sections ──────────────────────────────────────── -->
+            <TextBlock Text="SECTIONS" Foreground="#60CDFF" FontSize="7.5"
+                       FontWeight="SemiBold" HorizontalAlignment="Center"
+                       Margin="0,0,0,3" Opacity="0.6"/>
+
+            <!-- SD — Teal (section drawer) -->
+            <Button Tag="SECDRAW " ToolTip="Section Drawer (SECDRAW)"
+                    Click="ToolButton_Click" Style="{x:Null}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Width="38" Height="34"
+                                Background="Transparent" CornerRadius="6"
+                                Margin="1" Cursor="Hand">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE8A0;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="15" Foreground="#00897B"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="SecDr" FontSize="7" Foreground="#00897B"
+                                           HorizontalAlignment="Center" Margin="0,-1,0,0" Opacity="0.7"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3300897B"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
