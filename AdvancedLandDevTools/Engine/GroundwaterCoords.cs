@@ -192,7 +192,7 @@ namespace AdvancedLandDevTools.Engine
             }
         }
 
-        private static bool ConvertStatePlaneFromLatLon(
+        internal static bool ConvertStatePlaneFromLatLon(
             double lat, double lon, out double eastingFt, out double northingFt)
         {
             double metersPerDegreeLat = 110920.0;

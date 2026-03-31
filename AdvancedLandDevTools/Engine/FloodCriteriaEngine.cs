@@ -11,6 +11,68 @@ using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace AdvancedLandDevTools.Engine
 {
+    // ═════════════════════════════════════════════════════════════════════
+    //  Cached coordinate transformer — created ONCE, reused for all points.
+    //  Avoids per-vertex reflection overhead that freezes Civil 3D.
+    // ═════════════════════════════════════════════════════════════════════
+    internal class CachedCoordTransformer
+    {
+        private readonly object? _transformer;
+        private readonly System.Reflection.MethodInfo? _transformMethod;
+        private readonly bool _useFallback;
+
+        internal CachedCoordTransformer(string drawingCS)
+        {
+            _useFallback = true;
+            if (string.IsNullOrEmpty(drawingCS)) return;
+
+            try
+            {
+                var asm = System.Reflection.Assembly.Load("Autodesk.Geolocation");
+                if (asm == null) return;
+
+                var csType = asm.GetType("Autodesk.Geolocation.CoordinateSystem");
+                var txType = asm.GetType("Autodesk.Geolocation.CoordinateSystemTransformer");
+                if (csType == null || txType == null) return;
+
+                var src = Activator.CreateInstance(csType, "LL84");
+                var tgt = Activator.CreateInstance(csType, drawingCS);
+                _transformer = Activator.CreateInstance(txType, src, tgt);
+                _transformMethod = txType.GetMethod("Transform",
+                    new[] { typeof(Point3d) });
+
+                if (_transformer != null && _transformMethod != null)
+                    _useFallback = false;
+            }
+            catch { /* fall back to approximate conversion */ }
+        }
+
+        internal bool Transform(double lat, double lon,
+                                out double drawingX, out double drawingY)
+        {
+            drawingX = 0; drawingY = 0;
+
+            if (_useFallback)
+                return GroundwaterCoords.ConvertStatePlaneFromLatLon(
+                    lat, lon, out drawingX, out drawingY);
+
+            try
+            {
+                var pt = new Point3d(lon, lat, 0);
+                var result = (Point3d)_transformMethod!.Invoke(
+                    _transformer, new object[] { pt })!;
+                drawingX = result.X;
+                drawingY = result.Y;
+                return true;
+            }
+            catch
+            {
+                return GroundwaterCoords.ConvertStatePlaneFromLatLon(
+                    lat, lon, out drawingX, out drawingY);
+            }
+        }
+    }
+
     public static class FloodCriteriaEngine
     {
         private const string MDC_FLOOD_CRITERIA_URL =
@@ -83,6 +145,7 @@ namespace AdvancedLandDevTools.Engine
                     $"&spatialRel=esriSpatialRelIntersects" +
                     $"&outFields=ELEV" +
                     $"&returnGeometry=true" +
+                    $"&resultRecordCount=30" +
                     $"&f=json";
 
                 string jsonResponse = System.Threading.Tasks.Task.Run(() =>
@@ -123,6 +186,7 @@ namespace AdvancedLandDevTools.Engine
                     $"&outFields=ELEV" +
                     $"&outSR=4326" +
                     $"&returnGeometry=true" +
+                    $"&resultRecordCount=30" +
                     $"&f=json";
 
                 string jsonResponse = System.Threading.Tasks.Task.Run(() =>
@@ -168,6 +232,9 @@ namespace AdvancedLandDevTools.Engine
             var contours = new List<ContourLineData>();
             var center = new Point2d(pickedPoint.X, pickedPoint.Y);
 
+            // Create transformer ONCE — reused for all vertices across all features
+            var transformer = new CachedCoordTransformer(drawingCS);
+
             foreach (var feature in features)
             {
                 var attrs = feature["attributes"] as JObject;
@@ -185,7 +252,7 @@ namespace AdvancedLandDevTools.Engine
                 }
 
                 // Convert geometry to drawing coords and clip to 500 ft radius
-                var clipped = ConvertAndClipPaths(geom, elev, center, drawingCS);
+                var clipped = ConvertAndClipPaths(geom, elev, center, transformer);
                 contours.AddRange(clipped);
             }
 
@@ -214,7 +281,8 @@ namespace AdvancedLandDevTools.Engine
         //  Convert ArcGIS polyline paths (WGS84) → drawing coords, clip to radius
         // ═════════════════════════════════════════════════════════════════════
         private static List<ContourLineData> ConvertAndClipPaths(
-            JObject geometry, double elev, Point2d center, string drawingCS)
+            JObject geometry, double elev, Point2d center,
+            CachedCoordTransformer transformer)
         {
             var result = new List<ContourLineData>();
             var paths = geometry["paths"] as JArray;
@@ -229,8 +297,7 @@ namespace AdvancedLandDevTools.Engine
                     double wgsX = coord[0]!.Value<double>();  // lon
                     double wgsY = coord[1]!.Value<double>();  // lat
 
-                    if (GroundwaterCoords.ConvertFromLatLon(
-                            drawingCS, wgsY, wgsX, out double dx, out double dy))
+                    if (transformer.Transform(wgsY, wgsX, out double dx, out double dy))
                     {
                         drawingPts.Add(new Point2d(dx, dy));
                     }
