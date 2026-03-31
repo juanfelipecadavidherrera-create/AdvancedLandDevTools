@@ -94,6 +94,15 @@ namespace AdvancedLandDevTools.Models
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    //  ContourLineData  –  one clipped contour segment in drawing coordinates
+    // ─────────────────────────────────────────────────────────────────────────
+    public class ContourLineData
+    {
+        public double         Elevation { get; set; }
+        public List<Point2d>  Points    { get; set; } = new();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     //  FloodCriteriaResult  –  data returned from MDC Flood Criteria 2022
     // ─────────────────────────────────────────────────────────────────────────
     public class FloodCriteriaResult
@@ -102,6 +111,7 @@ namespace AdvancedLandDevTools.Models
         public string ErrorMessage { get; set; } = string.Empty;
         public string Elevation    { get; set; } = "N/A";   // Flood criteria elevation (ft NGVD)
         public string Distance     { get; set; } = "N/A";   // Distance to nearest contour line
+        public List<ContourLineData> Contours { get; set; } = new();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
