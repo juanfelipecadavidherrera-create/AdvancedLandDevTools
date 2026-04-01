@@ -33,6 +33,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(VtEditCommand))]
 [assembly: CommandClass(typeof(SectionDrawerCommand))]
 [assembly: CommandClass(typeof(BlockToSurfaceCommand))]
+[assembly: CommandClass(typeof(PipeSizingCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -135,6 +136,7 @@ namespace AdvancedLandDevTools
                 "\n║    CHANGEELEVATION – Pipe Elevation Equalizer           ║" +
                 "\n║    LOWRIM          – Lowest Rim Elevation Finder        ║" +
                 "\n║    ELEVSLOPE       – Elevation Sloper                   ║" +
+                "\n║    PIPESIZING      – Pipe Sizing Calculator              ║" +
                 "\n║  Property Information:                                  ║" +
                 "\n║    FLOODZONE       – FEMA Flood Zone Lookup             ║" +
                 "\n║    FLOODCRITERIA   – MDC County Flood Criteria          ║" +
