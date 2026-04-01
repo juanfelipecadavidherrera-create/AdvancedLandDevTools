@@ -33,6 +33,8 @@ namespace AdvancedLandDevTools.UI
         public event Action? StartRunRequested;
         /// <summary>Raised when user clicks Resume Previous Drive.</summary>
         public event Action? ResumeRequested;
+        /// <summary>Raised when user clicks Steer in Place.</summary>
+        public event Action? SteerRequested;
 
         private readonly List<VehEntry> _vehicles;
 
@@ -147,6 +149,7 @@ namespace AdvancedLandDevTools.UI
             PnlStart.Visibility = Visibility.Collapsed;
             TxtStatus.Visibility = Visibility.Visible;
             PnlActions.Visibility = Visibility.Visible;
+            BtnSteer.Visibility = Visibility.Visible;
             StartRunRequested?.Invoke();
 
             // Send keyword to unblock the ed.GetKeywords prompt
@@ -165,6 +168,7 @@ namespace AdvancedLandDevTools.UI
             PnlStart.Visibility = Visibility.Collapsed;
             TxtStatus.Visibility = Visibility.Visible;
             PnlActions.Visibility = Visibility.Visible;
+            BtnSteer.Visibility = Visibility.Visible;
             ResumeRequested?.Invoke();
 
             // Send keyword to unblock the ed.GetKeywords prompt
@@ -173,6 +177,20 @@ namespace AdvancedLandDevTools.UI
                 var doc = Autodesk.AutoCAD.ApplicationServices.Application
                     .DocumentManager.MdiActiveDocument;
                 doc?.SendStringToExecute("Resume\n", true, false, false);
+            }
+            catch { }
+        }
+
+        private void BtnSteer_Click(object sender, RoutedEventArgs e)
+        {
+            SteerRequested?.Invoke();
+            // Send Escape to immediately cancel the active drag jig so the
+            // steer flag is picked up without needing an extra click.
+            try
+            {
+                var doc = Autodesk.AutoCAD.ApplicationServices.Application
+                    .DocumentManager.MdiActiveDocument;
+                doc?.SendStringToExecute("\x1b", true, false, false); // Escape
             }
             catch { }
         }

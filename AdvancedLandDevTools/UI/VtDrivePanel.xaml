@@ -272,6 +272,17 @@
                         Width="70" Click="BtnCancel_Click"/>
             </StackPanel>
 
+            <!-- Steer in Place button (visible during drive) -->
+            <Button x:Name="BtnSteer" Style="{StaticResource DarkBtn}"
+                    Margin="0,2,0,4" Visibility="Collapsed" Click="BtnSteer_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE7F8;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                               Foreground="#FFB74D" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="Steer in Place (S)" FontSize="11"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
             <!-- Edit mode section (hidden until path is created) -->
             <StackPanel x:Name="PnlEdit" Visibility="Collapsed" Margin="0,8,0,0">
                 <Border Height="1" Background="#333" Margin="0,0,0,8"/>

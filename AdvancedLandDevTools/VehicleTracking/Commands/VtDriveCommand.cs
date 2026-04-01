@@ -26,6 +26,9 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         public Vec2 Position;   // front axle (tracking point)
         public double Heading;  // vehicle heading (front-facing direction)
         public bool IsReverse;
+        /// <summary>Pre-set front wheel steer angle for the NEXT section starting
+        /// from this waypoint. Set by "steer in place" (stopped turn). Default 0.</summary>
+        public double InitialSteer;
     }
 
     /// <summary>
@@ -239,7 +242,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                     // Recompute this section — accept clamped (max-turn) arcs
                     var sec = SectionSolver.Solve(waypoints[i - 1].Position, waypoints[i - 1].Heading,
                         waypoints[i].Position, vehicle, waypoints[i].IsReverse,
-                        VtDriveCommand._speedMph * 1.46667);
+                        VtDriveCommand._speedMph * 1.46667, waypoints[i - 1].InitialSteer);
                     if (sec.IsError) { valid = false; break; }
                     // If clamped, snap waypoint to where vehicle actually arrives
                     if (sec.WasClamped)
@@ -252,7 +255,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                     // Recompute with existing heading (position unchanged, should be near-identical)
                     var sec = SectionSolver.Solve(waypoints[i - 1].Position, waypoints[i - 1].Heading,
                         waypoints[i].Position, vehicle, waypoints[i].IsReverse,
-                        VtDriveCommand._speedMph * 1.46667);
+                        VtDriveCommand._speedMph * 1.46667, waypoints[i - 1].InitialSteer);
                     waypoints[i].Heading = sec.End.Heading;
                     newSecs.Add(sec);
                 }
@@ -404,8 +407,10 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         private const int MAX_STEPS = 5000;    // safety cap
 
         /// <param name="speedFps">Vehicle speed in feet/second (affects steering rate limit).</param>
+        /// <param name="initialSteer">Pre-set front wheel steer angle (from stop-and-steer). 0 = straight.</param>
         public static PathSection Solve(Vec2 startPos, double startHeading,
-            Vec2 target, VehicleUnit v, bool isReverse, double speedFps = 22.0)
+            Vec2 target, VehicleUnit v, bool isReverse, double speedFps = 22.0,
+            double initialSteer = 0.0)
         {
             var sec = new PathSection
             {
@@ -429,7 +434,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
             double heading = startHeading;
             Vec2 rearAxle = new(startPos.X - wb * Math.Cos(heading),
                                 startPos.Y - wb * Math.Sin(heading));
-            double steer = 0.0;
+            double steer = Math.Clamp(initialSteer, -maxSteer, maxSteer);
             int dir = isReverse ? -1 : 1;
 
             // Record initial points
@@ -569,6 +574,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         internal static bool _placeBlockFlag;
         internal static bool _startRunFlag;
         internal static bool _resumeFlag;
+        internal static bool _steerFlag;
 
         [CommandMethod("VTDRIVE", CommandFlags.Modal)]
         public void Execute()
@@ -585,7 +591,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 Database db = doc.Database;
 
                 // ── Show WPF panel (setup mode) ──────────────────────
-                _undoFlag = _finishFlag = _cancelFlag = _acceptFlag = _placeBlockFlag = _startRunFlag = _resumeFlag = false;
+                _undoFlag = _finishFlag = _cancelFlag = _acceptFlag = _placeBlockFlag = _startRunFlag = _resumeFlag = _steerFlag = false;
                 _panel = new VtDrivePanel();
                 _panel.UndoRequested += () => { _undoFlag = true; };
                 _panel.FinishRequested += () => { _finishFlag = true; };
@@ -594,6 +600,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 _panel.PlaceBlockRequested += () => { _placeBlockFlag = true; };
                 _panel.StartRunRequested += () => { _startRunFlag = true; };
                 _panel.ResumeRequested += () => { _resumeFlag = true; };
+                _panel.SteerRequested += () => { _steerFlag = true; };
                 _panel.Show();
 
                 // ── Setup phase: wait for Start Run, Resume, Place Block, or Cancel ──
@@ -734,6 +741,26 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                         _placeBlockFlag = false;
                         HandlePlaceBlock(ed, db, sel);
                         _panel?.SetStatus("Block placed. Continue driving...", "#66BB6A");
+                        continue;
+                    }
+
+                    // ── Steer in Place (interrupted from panel or S key) ──
+                    if (_steerFlag)
+                    {
+                        _steerFlag = false;
+                        double steerAngle = RunSteerInPlace(ed, vehicle, waypoints.Last());
+                        if (!double.IsNaN(steerAngle))
+                        {
+                            waypoints.Last().InitialSteer = steerAngle;
+                            jig.Refresh(waypoints, sections);
+                            double deg = Math.Abs(steerAngle) * 180.0 / Math.PI;
+                            string dir = steerAngle > 0.01 ? "left" : steerAngle < -0.01 ? "right" : "straight";
+                            _panel?.SetStatus($"Wheels set {deg:F0}° {dir}. Continue driving.", "#66BB6A");
+                        }
+                        else
+                        {
+                            _panel?.SetStatus("Steer cancelled. Continue driving.", "#FFB74D");
+                        }
                         continue;
                     }
 
@@ -892,6 +919,25 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                     continue;
                 }
 
+                if (_steerFlag)
+                {
+                    _steerFlag = false;
+                    double steerAngle = RunSteerInPlace(ed, vehicle, waypoints.Last());
+                    if (!double.IsNaN(steerAngle))
+                    {
+                        waypoints.Last().InitialSteer = steerAngle;
+                        jig.Refresh(waypoints, sections);
+                        double deg = Math.Abs(steerAngle) * 180.0 / Math.PI;
+                        string dir = steerAngle > 0.01 ? "left" : steerAngle < -0.01 ? "right" : "straight";
+                        _panel?.SetStatus($"Wheels set {deg:F0}° {dir}. Continue driving.", "#66BB6A");
+                    }
+                    else
+                    {
+                        _panel?.SetStatus("Steer cancelled. Continue driving.", "#FFB74D");
+                    }
+                    continue;
+                }
+
                 if (jr.Status == PromptStatus.OK)
                 {
                     if (waypoints.Count > 1 && jig.IsInUndoZone)
@@ -935,7 +981,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 var cur = combinedWps[i];
                 var ps = SectionSolver.Solve(
                     prev.Position, prev.Heading, cur.Position,
-                    vehicle, cur.IsReverse, _speedMph * 1.46667);
+                    vehicle, cur.IsReverse, _speedMph * 1.46667, prev.InitialSteer);
                 combinedSections.Add(ps);
             }
 
@@ -1059,6 +1105,21 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
 
             tx.Commit();
             ed.WriteMessage($"\n  Vehicle detail block [{symbol}] placed.\n");
+        }
+
+        // ── Steer in Place — stop and pre-crank front wheels ─────────
+        /// <summary>
+        /// Lets user set the front wheel steer angle while vehicle is stopped.
+        /// Returns the steer angle in radians, or NaN if cancelled.
+        /// </summary>
+        private static double RunSteerInPlace(Editor ed, VehicleUnit vehicle, WaypointData wp)
+        {
+            ed.WriteMessage("\n  Steer in Place — move mouse to set wheel angle, click to confirm.\n");
+            var jig = new SteerJig(vehicle, wp);
+            var jr = ed.Drag(jig);
+            if (jr.Status == PromptStatus.OK)
+                return jig.ResultSteer;
+            return double.NaN;
         }
 
         // ── Draw permanent entities ──────────────────────────────────
@@ -1332,7 +1393,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
         internal static string SerializeWps(List<WaypointData> wps)
         {
             return string.Join("|", wps.Select(w =>
-                $"{w.Position.X:F4},{w.Position.Y:F4},{w.Heading:F6},{(w.IsReverse ? 1 : 0)}"));
+                $"{w.Position.X:F4},{w.Position.Y:F4},{w.Heading:F6},{(w.IsReverse ? 1 : 0)},{w.InitialSteer:F6}"));
         }
 
         internal static List<WaypointData> DeserializeWps(string data)
@@ -1346,7 +1407,8 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                     {
                         Position = new Vec2(double.Parse(v[0]), double.Parse(v[1])),
                         Heading = double.Parse(v[2]),
-                        IsReverse = v[3] == "1"
+                        IsReverse = v[3] == "1",
+                        InitialSteer = v.Length >= 5 ? double.Parse(v[4]) : 0.0
                     });
             }
             return result;
@@ -1407,7 +1469,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                         var sec = SectionSolver.Solve(waypoints[i - 1].Position,
                             waypoints[i - 1].Heading, waypoints[i].Position,
                             vehicle, waypoints[i].IsReverse,
-                            VtDriveCommand._speedMph * 1.46667);
+                            VtDriveCommand._speedMph * 1.46667, waypoints[i - 1].InitialSteer);
                         waypoints[i].Heading = sec.End.Heading;
                         sections.Add(sec);
                     }
@@ -1476,7 +1538,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
             // Section BEFORE: wp[i-1] → mouse
             _secBefore = SectionSolver.Solve(_wps[i - 1].Position, _wps[i - 1].Heading,
                 _mousePos, _v, _wps[i].IsReverse,
-                VtDriveCommand._speedMph * 1.46667);
+                VtDriveCommand._speedMph * 1.46667, _wps[i - 1].InitialSteer);
             if (_secBefore.IsError) _valid = false;
             // WasClamped is OK — shows max-turn arc
 
@@ -1489,7 +1551,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
             {
                 _secAfter = SectionSolver.Solve(afterStart, newH,
                     _wps[i + 1].Position, _v, _wps[i + 1].IsReverse,
-                    VtDriveCommand._speedMph * 1.46667);
+                    VtDriveCommand._speedMph * 1.46667, _wps[i].InitialSteer);
                 if (_secAfter != null && _secAfter.IsError) _valid = false;
             }
             else
@@ -1699,7 +1761,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                 double bearing = Math.Atan2(tgt.Y - lw.Position.Y, tgt.X - lw.Position.X);
                 bool rev = Math.Abs(SectionSolver.Norm(bearing - lw.Heading)) > Math.PI * 0.6;
                 _preview = SectionSolver.Solve(lw.Position, lw.Heading, tgt, _v, rev,
-                    VtDriveCommand._speedMph * 1.46667);
+                    VtDriveCommand._speedMph * 1.46667, lw.InitialSteer);
             }
             else _preview = null;
 
@@ -1859,6 +1921,143 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  SteerJig — Steer in place (stop and turn wheels)
+    //  Shows the vehicle body stationary while front wheels rotate
+    //  based on mouse position (left/right of vehicle heading).
+    // ═══════════════════════════════════════════════════════════════
+
+    internal class SteerJig : DrawJig
+    {
+        private readonly VehicleUnit _v;
+        private readonly WaypointData _wp;
+        private Point3d _mouse;
+        private double _steer;
+
+        public double ResultSteer => _steer;
+
+        public SteerJig(VehicleUnit v, WaypointData wp)
+        {
+            _v = v;
+            _wp = wp;
+            _mouse = new Point3d(wp.Position.X, wp.Position.Y, 0);
+        }
+
+        protected override SamplerStatus Sampler(JigPrompts prompts)
+        {
+            var opt = new JigPromptPointOptions(
+                "\nMove mouse to steer wheels. Click to confirm: ")
+            {
+                UserInputControls = UserInputControls.Accept3dCoordinates |
+                                    UserInputControls.NullResponseAccepted
+            };
+            opt.UseBasePoint = true;
+            opt.BasePoint = new Point3d(_wp.Position.X, _wp.Position.Y, 0);
+
+            var res = prompts.AcquirePoint(opt);
+            if (res.Status != PromptStatus.OK) return SamplerStatus.Cancel;
+            if (res.Value.DistanceTo(_mouse) < 0.05) return SamplerStatus.NoChange;
+            _mouse = res.Value;
+
+            // Compute steer angle from mouse position relative to vehicle heading.
+            // Angle between heading and bearing to mouse determines sign and magnitude.
+            double bearing = Math.Atan2(
+                _mouse.Y - _wp.Position.Y, _mouse.X - _wp.Position.X);
+            double angleDiff = SectionSolver.Norm(bearing - _wp.Heading);
+
+            // Map the angleDiff to a steer angle. +90° = full lock left, -90° = full lock right.
+            // Clamp to maxSteer.
+            double maxS = _v.MaxSteeringAngle;
+            _steer = Math.Clamp(angleDiff / (Math.PI * 0.5) * maxS, -maxS, maxS);
+
+            return SamplerStatus.OK;
+        }
+
+        protected override bool WorldDraw(WorldDraw draw)
+        {
+            var g = draw.Geometry;
+            var s = draw.SubEntityTraits;
+
+            // Draw vehicle body (stationary)
+            Vec2 rear = new(_wp.Position.X - _v.Wheelbase * Math.Cos(_wp.Heading),
+                            _wp.Position.Y - _v.Wheelbase * Math.Sin(_wp.Heading));
+            var corners = SweptPathSolver.ComputeBodyCorners(_v, rear, _wp.Heading);
+            var body = new Point3dCollection();
+            foreach (var c in corners) body.Add(new Point3d(c.X, c.Y, 0));
+            body.Add(new Point3d(corners[0].X, corners[0].Y, 0));
+            s.Color = 150; s.LineWeight = LineWeight.LineWeight030;
+            g.Polyline(body, Vector3d.ZAxis, IntPtr.Zero);
+
+            // Axle lines
+            double hw = _v.Width * 0.5;
+            double px = -Math.Sin(_wp.Heading), py = Math.Cos(_wp.Heading);
+            s.Color = 7; s.LineWeight = LineWeight.LineWeight020;
+            g.Polyline(new Point3dCollection {
+                new Point3d(rear.X + hw * px, rear.Y + hw * py, 0),
+                new Point3d(rear.X - hw * px, rear.Y - hw * py, 0)
+            }, Vector3d.ZAxis, IntPtr.Zero);
+            g.Polyline(new Point3dCollection {
+                new Point3d(_wp.Position.X + hw * px, _wp.Position.Y + hw * py, 0),
+                new Point3d(_wp.Position.X - hw * px, _wp.Position.Y - hw * py, 0)
+            }, Vector3d.ZAxis, IntPtr.Zero);
+
+            // Draw wheels with current steer angle (front wheels rotate, rear fixed)
+            WheelViz.DrawWheels(g, s, _v, _wp, _steer, false);
+
+            // Draw heading indicator line (where vehicle will go)
+            double indicatorLen = _v.Length * 1.5;
+            double futureHeading = _wp.Heading;
+            // Show approximate arc direction if steering
+            if (Math.Abs(_steer) > 1e-4)
+            {
+                double R = _v.Wheelbase / Math.Tan(Math.Abs(_steer));
+                double arcLen = indicatorLen;
+                double sweep = arcLen / R * Math.Sign(_steer);
+                double perpA = _wp.Heading + Math.Sign(_steer) * Math.PI * 0.5;
+                Vec2 center = new(_wp.Position.X + R * Math.Cos(perpA),
+                                  _wp.Position.Y + R * Math.Sin(perpA));
+                double startA = Math.Atan2(
+                    _wp.Position.Y - center.Y, _wp.Position.X - center.X);
+
+                var arcPts = new Point3dCollection();
+                int segs = 16;
+                for (int i = 0; i <= segs; i++)
+                {
+                    double a = startA + sweep * i / segs;
+                    arcPts.Add(new Point3d(
+                        center.X + R * Math.Cos(a),
+                        center.Y + R * Math.Sin(a), 0));
+                }
+                s.Color = 3; s.LineWeight = LineWeight.LineWeight015;
+                g.Polyline(arcPts, Vector3d.ZAxis, IntPtr.Zero);
+            }
+            else
+            {
+                // Straight indicator
+                s.Color = 3; s.LineWeight = LineWeight.LineWeight015;
+                g.Polyline(new Point3dCollection {
+                    new Point3d(_wp.Position.X, _wp.Position.Y, 0),
+                    new Point3d(_wp.Position.X + indicatorLen * Math.Cos(_wp.Heading),
+                                _wp.Position.Y + indicatorLen * Math.Sin(_wp.Heading), 0)
+                }, Vector3d.ZAxis, IntPtr.Zero);
+            }
+
+            // "STEER" label
+            double lblOff = _v.Width * 0.9;
+            double lx = _wp.Position.X - lblOff * px;
+            double ly = _wp.Position.Y - lblOff * py;
+            double pct = _v.MaxSteeringAngle > 1e-9
+                ? Math.Abs(_steer) / _v.MaxSteeringAngle * 100.0 : 0;
+            string dir = _steer > 0.01 ? "L" : (_steer < -0.01 ? "R" : "");
+            s.Color = 2; s.LineWeight = LineWeight.LineWeight020;
+            double th = _v.TrackWidth * 0.10 * 2.5 * 1.5;
+            g.Text(new Point3d(lx, ly, 0), Vector3d.ZAxis, Vector3d.XAxis,
+                th, 1.0, 0, $"STEER {pct:F0}%{dir}");
+
+            return true;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     //  VTEDIT Command — Click near any X marker or path to edit.
     //  Hides old geometry, shows live jig preview, redraws on finish.
     // ═══════════════════════════════════════════════════════════════
@@ -1996,7 +2195,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                         {
                             var sec = SectionSolver.Solve(waypoints[i].Position, waypoints[i].Heading,
                                 waypoints[i + 1].Position, vehicle, waypoints[i + 1].IsReverse,
-                                VtDriveCommand._speedMph * 1.46667);
+                                VtDriveCommand._speedMph * 1.46667, waypoints[i].InitialSteer);
                             if (sec.IsError) { valid = false; break; }
                             // If clamped, snap waypoint to where vehicle actually arrives
                             if (sec.WasClamped)
@@ -2028,7 +2227,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
                     {
                         var sec = SectionSolver.Solve(waypoints[i - 1].Position, waypoints[i - 1].Heading,
                             waypoints[i].Position, vehicle, waypoints[i].IsReverse,
-                            VtDriveCommand._speedMph * 1.46667);
+                            VtDriveCommand._speedMph * 1.46667, waypoints[i - 1].InitialSteer);
                         waypoints[i].Heading = sec.End.Heading;
                         newSecs.Add(sec);
                     }
@@ -2137,7 +2336,7 @@ namespace AdvancedLandDevTools.VehicleTracking.Commands
             {
                 var sec = SectionSolver.Solve(tmp[i - 1].Position, tmp[i - 1].Heading,
                     tmp[i].Position, _v, tmp[i].IsReverse,
-                    VtDriveCommand._speedMph * 1.46667);
+                    VtDriveCommand._speedMph * 1.46667, tmp[i - 1].InitialSteer);
                 if (sec.WasClamped)
                     tmp[i].Position = sec.End.Position;
                 tmp[i].Heading = sec.End.Heading;
