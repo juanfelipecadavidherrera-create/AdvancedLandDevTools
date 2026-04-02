@@ -214,14 +214,11 @@ namespace AdvancedLandDevTools.Commands
             btr.AppendEntity(clLine);
             tx.AddNewlyCreatedDBObject(clLine, true);
 
-            // Segment divider lines (when checked) — skip at block boundaries
+            // Segment divider lines (when checked) — one vertical line at every segment boundary
             if (drawSegmentLines)
             {
                 foreach (var bp in geo.SegmentBoundaries)
                 {
-                    // Skip divider lines at curb/gutter blocks — the block outline is enough
-                    if (bp.Type != Engine.SegmentType.Normal) continue;
-
                     var divLine = new Autodesk.AutoCAD.DatabaseServices.Line(
                         new Point3d(insertPt.X + bp.X, insertPt.Y + bp.Y, 0),
                         new Point3d(insertPt.X + bp.X, insertPt.Y + clTopAbove, 0))
