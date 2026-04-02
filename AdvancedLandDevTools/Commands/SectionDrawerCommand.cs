@@ -96,7 +96,7 @@ namespace AdvancedLandDevTools.Commands
             DrawSurfaceLines(btr, tx, insertPt, layerId, geo.LeftPoints,  profile.LeftSegments);
             DrawSurfaceLines(btr, tx, insertPt, layerId, geo.RightPoints, profile.RightSegments);
 
-            // Block outlines (closed polylines for curbs/gutters)
+            // Block outlines (closed polylines for curbs/gutters) — always with concrete hatch
             foreach (var block in geo.BlockOutlines)
             {
                 if (block.Count < 3) continue;
@@ -112,6 +112,22 @@ namespace AdvancedLandDevTools.Commands
                 pl.ColorIndex = 8; // gray for concrete blocks
                 btr.AppendEntity(pl);
                 tx.AddNewlyCreatedDBObject(pl, true);
+
+                try
+                {
+                    var hatch = new Hatch();
+                    btr.AppendEntity(hatch);
+                    tx.AddNewlyCreatedDBObject(hatch, true);
+                    hatch.LayerId = layerId;
+                    hatch.ColorIndex = 8;
+                    hatch.SetHatchPattern(HatchPatternType.PreDefined, "AR-CONC");
+                    hatch.PatternScale = 0.05;
+                    hatch.Associative = false;
+                    var ids = new ObjectIdCollection { pl.ObjectId };
+                    hatch.AppendLoop(HatchLoopTypes.Default, ids);
+                    hatch.EvaluateHatch(true);
+                }
+                catch { }
             }
 
             // ── Road structural layers (per-segment IsRoad) ────────────────

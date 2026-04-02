@@ -206,8 +206,8 @@ namespace AdvancedLandDevTools.Engine
                 {
                     if (current != null)
                     {
-                        // Close region with this non-road point
-                        current.Add(fullSurface[i]);
+                        // Close region at the last road point (do NOT include the block's
+                        // first sub-point — that would push the hatch into the curb area)
                         geo.RoadRegions.Add(current);
                         current = null;
                     }
