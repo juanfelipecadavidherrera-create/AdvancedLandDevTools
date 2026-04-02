@@ -121,10 +121,11 @@ namespace AdvancedLandDevTools.Commands
                     hatch.LayerId = layerId;
                     hatch.ColorIndex = 8;
                     hatch.SetHatchPattern(HatchPatternType.PreDefined, "AR-CONC");
-                    hatch.PatternScale = 0.05;
+                    hatch.PatternScale = 0.25;   // 0.05 was too small to render visibly
+                    hatch.HatchStyle = HatchStyle.Normal;
                     hatch.Associative = false;
                     var ids = new ObjectIdCollection { pl.ObjectId };
-                    hatch.AppendLoop(HatchLoopTypes.Default, ids);
+                    hatch.AppendLoop(HatchLoopTypes.Polyline, ids);  // more stable for closed polylines
                     hatch.EvaluateHatch(true);
                 }
                 catch { }

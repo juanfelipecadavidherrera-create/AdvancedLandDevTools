@@ -148,71 +148,52 @@ namespace AdvancedLandDevTools.Engine
         /// <summary>Build contiguous road surface regions for structural layer drawing.</summary>
         private static void BuildRoadRegions(SectionGeometry geo, SectionProfile profile)
         {
-            // Build full surface: left reversed + right (skip duplicate origin)
-            var fullSurface = new List<(double X, double Y)>();
-            var fullIsRoad = new List<bool>();
+            // Process each side independently, walking center → outward.
+            // LeftPoints / RightPoints are already in that order, so no reversal needed.
+            BuildSideRoadRegions(geo, profile.RightSegments, geo.RightPoints);
+            BuildSideRoadRegions(geo, profile.LeftSegments,  geo.LeftPoints);
+        }
 
-            // Left side reversed (outermost → center)
-            // Each left segment's sub-points map to LeftPoints[1..N]
-            int lIdx = geo.LeftPoints.Count - 1;
-            for (int s = profile.LeftSegments.Count - 1; s >= 0; s--)
-            {
-                int count = SubPointCount(profile.LeftSegments[s]);
-                for (int k = 0; k < count; k++)
-                {
-                    if (lIdx >= 0)
-                    {
-                        fullSurface.Add(geo.LeftPoints[lIdx]);
-                        fullIsRoad.Add(profile.LeftSegments[s].IsRoad);
-                        lIdx--;
-                    }
-                }
-            }
-            // Add center point (origin)
-            fullSurface.Add(geo.LeftPoints[0]);
-            fullIsRoad.Add(false); // center point itself
+        /// <summary>
+        /// Walks one side center → outward and collects contiguous IsRoad runs into
+        /// RoadRegions.  Each region starts at the boundary point that precedes the run
+        /// (center origin or the far edge of the preceding block) and ends at the boundary
+        /// point that follows it — no block sub-points are ever included.
+        /// </summary>
+        private static void BuildSideRoadRegions(SectionGeometry geo,
+            List<SectionSegment> segments, List<(double X, double Y)> points)
+        {
+            List<(double X, double Y)>? current = null;
+            // ptIdx tracks the index of the boundary point before the current segment's
+            // sub-points.  points[0] is always the center/origin.
+            int ptIdx = 0;
 
-            // Right side (center → outermost), skip first (already added)
-            int rIdx = 1;
-            foreach (var seg in profile.RightSegments)
+            foreach (var seg in segments)
             {
                 int count = SubPointCount(seg);
-                for (int k = 0; k < count; k++)
-                {
-                    if (rIdx < geo.RightPoints.Count)
-                    {
-                        fullSurface.Add(geo.RightPoints[rIdx]);
-                        fullIsRoad.Add(seg.IsRoad);
-                        rIdx++;
-                    }
-                }
-            }
 
-            // Extract contiguous road regions
-            List<(double X, double Y)>? current = null;
-            for (int i = 0; i < fullSurface.Count; i++)
-            {
-                if (fullIsRoad[i])
+                if (seg.IsRoad)
                 {
                     if (current == null)
                     {
-                        current = new List<(double, double)>();
-                        // Add previous point as region start if available
-                        if (i > 0) current.Add(fullSurface[i - 1]);
+                        // Open a new region starting at the current boundary point
+                        // (center for the first road segment, block far-edge otherwise).
+                        current = new List<(double X, double Y)> { points[ptIdx] };
                     }
-                    current.Add(fullSurface[i]);
+                    for (int k = 1; k <= count; k++)
+                        current.Add(points[ptIdx + k]);
                 }
-                else
+                else if (current != null)
                 {
-                    if (current != null)
-                    {
-                        // Close region at the last road point (do NOT include the block's
-                        // first sub-point — that would push the hatch into the curb area)
-                        geo.RoadRegions.Add(current);
-                        current = null;
-                    }
+                    // Close the road region at points[ptIdx] — the exact road/block boundary.
+                    // The block's own sub-points are never touched.
+                    if (current.Count >= 2) geo.RoadRegions.Add(current);
+                    current = null;
                 }
+
+                ptIdx += count;
             }
+
             if (current != null && current.Count >= 2)
                 geo.RoadRegions.Add(current);
         }
