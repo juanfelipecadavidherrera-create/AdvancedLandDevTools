@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -91,37 +92,9 @@ namespace AdvancedLandDevTools.Commands
             }
             var layerId = lt[LAYER_NAME];
 
-            // Left polyline (no centerline in output)
-            if (geo.LeftPoints.Count >= 2)
-            {
-                var pl = new AcDbPolyline();
-                for (int i = 0; i < geo.LeftPoints.Count; i++)
-                {
-                    var p = geo.LeftPoints[i];
-                    pl.AddVertexAt(i,
-                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y), 0, 0, 0);
-                }
-                pl.LayerId = layerId;
-                pl.ColorIndex = 4;
-                btr.AppendEntity(pl);
-                tx.AddNewlyCreatedDBObject(pl, true);
-            }
-
-            // Right polyline
-            if (geo.RightPoints.Count >= 2)
-            {
-                var pl = new AcDbPolyline();
-                for (int i = 0; i < geo.RightPoints.Count; i++)
-                {
-                    var p = geo.RightPoints[i];
-                    pl.AddVertexAt(i,
-                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y), 0, 0, 0);
-                }
-                pl.LayerId = layerId;
-                pl.ColorIndex = 4;
-                btr.AppendEntity(pl);
-                tx.AddNewlyCreatedDBObject(pl, true);
-            }
+            // Left + right surface lines — split at block segments so lines don't overdraw block outlines
+            DrawSurfaceLines(btr, tx, insertPt, layerId, geo.LeftPoints,  profile.LeftSegments);
+            DrawSurfaceLines(btr, tx, insertPt, layerId, geo.RightPoints, profile.RightSegments);
 
             // Block outlines (closed polylines for curbs/gutters)
             foreach (var block in geo.BlockOutlines)
@@ -262,6 +235,62 @@ namespace AdvancedLandDevTools.Commands
             }
 
             tx.Commit();
+        }
+
+        /// <summary>
+        /// Draws surface profile lines for one side, breaking the polyline at each block-type
+        /// segment (TypeF, TypeD, ValleyGutter) so the line never overdraw the block outlines.
+        /// A new polyline run resumes from the far end of each block.
+        /// </summary>
+        private static void DrawSurfaceLines(
+            BlockTableRecord btr, Transaction tx,
+            Point3d insertPt, ObjectId layerId,
+            List<(double X, double Y)> points,
+            List<SectionSegment> segments)
+        {
+            if (points.Count < 2) return;
+
+            var runs = new List<List<(double X, double Y)>>();
+            var current = new List<(double X, double Y)> { points[0] };
+            int ptIdx = 0;
+
+            foreach (var seg in segments)
+            {
+                int count = SectionDrawerEngine.SubPointCount(seg);
+
+                if (seg.Type == Engine.SegmentType.Normal)
+                {
+                    for (int k = 1; k <= count; k++)
+                        current.Add(points[ptIdx + k]);
+                }
+                else
+                {
+                    // Block segment: close the current run at the block start (already last pt),
+                    // then begin a fresh run from the block's far end point.
+                    if (current.Count >= 2) runs.Add(current);
+                    current = new List<(double X, double Y)> { points[ptIdx + count] };
+                }
+
+                ptIdx += count;
+            }
+
+            if (current.Count >= 2) runs.Add(current);
+
+            foreach (var run in runs)
+            {
+                if (run.Count < 2) continue;
+                var pl = new AcDbPolyline();
+                for (int i = 0; i < run.Count; i++)
+                {
+                    var p = run[i];
+                    pl.AddVertexAt(i,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y), 0, 0, 0);
+                }
+                pl.LayerId = layerId;
+                pl.ColorIndex = 4; // cyan
+                btr.AppendEntity(pl);
+                tx.AddNewlyCreatedDBObject(pl, true);
+            }
         }
     }
 }
