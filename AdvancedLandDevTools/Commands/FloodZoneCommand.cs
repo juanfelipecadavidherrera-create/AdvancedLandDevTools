@@ -116,7 +116,7 @@ namespace AdvancedLandDevTools.Commands
             ed.WriteMessage($"\n  ║  Distance to Line:   {result.Distance,-25} ║");
             ed.WriteMessage("\n  ╠══════════════════════════════════════════════════╣");
             ed.WriteMessage("\n  ║  Note: Elevation is the minimum ground surface  ║");
-            ed.WriteMessage("\n  ║  elevation for developed properties (ft NGVD).  ║");
+            ed.WriteMessage("\n  ║  elevation for developed properties (ft NAVD).  ║");
             ed.WriteMessage("\n  ╚══════════════════════════════════════════════════╝");
 
             // Draw contour lines within 500 ft radius
@@ -224,7 +224,7 @@ namespace AdvancedLandDevTools.Commands
 
                         var mtext = new MText();
                         mtext.Location   = new Point3d(midPt.X + offsetX, midPt.Y + offsetY, 0);
-                        mtext.Contents   = $"FC ELEV: {contour.Elevation:F1}' NGVD";
+                        mtext.Contents   = $"FC ELEV: {contour.Elevation:F1}' NAVD / {contour.Elevation + 1.52:F2}' NGVD";
                         mtext.TextHeight = 4.0;
                         mtext.Rotation   = angle;
                         mtext.Attachment = AttachmentPoint.BottomCenter;

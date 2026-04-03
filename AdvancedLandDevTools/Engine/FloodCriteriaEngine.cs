@@ -271,7 +271,7 @@ namespace AdvancedLandDevTools.Engine
             return new FloodCriteriaResult
             {
                 Success   = true,
-                Elevation = $"{nearestElev:F1} ft NGVD",
+                Elevation = $"{nearestElev:F1} NAVD ; {nearestElev + 1.52:F2} NGVD",
                 Distance  = $"{distFeet:F0} ft (approx)",
                 Contours  = contours
             };
