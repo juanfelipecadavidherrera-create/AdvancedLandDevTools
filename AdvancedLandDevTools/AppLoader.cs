@@ -35,6 +35,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(BlockToSurfaceCommand))]
 [assembly: CommandClass(typeof(TextToSurfaceCommand))]
 [assembly: CommandClass(typeof(PipeSizingCommand))]
+[assembly: CommandClass(typeof(TrenchManagerCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -149,8 +150,9 @@ namespace AdvancedLandDevTools
                 "\n║    SECTIONLOOKUP   – PLSS Township/Range/Section        ║" +
                 "\n║    GWMAY           – Water Table (Avg May)              ║" +
                 "\n║    GWOCT           – Water Table (October 2040)         ║" +
-                "\n║  Areas:                                                 ║" +
+                "\n║  Areas & Excavation:                                    ║" +
                 "\n║    AREAMANAGER     – Area Manager Palette               ║" +
+                "\n║    EXF             – EXF Trench Manager Palette         ║" +
                 "\n║  Viewports:                                             ║" +
                 "\n║    VPCUT           – Viewport Cut (clip from shapes)    ║" +
                 "\n║  Vehicle Tracking:                                      ║" +

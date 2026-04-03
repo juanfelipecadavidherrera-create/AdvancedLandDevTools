@@ -657,6 +657,30 @@ namespace AdvancedLandDevTools.Ribbon
             };
             qaSource.Items.Add(btnAreaManager);
 
+            // ── EXF Trench Manager button ─────────────────────────────────
+            var btnTrenchManager = new RibbonButton
+            {
+                Id               = "ALDT_BTN_TRENCHMANAGER",
+                Name             = "EXF Trench Manager",
+                Text             = "Trench\nManager",
+                Description      = "Open the EXF Trench Manager palette to track linear " +
+                                   "trench lengths per project.",
+                ToolTip          = BuildToolTip(
+                    "EXF Trench Manager",
+                    "Toggle the EXF Trench Manager dockable panel. Select a polyline and " +
+                    "the tool stores the longest consecutive segment (e.g. longest side " +
+                    "of a rectangle). Zoom to any stored trench.\n\nCommand: EXF"),
+                CommandHandler   = new RibbonCommandHandler("EXF "),
+                CommandParameter = "EXF ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildTrenchManagerIcon(32),
+                Image            = BuildTrenchManagerIcon(16)
+            };
+            qaSource.Items.Add(btnTrenchManager);
+
             tab.Panels.Add(new RibbonPanel { Source = qaSource });
 
             // ═══════════════════════════════════════════════════════════════
@@ -1808,6 +1832,91 @@ namespace AdvancedLandDevTools.Ribbon
                 Canvas.SetTop(dot, dotY);
                 canvas.Children.Add(dot);
             }
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ── EXF Trench Manager icon — trench cross-section + ruler ───────
+        private static ImageSource BuildTrenchManagerIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Earth / ground fill ───────────────────────────────────────────
+            Add(new Rectangle { Width = size, Height = s * 14,
+                Fill = C("#3E2723") });
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 18);
+
+            // ── Trench cut-out (U shape in earth) ────────────────────────────
+            // Left wall
+            Add(new Rectangle { Width = s * 6, Height = s * 14,
+                Fill = C("#1A1A2E") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 8);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 18);
+
+            // Right wall
+            Add(new Rectangle { Width = s * 6, Height = s * 14,
+                Fill = C("#1A1A2E") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 18);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 18);
+
+            // Trench bottom (slightly lighter)
+            Add(new Rectangle { Width = s * 10, Height = s * 3,
+                Fill = C("#263238") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 8);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 29);
+
+            // ── Trench outline ───────────────────────────────────────────────
+            var outline = C("#FF8A65");
+            double lw = s * 1.4;
+            // Left wall line
+            Add(new Line { X1=s*8,  Y1=s*18, X2=s*8,  Y2=s*32, Stroke=outline, StrokeThickness=lw });
+            // Right wall line
+            Add(new Line { X1=s*24, Y1=s*18, X2=s*24, Y2=s*32, Stroke=outline, StrokeThickness=lw });
+            // Bottom line
+            Add(new Line { X1=s*8,  Y1=s*29, X2=s*24, Y2=s*29, Stroke=outline, StrokeThickness=lw });
+
+            // ── Ground surface line ──────────────────────────────────────────
+            Add(new Line { X1=s*0, Y1=s*18, X2=s*32, Y2=s*18,
+                Stroke=C("#8D6E63"), StrokeThickness=s*1.5 });
+
+            // ── Dimension arrow showing longest segment (top arrow) ───────────
+            var dimColor = C("#4DD0E1");
+            double aw = s * 1.3;
+            // Arrow shaft
+            Add(new Line { X1=s*8, Y1=s*12, X2=s*24, Y2=s*12,
+                Stroke=dimColor, StrokeThickness=aw });
+            // Left tick
+            Add(new Line { X1=s*8, Y1=s*10, X2=s*8, Y2=s*14,
+                Stroke=dimColor, StrokeThickness=aw });
+            // Right tick
+            Add(new Line { X1=s*24, Y1=s*10, X2=s*24, Y2=s*14,
+                Stroke=dimColor, StrokeThickness=aw });
+
+            // ── Small ruler ticks on top ─────────────────────────────────────
+            Add(new Line { X1=s*12, Y1=s*12, X2=s*12, Y2=s*10,
+                Stroke=dimColor, StrokeThickness=s*0.8 });
+            Add(new Line { X1=s*16, Y1=s*12, X2=s*16, Y2=s*10,
+                Stroke=dimColor, StrokeThickness=s*0.8 });
+            Add(new Line { X1=s*20, Y1=s*12, X2=s*20, Y2=s*10,
+                Stroke=dimColor, StrokeThickness=s*0.8 });
+
+            // ── Length label ─────────────────────────────────────────────────
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text = "L",
+                FontSize = s * 7,
+                FontWeight = System.Windows.FontWeights.Bold,
+                Foreground = C("#FFF176")
+            };
+            Canvas.SetLeft(lbl, s * 14); Canvas.SetTop(lbl, s * 2); Add(lbl);
 
             return RenderToBitmap(canvas, size, size);
         }

@@ -597,6 +597,31 @@
                 </Button.Template>
             </Button>
 
+            <!-- EXF — orange (trench/excavation) -->
+            <Button Tag="EXF " ToolTip="EXF Trench Manager (EXF)"
+                    Click="ToolButton_Click" Style="{x:Null}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Width="38" Height="34"
+                                Background="Transparent" CornerRadius="6"
+                                Margin="1" Cursor="Hand">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="15" Foreground="#FF8A65"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="EXF" FontSize="7" Foreground="#FF8A65"
+                                           HorizontalAlignment="Center" Margin="0,-1,0,0" Opacity="0.7"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33FF8A65"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
             <!-- ── VIEWPORTS section ── -->
             <Border Height="1" Background="#60CDFF" Opacity="0.2" Margin="4,4"/>
             <TextBlock Text="VIEWPORT" Foreground="#60CDFF" FontSize="7.5"
