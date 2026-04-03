@@ -1,7 +1,11 @@
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using AdvancedLandDevTools.Engine;
+using AdvancedLandDevTools.Models;
 
 namespace AdvancedLandDevTools.UI
 {
@@ -12,9 +16,162 @@ namespace AdvancedLandDevTools.UI
         private static readonly Brush PassFg  = new SolidColorBrush(Color.FromRgb(107, 203, 119));
         private static readonly Brush FailFg  = new SolidColorBrush(Color.FromRgb(255, 107, 107));
 
+        private List<AreaEntry> _currentAreas = new();
+        private bool _areaMgrExpanded = false;
+
+        // Material → (n value, description)
+        private static readonly (string Label, double N, string Hint)[] _materials =
+        {
+            ("— select material —",  0,      ""),
+            ("Concrete (RCP)",       0.013,  "Reinforced concrete pipe, most common for storm drainage."),
+            ("Concrete (CIP smooth)",0.012,  "Cast-in-place, smooth form finish."),
+            ("HDPE (corrugated)",    0.024,  "Corrugated HDPE, high roughness."),
+            ("HDPE (smooth liner)",  0.012,  "HDPE with smooth interior liner."),
+            ("PVC (smooth)",         0.009,  "PVC or CPEP smooth wall."),
+            ("Ductile Iron",         0.013,  "Ductile iron pipe, lined."),
+            ("Cast Iron",            0.014,  "Unlined cast iron."),
+            ("Galvanized Steel",     0.016,  "Corrugated galvanized metal pipe."),
+            ("Clay (vitrified)",     0.013,  "Vitrified clay sewer pipe."),
+            ("Brick / Masonry",      0.015,  "Brick mortar-lined channel or culvert."),
+        };
+
         public PipeSizingWindow()
         {
             InitializeComponent();
+            LoadMaterials();
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Material Selector
+        // ═════════════════════════════════════════════════════════════════
+
+        private void LoadMaterials()
+        {
+            foreach (var m in _materials)
+                CboMaterial.Items.Add(m.Label);
+            CboMaterial.SelectedIndex = 0;
+        }
+
+        private void CboMaterial_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            int idx = CboMaterial.SelectedIndex;
+            if (idx <= 0 || idx >= _materials.Length) return;
+
+            var (_, n, hint) = _materials[idx];
+            TxtN.Text = n.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+            LblNHint.Text = hint;
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        //  Area Manager Integration
+        // ═════════════════════════════════════════════════════════════════
+
+        private void BtnToggleAreaMgr_Click(object sender, RoutedEventArgs e)
+        {
+            _areaMgrExpanded = !_areaMgrExpanded;
+            PnlAreaMgr.Visibility  = _areaMgrExpanded ? Visibility.Visible : Visibility.Collapsed;
+            TxtToggleArrow.Text    = _areaMgrExpanded ? "▼" : "▶";
+
+            if (_areaMgrExpanded && CboProject.Items.Count == 0)
+                LoadProjectList();
+        }
+
+        private void BtnReloadProjects_Click(object sender, RoutedEventArgs e)
+        {
+            LoadProjectList();
+        }
+
+        private void LoadProjectList()
+        {
+            var projects = AreaManagerStore.ListProjects();
+            CboProject.Items.Clear();
+            PnlAreaList.Children.Clear();
+            _currentAreas.Clear();
+            UpdateTotal();
+
+            if (projects.Count == 0)
+            {
+                LblNoProjects.Visibility = Visibility.Visible;
+                return;
+            }
+
+            LblNoProjects.Visibility = Visibility.Collapsed;
+            foreach (var p in projects)
+                CboProject.Items.Add(p);
+
+            CboProject.SelectedIndex = 0;
+        }
+
+        private void CboProject_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CboProject.SelectedItem is not string projectName) return;
+
+            var project = AreaManagerStore.Load(projectName);
+            _currentAreas = project?.Areas ?? new List<AreaEntry>();
+
+            PnlAreaList.Children.Clear();
+            UpdateTotal();
+
+            if (_currentAreas.Count == 0)
+            {
+                var empty = new TextBlock
+                {
+                    Text = "No areas in this project.",
+                    Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                    FontStyle = FontStyles.Italic,
+                    Margin = new Thickness(4, 6, 4, 6),
+                    FontSize = 11
+                };
+                PnlAreaList.Children.Add(empty);
+                return;
+            }
+
+            foreach (var area in _currentAreas)
+            {
+                var cb = new CheckBox
+                {
+                    Tag = area,
+                    Margin = new Thickness(2, 3, 2, 3),
+                    Foreground = new SolidColorBrush(Colors.White),
+                    FontSize = 12
+                };
+
+                double acres = area.AreaSqFt / 43560.0;
+                cb.Content = $"{area.Name}  —  {area.AreaSqFt:N0} sq ft  ({acres:F3} ac)";
+                cb.Checked   += (s, _) => UpdateTotal();
+                cb.Unchecked += (s, _) => UpdateTotal();
+                PnlAreaList.Children.Add(cb);
+            }
+        }
+
+        private void UpdateTotal()
+        {
+            double total = 0;
+            foreach (CheckBox cb in PnlAreaList.Children.OfType<CheckBox>())
+            {
+                if (cb.IsChecked == true && cb.Tag is AreaEntry area)
+                    total += area.AreaSqFt;
+            }
+            double acres = total / 43560.0;
+            LblAreaTotal.Text = $"{total:N0} sq ft  ({acres:F3} ac)";
+        }
+
+        private void BtnApplyArea_Click(object sender, RoutedEventArgs e)
+        {
+            double total = 0;
+            foreach (CheckBox cb in PnlAreaList.Children.OfType<CheckBox>())
+            {
+                if (cb.IsChecked == true && cb.Tag is AreaEntry area)
+                    total += area.AreaSqFt;
+            }
+
+            if (total <= 0)
+            {
+                ShowError("No areas selected. Check at least one area before applying.");
+                return;
+            }
+
+            TxtArea.Text = total.ToString("F2", CultureInfo.InvariantCulture);
         }
 
         // ═════════════════════════════════════════════════════════════════

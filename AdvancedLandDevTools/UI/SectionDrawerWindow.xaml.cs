@@ -36,6 +36,10 @@ namespace AdvancedLandDevTools.UI
             public string RoadBg { get; set; } = "#333333";
             public string RoadFg { get; set; } = "#666666";
             public Visibility RoadVisible { get; set; } = Visibility.Visible;
+            public string GrassLabel { get; set; } = "G";
+            public string GrassBg { get; set; } = "#333333";
+            public string GrassFg { get; set; } = "#666666";
+            public Visibility GrassVisible { get; set; } = Visibility.Visible;
         }
 
         // ── Add / Delete segments ────────────────────────────────────
@@ -88,7 +92,9 @@ namespace AdvancedLandDevTools.UI
         {
             if (sender is Button btn && btn.Tag is int idx && idx < _profile.LeftSegments.Count)
             {
-                _profile.LeftSegments[idx].IsRoad = !_profile.LeftSegments[idx].IsRoad;
+                var seg = _profile.LeftSegments[idx];
+                seg.IsRoad = !seg.IsRoad;
+                if (seg.IsRoad) seg.IsGrass = false;
                 RefreshAll();
             }
         }
@@ -97,7 +103,31 @@ namespace AdvancedLandDevTools.UI
         {
             if (sender is Button btn && btn.Tag is int idx && idx < _profile.RightSegments.Count)
             {
-                _profile.RightSegments[idx].IsRoad = !_profile.RightSegments[idx].IsRoad;
+                var seg = _profile.RightSegments[idx];
+                seg.IsRoad = !seg.IsRoad;
+                if (seg.IsRoad) seg.IsGrass = false;
+                RefreshAll();
+            }
+        }
+
+        private void BtnToggleLeftGrass_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int idx && idx < _profile.LeftSegments.Count)
+            {
+                var seg = _profile.LeftSegments[idx];
+                seg.IsGrass = !seg.IsGrass;
+                if (seg.IsGrass) seg.IsRoad = false;
+                RefreshAll();
+            }
+        }
+
+        private void BtnToggleRightGrass_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int idx && idx < _profile.RightSegments.Count)
+            {
+                var seg = _profile.RightSegments[idx];
+                seg.IsGrass = !seg.IsGrass;
+                if (seg.IsGrass) seg.IsRoad = false;
                 RefreshAll();
             }
         }
@@ -219,7 +249,11 @@ namespace AdvancedLandDevTools.UI
                     RoadLabel = "R",
                     RoadBg = s.IsRoad ? "#224422" : "#333333",
                     RoadFg = s.IsRoad ? "#6BCB77" : "#666666",
-                    RoadVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible
+                    RoadVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible,
+                    GrassLabel = "G",
+                    GrassBg = s.IsGrass ? "#1A3322" : "#333333",
+                    GrassFg = s.IsGrass ? "#5CDB95" : "#666666",
+                    GrassVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible
                 };
             }).ToList();
         }

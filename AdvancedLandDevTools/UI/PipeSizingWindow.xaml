@@ -80,6 +80,90 @@
                         <TextBlock Text="HYDROLOGY — Runoff Demand (Rational Method)"
                                    Style="{StaticResource FluentSectionTitle}"/>
 
+                        <!-- ── Area Manager Picker (collapsible) ── -->
+                        <Border Margin="0,0,0,10" CornerRadius="6"
+                                BorderThickness="1" BorderBrush="{StaticResource AldtBorder}">
+                            <StackPanel>
+                                <!-- Toggle header -->
+                                <Button x:Name="BtnToggleAreaMgr"
+                                        Click="BtnToggleAreaMgr_Click"
+                                        Background="Transparent" BorderThickness="0"
+                                        Padding="10,7" HorizontalContentAlignment="Left"
+                                        Cursor="Hand">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtToggleArrow"
+                                                   Text="▶" Foreground="{StaticResource AldtAccent}"
+                                                   FontSize="9" VerticalAlignment="Center"
+                                                   Margin="0,0,8,0"/>
+                                        <TextBlock Text="From Area Manager"
+                                                   Foreground="{StaticResource AldtAccent}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- Expandable body -->
+                                <StackPanel x:Name="PnlAreaMgr" Visibility="Collapsed"
+                                            Margin="10,0,10,10">
+
+                                    <!-- Project selector row -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox x:Name="CboProject"
+                                                  Style="{StaticResource FluentComboBox}"
+                                                  SelectionChanged="CboProject_SelectionChanged"/>
+                                        <Button Grid.Column="2" Content="↺"
+                                                Style="{StaticResource FluentSecondaryBtn}"
+                                                Padding="8,4" FontSize="14"
+                                                ToolTip="Reload project list"
+                                                Click="BtnReloadProjects_Click"/>
+                                    </Grid>
+
+                                    <!-- Area checklist -->
+                                    <Border MaxHeight="160" BorderThickness="1"
+                                            BorderBrush="{StaticResource AldtBorder}"
+                                            CornerRadius="4" Margin="0,0,0,8">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <StackPanel x:Name="PnlAreaList" Margin="4"/>
+                                        </ScrollViewer>
+                                    </Border>
+
+                                    <!-- Total + Apply row -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Selected total:"
+                                                       Foreground="{StaticResource AldtTextSecondary}"
+                                                       FontSize="11"/>
+                                            <TextBlock x:Name="LblAreaTotal"
+                                                       Text="0 sq ft  (0.000 ac)"
+                                                       Foreground="White" FontWeight="SemiBold"
+                                                       FontSize="12"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Content="Apply to Area ↓"
+                                                Style="{StaticResource FluentPrimaryBtn}"
+                                                Padding="10,5"
+                                                Click="BtnApplyArea_Click"/>
+                                    </Grid>
+
+                                    <!-- No-projects hint -->
+                                    <TextBlock x:Name="LblNoProjects"
+                                               Text="No Area Manager projects found."
+                                               Foreground="{StaticResource AldtTextSecondary}"
+                                               FontSize="11" FontStyle="Italic"
+                                               Visibility="Collapsed" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -156,10 +240,14 @@
                                          Text="18" Margin="0,0,0,10"/>
                             </StackPanel>
 
-                            <!-- Row 0: Manning's n -->
+                            <!-- Row 0: Manning's n + material picker -->
                             <StackPanel Grid.Row="0" Grid.Column="2">
                                 <TextBlock Text="Manning's n"
                                            Style="{StaticResource FluentFieldLabel}"/>
+                                <ComboBox x:Name="CboMaterial"
+                                          Style="{StaticResource FluentComboBox}"
+                                          Margin="0,0,0,4"
+                                          SelectionChanged="CboMaterial_SelectionChanged"/>
                                 <TextBox x:Name="TxtN"
                                          Style="{StaticResource FluentTextBox}"
                                          Text="0.013" Margin="0,0,0,10"/>
@@ -174,12 +262,13 @@
                                          Text="0.005" Margin="0,0,0,4"/>
                             </StackPanel>
 
-                            <!-- Row 1: hint -->
+                            <!-- Row 1: n value hint -->
                             <StackPanel Grid.Row="1" Grid.Column="2"
-                                        VerticalAlignment="Bottom" Margin="0,0,0,4">
-                                <TextBlock Style="{StaticResource FluentHint}"
+                                        VerticalAlignment="Top" Margin="0,4,0,0">
+                                <TextBlock x:Name="LblNHint"
+                                           Style="{StaticResource FluentHint}"
                                            TextWrapping="Wrap"
-                                           Text="Concrete=0.013  HDPE=0.012  PVC=0.009"/>
+                                           Text="Select a material above or type n manually."/>
                             </StackPanel>
                         </Grid>
                     </StackPanel>

@@ -383,6 +383,31 @@
                 </Button.Template>
             </Button>
 
+            <!-- T2S — Cyan (text to surface) -->
+            <Button Tag="TEXTTOSURFACE " ToolTip="Text to Surface (TEXTTOSURFACE)"
+                    Click="ToolButton_Click" Style="{x:Null}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Width="38" Height="34"
+                                Background="Transparent" CornerRadius="6"
+                                Margin="1" Cursor="Hand">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE8D2;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="15" Foreground="#4DD0E1"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="T2S" FontSize="7" Foreground="#4DD0E1"
+                                           HorizontalAlignment="Center" Margin="0,-1,0,0" Opacity="0.7"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#334DD0E1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
             <!-- LR — Red/amber (lowest rim) -->
             <Button Tag="LOWRIM " ToolTip="Lowest Rim Elevation (LOWRIM)"
                     Click="ToolButton_Click" Style="{x:Null}">

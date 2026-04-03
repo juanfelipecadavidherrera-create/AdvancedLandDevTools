@@ -33,6 +33,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(VtEditCommand))]
 [assembly: CommandClass(typeof(SectionDrawerCommand))]
 [assembly: CommandClass(typeof(BlockToSurfaceCommand))]
+[assembly: CommandClass(typeof(TextToSurfaceCommand))]
 [assembly: CommandClass(typeof(PipeSizingCommand))]
 
 namespace AdvancedLandDevTools
@@ -131,12 +132,17 @@ namespace AdvancedLandDevTools
                 "\n║    MARKLINES       – Mark Crossing Lines in PV          ║" +
                 "\n║  Alignments:                                            ║" +
                 "\n║    ALIGNDEPLOY     – Align Deploy                       ║" +
+                "\n║  Surfaces:                                              ║" +
+                "\n║    BLOCKTOSURFACE  – Add Block Elevations to Surface    ║" +
+                "\n║    TEXTTOSURFACE   – Add Text/Leader Elevations to Surf ║" +
                 "\n║  Pipes:                                                 ║" +
                 "\n║    INVERTPULLUP    – Invert Pull Up                     ║" +
                 "\n║    CHANGEELEVATION – Pipe Elevation Equalizer           ║" +
                 "\n║    LOWRIM          – Lowest Rim Elevation Finder        ║" +
                 "\n║    ELEVSLOPE       – Elevation Sloper                   ║" +
-                "\n║    PIPESIZING      – Pipe Sizing Calculator              ║" +
+                "\n║    PIPESIZING      – Pipe Sizing Calculator             ║" +
+                "\n║  Cross Sections:                                        ║" +
+                "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
                 "\n║    FLOODZONE       – FEMA Flood Zone Lookup             ║" +
                 "\n║    FLOODCRITERIA   – MDC County Flood Criteria          ║" +

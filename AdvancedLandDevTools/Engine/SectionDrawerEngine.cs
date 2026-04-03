@@ -37,6 +37,10 @@ namespace AdvancedLandDevTools.Engine
         /// <summary>When true, road structural layers (asphalt/base/subgrade) are drawn under this segment.</summary>
         [JsonProperty("isRoad")]
         public bool IsRoad { get; set; }
+
+        /// <summary>When true, an earth/grass fill layer (2 ft deep) is drawn under this segment. Mutually exclusive with IsRoad.</summary>
+        [JsonProperty("isGrass")]
+        public bool IsGrass { get; set; }
     }
 
     public class SectionProfile
@@ -77,6 +81,9 @@ namespace AdvancedLandDevTools.Engine
 
         /// <summary>Contiguous road surface regions for structural layers.</summary>
         public List<List<(double X, double Y)>> RoadRegions { get; set; } = new();
+
+        /// <summary>Contiguous grass surface regions for earth hatch layer.</summary>
+        public List<List<(double X, double Y)>> GrassRegions { get; set; } = new();
 
         public double CenterlineBaseY => 0;
         public double CenterlineTopY { get; set; }
@@ -139,8 +146,9 @@ namespace AdvancedLandDevTools.Engine
                 AddBlockOutline(geo, seg, sx, sy, -1);
             }
 
-            // Build road regions from both sides
+            // Build road and grass regions from both sides
             BuildRoadRegions(geo, profile);
+            BuildGrassRegions(geo, profile);
 
             return geo;
         }
@@ -196,6 +204,43 @@ namespace AdvancedLandDevTools.Engine
 
             if (current != null && current.Count >= 2)
                 geo.RoadRegions.Add(current);
+        }
+
+        /// <summary>Build contiguous grass surface regions for earth hatch drawing.</summary>
+        private static void BuildGrassRegions(SectionGeometry geo, SectionProfile profile)
+        {
+            BuildSideGrassRegions(geo, profile.RightSegments, geo.RightPoints);
+            BuildSideGrassRegions(geo, profile.LeftSegments,  geo.LeftPoints);
+        }
+
+        private static void BuildSideGrassRegions(SectionGeometry geo,
+            List<SectionSegment> segments, List<(double X, double Y)> points)
+        {
+            List<(double X, double Y)>? current = null;
+            int ptIdx = 0;
+
+            foreach (var seg in segments)
+            {
+                int count = SubPointCount(seg);
+
+                if (seg.IsGrass)
+                {
+                    if (current == null)
+                        current = new List<(double X, double Y)> { points[ptIdx] };
+                    for (int k = 1; k <= count; k++)
+                        current.Add(points[ptIdx + k]);
+                }
+                else if (current != null)
+                {
+                    if (current.Count >= 2) geo.GrassRegions.Add(current);
+                    current = null;
+                }
+
+                ptIdx += count;
+            }
+
+            if (current != null && current.Count >= 2)
+                geo.GrassRegions.Add(current);
         }
 
         /// <summary>Returns sub-point deltas for a segment. dirSign = +1 for right, -1 for left.</summary>

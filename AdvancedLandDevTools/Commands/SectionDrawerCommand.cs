@@ -215,6 +215,79 @@ namespace AdvancedLandDevTools.Commands
                 }
             }
 
+            // ── Grass/Earth layer (per-segment IsGrass) ────────────────
+            foreach (var region in geo.GrassRegions)
+            {
+                if (region.Count < 2) continue;
+
+                const double grassDepth = 2.0;
+
+                var boundary = new AcDbPolyline();
+                int vtx = 0;
+
+                // Top edge L→R
+                foreach (var p in region)
+                    boundary.AddVertexAt(vtx++,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y), 0, 0, 0);
+
+                // Bottom edge R→L
+                for (int i = region.Count - 1; i >= 0; i--)
+                {
+                    var p = region[i];
+                    boundary.AddVertexAt(vtx++,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - grassDepth), 0, 0, 0);
+                }
+                boundary.Closed = true;
+                boundary.LayerId = layerId;
+                boundary.ColorIndex = 3; // green
+                btr.AppendEntity(boundary);
+                tx.AddNewlyCreatedDBObject(boundary, true);
+
+                try
+                {
+                    var hatch = new Hatch();
+                    btr.AppendEntity(hatch);
+                    tx.AddNewlyCreatedDBObject(hatch, true);
+                    hatch.LayerId = layerId;
+                    hatch.ColorIndex = 3;
+                    hatch.SetHatchPattern(HatchPatternType.PreDefined, "EARTH");
+                    hatch.PatternScale = 1.0;
+                    hatch.Associative = false;
+                    var ids = new ObjectIdCollection { boundary.ObjectId };
+                    hatch.AppendLoop(HatchLoopTypes.Default, ids);
+                    hatch.EvaluateHatch(true);
+                }
+                catch { }
+
+                // Bottom line
+                var botLine = new AcDbPolyline();
+                for (int i = 0; i < region.Count; i++)
+                {
+                    var p = region[i];
+                    botLine.AddVertexAt(i,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - grassDepth), 0, 0, 0);
+                }
+                botLine.LayerId = layerId;
+                botLine.ColorIndex = 3;
+                btr.AppendEntity(botLine);
+                tx.AddNewlyCreatedDBObject(botLine, true);
+
+                // Vertical closing lines at region edges
+                var lPt = region[0];
+                var rPt = region[region.Count - 1];
+                foreach (var edgePt in new[] { lPt, rPt })
+                {
+                    var edgeLine = new Autodesk.AutoCAD.DatabaseServices.Line(
+                        new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y, 0),
+                        new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y - grassDepth, 0))
+                    {
+                        LayerId = layerId, ColorIndex = 3
+                    };
+                    btr.AppendEntity(edgeLine);
+                    tx.AddNewlyCreatedDBObject(edgeLine, true);
+                }
+            }
+
             // Centerline — extends from section surface UPWARD by CL height
             double surfaceY = geo.CenterlineTopY;
             double clHeight = profile.CenterlineHeight;

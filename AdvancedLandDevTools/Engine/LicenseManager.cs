@@ -94,6 +94,18 @@ namespace AdvancedLandDevTools.Engine
         /// </summary>
         public static LicenseState GetState()
         {
+            // ── Developer / pre-publication mode ─────────────────────────────
+            // APP_ID is still the placeholder, meaning the plugin has not been
+            // submitted to the Autodesk App Store yet. Treat as fully licensed
+            // so the developer can work without a trial clock. Replace APP_ID
+            // with the real App Store ID before publishing — that will
+            // automatically re-enable the entitlement + trial flow below.
+            if (APP_ID == "REPLACE_WITH_YOUR_APP_ID")
+            {
+                _cachedState = LicenseState.Licensed;
+                return _cachedState;
+            }
+
             if (_cachedState != LicenseState.Unknown &&
                 DateTime.UtcNow - _lastCheck < _recheckInterval)
             {
