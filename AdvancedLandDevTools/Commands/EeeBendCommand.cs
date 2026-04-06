@@ -216,20 +216,15 @@ namespace AdvancedLandDevTools.Commands
                     staUL = staLL - LegDeltaH;   // outside (lower station)
                     staUR = staLR + LegDeltaH;   // outside (higher station)
 
-                    // Upper bends stay at the pipe's ORIGINAL GRADE at their own stations.
-                    // Allow linear extrapolation (no clamp) so the grade continues correctly
-                    // even if staUL/staUR fall slightly outside the pipe's stored endpoint range.
-                    double span = Math.Abs(sta2 - sta1);
-                    double tUL  = span < 0.001 ? 0.5 : (staUL - sta1) / (sta2 - sta1);
-                    double tUR  = span < 0.001 ? 0.5 : (staUR - sta1) / (sta2 - sta1);
-                    elevUL = pipeOrigStart.Z + tUL * (pipeOrigEnd.Z - pipeOrigStart.Z);
-                    elevUR = pipeOrigStart.Z + tUR * (pipeOrigEnd.Z - pipeOrigStart.Z);
-
-                    // Bottom section centerline: 1 ft real below crossing invert
-                    //   (= 10 profile-view units below click, matching manual _AeccAddPipeRunVerticalBend workflow)
-                    //   Diagonal legs adapt slope naturally to connect original grade → low point.
+                    // Bottom section: 1 ft real (10 profile-view units) below crossing invert
                     pipeRadius = pipe.OuterDiameter / 2.0;
                     elevLow    = crossingInvElev - 1.0;
+
+                    // Upper bends computed FROM the bottom bends following the fixed diagonal:
+                    //   ΔV = LegDeltaV (≈ 1.154 ft real = 11.54 profile-view-ft ≈ 11.6)  UP
+                    //   ΔH = LegDeltaH (≈ 1.154 ft real)  OUTWARD (already set in staUL/staUR)
+                    elevUL = elevLow + LegDeltaV;
+                    elevUR = elevLow + LegDeltaV;
 
                     // Convert to 3D world points for the visual guide
                     // Order by increasing station: UL → LL → LR → UR
