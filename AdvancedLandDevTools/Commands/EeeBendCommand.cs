@@ -134,8 +134,9 @@ namespace AdvancedLandDevTools.Commands
                 Point3d ptLowerRight = Point3d.Origin;
                 Point3d ptUpperRight = Point3d.Origin;
                 double elevLow = 0;
-                double upperBendElev = 0;  // centerline elevation at the 4 upper bend PVIs
-                double pipeRadius    = 0;  // OuterDiameter / 2 of the selected pressure pipe
+                double elevUL  = 0;  // centerline at Upper-Left  bend = original pipe grade at staUL
+                double elevUR  = 0;  // centerline at Upper-Right bend = original pipe grade at staUR
+                double pipeRadius = 0;  // OuterDiameter / 2 of the selected pressure pipe
                 double staUL = 0, staLL = 0, staLR = 0, staUR = 0;
 
                 using (var tx = db.TransactionManager.StartTransaction())
@@ -206,33 +207,40 @@ namespace AdvancedLandDevTools.Commands
                     t = Math.Max(0.0, Math.Min(1.0, t));
                     pipeElevAtCross = pipeOrigStart.Z + t * (pipeOrigEnd.Z - pipeOrigStart.Z);
 
-                    // Duck elevation — measured from outside crown of pressure pipe:
-                    //   Outside crown at upper bends = crossingInvElev − (DiagLegFt / ProfileVExag)
-                    //     = crossing invert − 1.16 ft real  (11.6 profile-view-ft separation)
-                    //   Centerline at upper bends    = outside crown − pipeRadius
-                    pipeRadius    = pipe.OuterDiameter / 2.0;
-                    double outsideCrownAtUpperBends = crossingInvElev - (DiagLegFt / ProfileVExag);
-                    upperBendElev = outsideCrownAtUpperBends - pipeRadius;
-                    elevLow       = upperBendElev - LegDeltaV;
-
                     // Station values of the 4 bend points
                     staUL = crossingSta - HorizOffset;
                     staLL = crossingSta - HorizOffset + LegDeltaH;
                     staLR = crossingSta + HorizOffset - LegDeltaH;
                     staUR = crossingSta + HorizOffset;
 
-                    // Convert to 3D world points (alignment centreline, at computed elevations)
-                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, upperBendElev);
+                    // Upper bends stay at the pipe's ORIGINAL GRADE at their own stations.
+                    // Interpolation factor is computed per-station, not at crossingSta.
+                    double span  = Math.Abs(sta2 - sta1);
+                    double tUL   = span < 0.001 ? 0.5 : Math.Max(0.0, Math.Min(1.0, (staUL - sta1) / (sta2 - sta1)));
+                    double tUR   = span < 0.001 ? 0.5 : Math.Max(0.0, Math.Min(1.0, (staUR - sta1) / (sta2 - sta1)));
+                    elevUL = pipeOrigStart.Z + tUL * (pipeOrigEnd.Z - pipeOrigStart.Z);
+                    elevUR = pipeOrigStart.Z + tUR * (pipeOrigEnd.Z - pipeOrigStart.Z);
+
+                    // Bottom section (20 ft total span from UL to UR):
+                    //   Outside crown of bottom pipe = crossingInvElev − (DiagLegFt / ProfileVExag)
+                    //                                = crossing invert − 1.16 ft real
+                    //   Centerline of bottom pipe    = outside crown − pipeRadius
+                    // The diagonal legs naturally adapt slope to connect original grade → low point.
+                    pipeRadius = pipe.OuterDiameter / 2.0;
+                    elevLow    = crossingInvElev - (DiagLegFt / ProfileVExag) - pipeRadius;
+
+                    // Convert to 3D world points for the visual guide
+                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, elevUL);
                     ptLowerLeft  = StationElevToPoint3d(aln, staLL, elevLow);
                     ptLowerRight = StationElevToPoint3d(aln, staLR, elevLow);
-                    ptUpperRight = StationElevToPoint3d(aln, staUR, upperBendElev);
+                    ptUpperRight = StationElevToPoint3d(aln, staUR, elevUR);
 
                     tx.Abort();
                 }
 
                 // ── Step 4: Report geometry ──────────────────────────────────────
-                double outsideCrownReport = upperBendElev + pipeRadius;
-                double crownClearance     = crossingInvElev - outsideCrownReport;
+                double lowCrown       = elevLow + pipeRadius;   // outside crown of bottom section
+                double crownClearance = crossingInvElev - lowCrown;  // should equal DiagLegFt/ProfileVExag
                 ed.WriteMessage("\n");
                 ed.WriteMessage("\n  ╔══════════════════════════════════════════════════════════╗");
                 ed.WriteMessage("\n  ║              EEE BEND — DUCK GEOMETRY                    ║");
@@ -240,27 +248,26 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage($"\n  ║  Pipe centerline at crossing : {pipeElevAtCross,8:F3} ft              ║");
                 ed.WriteMessage($"\n  ║  Pipe outer radius           : {pipeRadius,8:F3} ft              ║");
                 ed.WriteMessage($"\n  ║  Crossing invert (from click): {crossingInvElev,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Outside crown at upper bends: {outsideCrownReport,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Crown clearance from cross  : {crownClearance,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Duck low-point centerline   : {elevLow,8:F3} ft              ║");
+                ed.WriteMessage($"\n  ║  Bottom section crown elev   : {lowCrown,8:F3} ft              ║");
+                ed.WriteMessage($"\n  ║  Crown clearance from cross  : {crownClearance,8:F3} ft (= 1.16 ft)  ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Upper-Left  Sta {staUL,10:F2} | C/L {upperBendElev,9:F3} ft     ║");
-                ed.WriteMessage($"\n  ║  Lower-Left  Sta {staLL,10:F2} | C/L {elevLow,9:F3} ft     ║");
-                ed.WriteMessage($"\n  ║  Lower-Right Sta {staLR,10:F2} | C/L {elevLow,9:F3} ft     ║");
-                ed.WriteMessage($"\n  ║  Upper-Right Sta {staUR,10:F2} | C/L {upperBendElev,9:F3} ft     ║");
+                ed.WriteMessage($"\n  ║  Upper-Left  Sta {staUL,10:F2} | orig grade {elevUL,7:F3} ft     ║");
+                ed.WriteMessage($"\n  ║  Lower-Left  Sta {staLL,10:F2} | bottom C/L {elevLow,7:F3} ft     ║");
+                ed.WriteMessage($"\n  ║  Lower-Right Sta {staLR,10:F2} | bottom C/L {elevLow,7:F3} ft     ║");
+                ed.WriteMessage($"\n  ║  Upper-Right Sta {staUR,10:F2} | orig grade {elevUR,7:F3} ft     ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Leg: {DiagLegFt:F1} ft  (ΔH = {LegDeltaH:F3} ft, ΔV = {LegDeltaV:F3} ft)         ║");
+                ed.WriteMessage($"\n  ║  Horiz offset ±{HorizOffset:F0} ft  |  Leg ΔH {LegDeltaH:F3} ft             ║");
                 ed.WriteMessage("\n  ╚══════════════════════════════════════════════════════════╝");
 
                 if (crownClearance < 0)
                     ed.WriteMessage(
-                        "\n  WARNING: Pipe crown sits ABOVE the crossing invert — check your click location.");
+                        "\n  WARNING: Bottom pipe crown is ABOVE the crossing invert — check click location.");
 
                 // ── Step 5: Modify pressure network ─────────────────────────────
                 bool networkModified = TryApplyDuck(
                     db, pipeId, alignId,
                     staUL, staLL, staLR, staUR,
-                    upperBendElev, elevLow,
+                    elevUL, elevUR, elevLow,
                     ed);
 
                 // ── Step 6: Draw visual guide (always) ──────────────────────────
@@ -287,7 +294,7 @@ namespace AdvancedLandDevTools.Commands
             ObjectId pipeId,
             ObjectId alignId,
             double staUL, double staLL, double staLR, double staUR,
-            double pipeElevAtCross, double elevLow,
+            double elevUL, double elevUR, double elevLow,
             Editor ed)
         {
             try
@@ -340,11 +347,12 @@ namespace AdvancedLandDevTools.Commands
                         return false;
                     }
 
-                    // Add 4 vertical bend PVIs — stations increase left-to-right: UL → LL → LR → UR
-                    targetRun.AddVerticalBendByPVI(staUL, pipeElevAtCross);  // Upper-Left
-                    targetRun.AddVerticalBendByPVI(staLL, elevLow);           // Lower-Left
-                    targetRun.AddVerticalBendByPVI(staLR, elevLow);           // Lower-Right
-                    targetRun.AddVerticalBendByPVI(staUR, pipeElevAtCross);  // Upper-Right
+                    // Upper bends at original pipe grade; bottom bends at required clearance depth.
+                    // Civil 3D computes the diagonal grade automatically from these PVI elevations.
+                    targetRun.AddVerticalBendByPVI(staUL, elevUL);   // Upper-Left  – original grade
+                    targetRun.AddVerticalBendByPVI(staLL, elevLow);  // Lower-Left  – bottom depth
+                    targetRun.AddVerticalBendByPVI(staLR, elevLow);  // Lower-Right – bottom depth
+                    targetRun.AddVerticalBendByPVI(staUR, elevUR);   // Upper-Right – original grade
 
                     tx.Commit();
                     ed.WriteMessage("\n  4 vertical bends inserted into the pressure pipe run.");
