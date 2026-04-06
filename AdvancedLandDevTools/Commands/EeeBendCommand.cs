@@ -207,61 +207,61 @@ namespace AdvancedLandDevTools.Commands
                     t = Math.Max(0.0, Math.Min(1.0, t));
                     pipeElevAtCross = pipeOrigStart.Z + t * (pipeOrigEnd.Z - pipeOrigStart.Z);
 
-                    // Station values of the 4 bend points
-                    staUL = crossingSta - HorizOffset;
-                    staLL = crossingSta - HorizOffset + LegDeltaH;
-                    staLR = crossingSta + HorizOffset - LegDeltaH;
-                    staUR = crossingSta + HorizOffset;
+                    // Station values of the 4 bend points:
+                    //   Bottom bends (LL, LR) sit at exactly ±HorizOffset from crossing.
+                    //   Upper bends (UL, UR) are LegDeltaH OUTSIDE the bottom bends —
+                    //   the pipe descends from original grade INTO the ±10 ft bottom zone.
+                    staLL = crossingSta - HorizOffset;
+                    staLR = crossingSta + HorizOffset;
+                    staUL = staLL - LegDeltaH;   // outside (lower station)
+                    staUR = staLR + LegDeltaH;   // outside (higher station)
 
                     // Upper bends stay at the pipe's ORIGINAL GRADE at their own stations.
-                    // Interpolation factor is computed per-station, not at crossingSta.
-                    double span  = Math.Abs(sta2 - sta1);
-                    double tUL   = span < 0.001 ? 0.5 : Math.Max(0.0, Math.Min(1.0, (staUL - sta1) / (sta2 - sta1)));
-                    double tUR   = span < 0.001 ? 0.5 : Math.Max(0.0, Math.Min(1.0, (staUR - sta1) / (sta2 - sta1)));
+                    // Allow linear extrapolation (no clamp) so the grade continues correctly
+                    // even if staUL/staUR fall slightly outside the pipe's stored endpoint range.
+                    double span = Math.Abs(sta2 - sta1);
+                    double tUL  = span < 0.001 ? 0.5 : (staUL - sta1) / (sta2 - sta1);
+                    double tUR  = span < 0.001 ? 0.5 : (staUR - sta1) / (sta2 - sta1);
                     elevUL = pipeOrigStart.Z + tUL * (pipeOrigEnd.Z - pipeOrigStart.Z);
                     elevUR = pipeOrigStart.Z + tUR * (pipeOrigEnd.Z - pipeOrigStart.Z);
 
-                    // Bottom section (20 ft total span from UL to UR):
-                    //   Outside crown of bottom pipe = crossingInvElev − (DiagLegFt / ProfileVExag)
-                    //                                = crossing invert − 1.16 ft real
-                    //   Centerline of bottom pipe    = outside crown − pipeRadius
-                    // The diagonal legs naturally adapt slope to connect original grade → low point.
+                    // Bottom section centerline: 1 ft real below crossing invert
+                    //   (= 10 profile-view units below click, matching manual _AeccAddPipeRunVerticalBend workflow)
+                    //   Diagonal legs adapt slope naturally to connect original grade → low point.
                     pipeRadius = pipe.OuterDiameter / 2.0;
-                    elevLow    = crossingInvElev - (DiagLegFt / ProfileVExag) - pipeRadius;
+                    elevLow    = crossingInvElev - 1.0;
 
                     // Convert to 3D world points for the visual guide
-                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, elevUL);
-                    ptLowerLeft  = StationElevToPoint3d(aln, staLL, elevLow);
-                    ptLowerRight = StationElevToPoint3d(aln, staLR, elevLow);
-                    ptUpperRight = StationElevToPoint3d(aln, staUR, elevUR);
+                    // Order by increasing station: UL → LL → LR → UR
+                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, elevUL);   // outside-left
+                    ptLowerLeft  = StationElevToPoint3d(aln, staLL, elevLow);  // ±10 ft left
+                    ptLowerRight = StationElevToPoint3d(aln, staLR, elevLow);  // ±10 ft right
+                    ptUpperRight = StationElevToPoint3d(aln, staUR, elevUR);   // outside-right
 
                     tx.Abort();
                 }
 
                 // ── Step 4: Report geometry ──────────────────────────────────────
-                double lowCrown       = elevLow + pipeRadius;   // outside crown of bottom section
-                double crownClearance = crossingInvElev - lowCrown;  // should equal DiagLegFt/ProfileVExag
+                double invertClearance = crossingInvElev - elevLow;   // = 1.0 ft by design
                 ed.WriteMessage("\n");
                 ed.WriteMessage("\n  ╔══════════════════════════════════════════════════════════╗");
                 ed.WriteMessage("\n  ║              EEE BEND — DUCK GEOMETRY                    ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Pipe centerline at crossing : {pipeElevAtCross,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Pipe outer radius           : {pipeRadius,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Crossing invert (from click): {crossingInvElev,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Bottom section crown elev   : {lowCrown,8:F3} ft              ║");
-                ed.WriteMessage($"\n  ║  Crown clearance from cross  : {crownClearance,8:F3} ft (= 1.16 ft)  ║");
+                ed.WriteMessage($"\n  ║  Pipe C/L at crossing  : {pipeElevAtCross,8:F3} ft                  ║");
+                ed.WriteMessage($"\n  ║  Crossing invert click : {crossingInvElev,8:F3} ft                  ║");
+                ed.WriteMessage($"\n  ║  Bottom C/L (−1.0 ft)  : {elevLow,8:F3} ft (clr {invertClearance:F2} ft)  ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
                 ed.WriteMessage($"\n  ║  Upper-Left  Sta {staUL,10:F2} | orig grade {elevUL,7:F3} ft     ║");
                 ed.WriteMessage($"\n  ║  Lower-Left  Sta {staLL,10:F2} | bottom C/L {elevLow,7:F3} ft     ║");
                 ed.WriteMessage($"\n  ║  Lower-Right Sta {staLR,10:F2} | bottom C/L {elevLow,7:F3} ft     ║");
                 ed.WriteMessage($"\n  ║  Upper-Right Sta {staUR,10:F2} | orig grade {elevUR,7:F3} ft     ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Horiz offset ±{HorizOffset:F0} ft  |  Leg ΔH {LegDeltaH:F3} ft             ║");
+                ed.WriteMessage($"\n  ║  Bottom span ±{HorizOffset:F0} ft  |  Leg ΔH {LegDeltaH:F3} ft              ║");
                 ed.WriteMessage("\n  ╚══════════════════════════════════════════════════════════╝");
 
-                if (crownClearance < 0)
+                if (invertClearance < 0)
                     ed.WriteMessage(
-                        "\n  WARNING: Bottom pipe crown is ABOVE the crossing invert — check click location.");
+                        "\n  WARNING: Bottom C/L is ABOVE the crossing invert — check your click location.");
 
                 // ── Step 5: Modify pressure network ─────────────────────────────
                 bool networkModified = TryApplyDuck(
