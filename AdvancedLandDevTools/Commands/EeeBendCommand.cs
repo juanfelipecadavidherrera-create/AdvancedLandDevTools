@@ -293,7 +293,7 @@ namespace AdvancedLandDevTools.Commands
                         return false;
                     }
 
-                    var network = tx.GetObject(networkId, OpenMode.ForRead)
+                    var network = tx.GetObject(networkId, OpenMode.ForWrite)
                                   as CivilDB.PressurePipeNetwork;
                     if (network == null)
                     {
