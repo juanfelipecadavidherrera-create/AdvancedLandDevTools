@@ -44,7 +44,12 @@ namespace AdvancedLandDevTools.Engine
             public int Verts;
         }
 
-        public static VpCutResult Run(ObjectId sourceVpId, IList<ObjectId> shapeIds)
+        /// <param name="paperspaceShapes">
+        /// true  = shapeIds are closed polylines already in paper space — vertices used directly.
+        /// false = shapeIds are closed curves in model space — vertices are transformed to PS.
+        /// </param>
+        public static VpCutResult Run(ObjectId sourceVpId, IList<ObjectId> shapeIds,
+                                      bool paperspaceShapes = false)
         {
             var result = new VpCutResult();
             Document doc = Application.DocumentManager.MdiActiveDocument;
@@ -96,38 +101,68 @@ namespace AdvancedLandDevTools.Engine
                 result.Info($"  ViewCenter(DCS)=({src.ViewCenter.X:F2},{src.ViewCenter.Y:F2})");
                 result.Info($"  ViewTarget(WCS)=({src.ViewTarget.X:F2},{src.ViewTarget.Y:F2},{src.ViewTarget.Z:F2})");
                 result.Info($"  PS center=({src.CenterPoint.X:F2},{src.CenterPoint.Y:F2})  size={src.Width:F2}x{src.Height:F2}");
+                result.Info(paperspaceShapes ? "  Mode: paper-space polyline" : "  Mode: model-space shapes");
 
                 foreach (ObjectId shapeId in shapeIds)
                 {
                     try
                     {
-                        var curve = tx.GetObject(shapeId, OpenMode.ForRead) as Curve;
-                        if (curve == null || !curve.Closed)
+                        if (paperspaceShapes)
                         {
-                            result.Fail($"{shapeId.Handle}: not a closed curve — skipped.");
-                            continue;
+                            // ── Paper-space polyline: vertices are already PS coords ──
+                            var pl = tx.GetObject(shapeId, OpenMode.ForRead) as Polyline;
+                            if (pl == null || !pl.Closed)
+                            {
+                                result.Fail($"{shapeId.Handle}: not a closed Polyline in paper space — skipped.");
+                                continue;
+                            }
+                            if (pl.NumberOfVertices < 3)
+                            {
+                                result.Fail($"{shapeId.Handle}: too few vertices — skipped.");
+                                continue;
+                            }
+
+                            var psPts = new List<Point2d>();
+                            for (int i = 0; i < pl.NumberOfVertices; i++)
+                                psPts.Add(pl.GetPoint2dAt(i));
+
+                            clips.Add(new ClipInfo
+                            {
+                                PsClipPts = psPts,
+                                Handle    = shapeId.Handle.ToString(),
+                                Verts     = pl.NumberOfVertices
+                            });
+                            result.Info($"  PS polyline {shapeId.Handle}: {pl.NumberOfVertices} verts → clip ready");
                         }
-
-                        var msVerts = GetCurveVertices(curve);
-                        if (msVerts.Count < 3)
+                        else
                         {
-                            result.Fail($"{shapeId.Handle}: too few vertices — skipped.");
-                            continue;
+                            // ── Model-space curve: transform vertices to paper space ──
+                            var curve = tx.GetObject(shapeId, OpenMode.ForRead) as Curve;
+                            if (curve == null || !curve.Closed)
+                            {
+                                result.Fail($"{shapeId.Handle}: not a closed curve — skipped.");
+                                continue;
+                            }
+
+                            var msVerts = GetCurveVertices(curve);
+                            if (msVerts.Count < 3)
+                            {
+                                result.Fail($"{shapeId.Handle}: too few vertices — skipped.");
+                                continue;
+                            }
+
+                            var psPts = new List<Point2d>();
+                            foreach (var ms in msVerts)
+                                psPts.Add(MsToPsPoint(ms, src));
+
+                            clips.Add(new ClipInfo
+                            {
+                                PsClipPts = psPts,
+                                Handle    = shapeId.Handle.ToString(),
+                                Verts     = msVerts.Count
+                            });
+                            result.Info($"  MS shape {shapeId.Handle}: {msVerts.Count} verts → clip ready");
                         }
-
-                        // Transform each vertex from model space (WCS) to paper space
-                        var psPts = new List<Point2d>();
-                        foreach (var ms in msVerts)
-                            psPts.Add(MsToPsPoint(ms, src));
-
-                        clips.Add(new ClipInfo
-                        {
-                            PsClipPts = psPts,
-                            Handle    = shapeId.Handle.ToString(),
-                            Verts     = msVerts.Count
-                        });
-
-                        result.Info($"  Shape {shapeId.Handle}: {msVerts.Count} verts → clip ready");
                     }
                     catch (Exception ex)
                     {
