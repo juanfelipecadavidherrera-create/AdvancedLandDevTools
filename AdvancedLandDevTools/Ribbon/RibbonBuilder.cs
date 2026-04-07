@@ -274,6 +274,33 @@ namespace AdvancedLandDevTools.Ribbon
             };
             piSource.Items.Add(btnPipeSizing);
 
+            piSource.Items.Add(new RibbonSeparator());
+
+            // ── EEE Bend (Duck) button ────────────────────────────────────────
+            var btnEeeBend = new RibbonButton
+            {
+                Id               = "ALDT_BTN_EEEBEND",
+                Name             = "EEE Bend",
+                Text             = "EEE\nBend",
+                Description      = "Inserts a pressure-network pipe duck around a crossing pipe " +
+                                   "in a profile view. Adds 4 bends and 5 pipe segments.",
+                ToolTip          = BuildToolTip(
+                    "EEE Bend — Pressure Pipe Duck",
+                    "Select a pressure pipe run in a profile, click the crossing location, " +
+                    "enter the crossing invert elevation. The command places 4 bends to " +
+                    "route the pipe under the crossing: ±10 ft horizontal offset, " +
+                    "then 11.6 ft diagonals at 1H:10V slope.\n\nCommand: EEEBEND"),
+                CommandHandler   = new RibbonCommandHandler("EEEBEND "),
+                CommandParameter = "EEEBEND ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildEeeBendIcon(32),
+                Image            = BuildEeeBendIcon(16)
+            };
+            piSource.Items.Add(btnEeeBend);
+
             tab.Panels.Add(new RibbonPanel { Source = piSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -2706,6 +2733,104 @@ namespace AdvancedLandDevTools.Ribbon
             };
             Canvas.SetLeft(label, s * 10); Canvas.SetTop(label, s * 18);
             Add(label);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  EEE Bend icon — side-view profile of a pipe duck
+        //  Shows: horizontal pipe, two upper bends (dots), two diagonal legs,
+        //  a bottom horizontal run, all on a dark blue background.
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildEeeBendIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1B2A"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Pipe path (duck / bypass shape) in profile view ───────────────
+            // Layout (all in 32-unit space, scaled by s):
+            //   Horizontal run: y=10, x=1..8   (left of duck)
+            //   Upper-Left bend:  (8, 10)
+            //   Diagonal left:    (8,10) → (10, 22)
+            //   Bottom run:       x=10..22, y=22
+            //   Diagonal right:   (22,22) → (24, 10)
+            //   Upper-Right bend: (24, 10)
+            //   Horizontal run:   x=24..31, y=10 (right of duck)
+
+            string pipePath =
+                $"M {s*1},{s*10} L {s*8},{s*10} " +
+                $"L {s*10},{s*22} " +
+                $"L {s*22},{s*22} " +
+                $"L {s*24},{s*10} " +
+                $"L {s*31},{s*10}";
+
+            // Shadow / outline (slightly thicker, dark)
+            Add(new Path
+            {
+                Data = Geometry.Parse(pipePath),
+                Stroke = C("#0A2030"), StrokeThickness = s * 3.5,
+                Fill = C("Transparent"), StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+            });
+
+            // Main pipe stroke (cyan-blue)
+            Add(new Path
+            {
+                Data = Geometry.Parse(pipePath),
+                Stroke = C("#29B6F6"), StrokeThickness = s * 2.5,
+                Fill = C("Transparent"), StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+            });
+
+            // ── Upper bend markers (orange dots) ──────────────────────────────
+            foreach (var (cx, cy) in new[] { (8.0, 10.0), (24.0, 10.0) })
+            {
+                Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = s * 4, Height = s * 4,
+                    Fill = C("#FF8A65"), Stroke = C("#BF360C"), StrokeThickness = s * 0.5
+                });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * (cx - 2));
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * (cy - 2));
+            }
+
+            // ── Lower bend markers (yellow dots) ─────────────────────────────
+            foreach (var (cx, cy) in new[] { (10.0, 22.0), (22.0, 22.0) })
+            {
+                Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = s * 4, Height = s * 4,
+                    Fill = C("#FFF176"), Stroke = C("#F57F17"), StrokeThickness = s * 0.5
+                });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * (cx - 2));
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * (cy - 2));
+            }
+
+            // ── "Crossing pipe" — orange horizontal bar above the duck ────────
+            Add(new Rectangle
+            {
+                Width = s * 10, Height = s * 3,
+                Fill = C("#FF8A65"), Opacity = 0.85,
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 11);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * 5);
+
+            // "X" label on crossing pipe
+            var xl = new System.Windows.Controls.TextBlock
+            {
+                Text = "X", Foreground = C("#0D1B2A"),
+                FontSize = s * 4, FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(xl, s * 14.5); Canvas.SetTop(xl, s * 5.2);
+            Add(xl);
 
             return RenderToBitmap(canvas, size, size);
         }
