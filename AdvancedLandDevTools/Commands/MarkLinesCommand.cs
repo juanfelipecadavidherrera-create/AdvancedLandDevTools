@@ -52,184 +52,189 @@ namespace AdvancedLandDevTools.Commands
 
             ed.WriteMessage($"\n  Layers selected: {selectedLayers.Count}");
 
-            // ── Step 2: Select profile view ───────────────────────────────
-            var peo = new PromptEntityOptions(
-                "\n  Select a profile view: ");
-            peo.AllowObjectOnLockedLayer = true;
-
-            PromptEntityResult per = ed.GetEntity(peo);
-            if (per.Status != PromptStatus.OK)
+            // ── Step 2: Select one or more profile views (Enter to finish) ──
+            var pvIds = new List<ObjectId>();
+            while (true)
             {
-                ed.WriteMessage("\n  Command cancelled.\n");
+                string prompt = pvIds.Count == 0
+                    ? "\n  Select a profile view (Enter when done): "
+                    : $"\n  Select another profile view or Enter to finish [{pvIds.Count} selected]: ";
+
+                var peo = new PromptEntityOptions(prompt);
+                peo.AllowNone = true;
+                peo.AllowObjectOnLockedLayer = true;
+
+                var per = ed.GetEntity(peo);
+                if (per.Status == PromptStatus.None || per.Status == PromptStatus.Cancel)
+                    break;
+                if (per.Status != PromptStatus.OK)
+                    break;
+
+                // Resolve to a profile view
+                using (var txCheck = db.TransactionManager.StartTransaction())
+                {
+                    var ent = txCheck.GetObject(per.ObjectId, OpenMode.ForRead);
+                    var pv  = ent as CivilDB.ProfileView
+                              ?? FindProfileViewAtPoint(per.PickedPoint, txCheck, db);
+
+                    if (pv != null && !pvIds.Contains(pv.ObjectId))
+                    {
+                        pvIds.Add(pv.ObjectId);
+                        ed.WriteMessage($"\n  Added: '{pv.Name}'");
+                    }
+                    else if (pv == null)
+                        ed.WriteMessage("\n  Not a profile view — try again.");
+                    else
+                        ed.WriteMessage("\n  Already selected.");
+
+                    txCheck.Abort();
+                }
+            }
+
+            if (pvIds.Count == 0)
+            {
+                ed.WriteMessage("\n  No profile views selected — cancelled.\n");
                 return;
             }
 
-            // ── Step 3: Resolve profile view & draw ───────────────────────
+            ed.WriteMessage($"\n  Processing {pvIds.Count} profile view(s)...");
+
+            // ── Step 3: Process all selected profile views ────────────────
             using (Transaction tx = db.TransactionManager.StartTransaction())
             {
                 try
                 {
-                    var ent = tx.GetObject(per.ObjectId, OpenMode.ForRead);
+                    var bt      = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                    var ms      = tx.GetObject(bt![BlockTableRecord.ModelSpace], OpenMode.ForRead)
+                                  as BlockTableRecord;
+                    var msWrite = tx.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite)
+                                  as BlockTableRecord;
+                    var ltRead  = tx.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
 
-                    CivilDB.ProfileView pv = ent as CivilDB.ProfileView;
-                    if (pv == null)
-                        pv = FindProfileViewAtPoint(per.PickedPoint, tx, db);
+                    // Cache crossings + alignment samples keyed by AlignmentId
+                    // so multiple profile views on the same alignment only scan entities once.
+                    var crossingsCache  = new Dictionary<ObjectId, List<CrossingInfo>>();
+                    var alignSampleCache = new Dictionary<ObjectId, List<Point2d>>();
 
-                    if (pv == null)
+                    int totalDrawn = 0;
+
+                    foreach (ObjectId pvId in pvIds)
                     {
-                        ed.WriteMessage("\n  Selected object is not a profile view.\n");
-                        tx.Abort();
-                        return;
-                    }
+                        var pv = tx.GetObject(pvId, OpenMode.ForRead) as CivilDB.ProfileView;
+                        if (pv == null) continue;
 
-                    ed.WriteMessage($"\n  Profile View: '{pv.Name}'");
-
-                    if (pv.AlignmentId.IsNull)
-                    {
-                        ed.WriteMessage("\n  Profile view has no alignment.\n");
-                        tx.Abort();
-                        return;
-                    }
-
-                    var alignment = tx.GetObject(pv.AlignmentId, OpenMode.ForRead)
-                                    as CivilDB.Alignment;
-                    if (alignment == null)
-                    {
-                        ed.WriteMessage("\n  Cannot open alignment.\n");
-                        tx.Abort();
-                        return;
-                    }
-
-                    ed.WriteMessage($"\n  Alignment: '{alignment.Name}'");
-
-                    // ── Step 4: Get profile view bounds ───────────────────
-                    double pvElevMin = pv.ElevationMin;
-                    double pvElevMax = pv.ElevationMax;
-
-                    ed.WriteMessage($"\n  PV Elev range: {pvElevMin:F2} — {pvElevMax:F2}");
-
-                    // ── Step 5: Sample alignment geometry for intersection ─
-                    // Build a dense polyline of the alignment's 2D path so we
-                    // can intersect candidate line segments geometrically.
-                    var alignPts = SampleAlignment(alignment);
-
-                    ed.WriteMessage($"\n  Alignment sampled: {alignPts.Count} points");
-
-                    // ── Step 6: Find all crossings ────────────────────────
-                    var crossings = new List<CrossingInfo>();
-
-                    var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-                    var ms = tx.GetObject(
-                             bt![BlockTableRecord.ModelSpace], OpenMode.ForRead)
-                             as BlockTableRecord;
-
-                    // Host drawing entities
-                    foreach (ObjectId id in ms!)
-                    {
-                        try
+                        if (pv.AlignmentId.IsNull)
                         {
-                            var obj = tx.GetObject(id, OpenMode.ForRead) as Entity;
-                            if (obj == null) continue;
-                            if (!selectedLayers.Contains(obj.Layer)) continue;
-
-                            CollectCrossings(obj, alignment, alignPts,
-                                             obj.Layer, crossings);
+                            ed.WriteMessage($"\n  '{pv.Name}': no alignment — skipped.");
+                            continue;
                         }
-                        catch { }
-                    }
 
-                    // XREF entities
-                    foreach (ObjectId id in ms)
-                    {
-                        try
+                        var alignment = tx.GetObject(pv.AlignmentId, OpenMode.ForRead)
+                                        as CivilDB.Alignment;
+                        if (alignment == null)
                         {
-                            if (tx.GetObject(id, OpenMode.ForRead) is not BlockReference br)
-                                continue;
+                            ed.WriteMessage($"\n  '{pv.Name}': cannot open alignment — skipped.");
+                            continue;
+                        }
 
-                            var btr = tx.GetObject(br.BlockTableRecord, OpenMode.ForRead)
-                                      as BlockTableRecord;
-                            if (btr == null) continue;
-                            if (!btr.IsFromExternalReference && !btr.IsFromOverlayReference)
-                                continue;
+                        // ── Sample alignment (cached per alignment) ───────
+                        if (!alignSampleCache.TryGetValue(pv.AlignmentId, out var alignPts))
+                        {
+                            alignPts = SampleAlignment(alignment);
+                            alignSampleCache[pv.AlignmentId] = alignPts;
+                        }
 
-                            Matrix3d xform    = br.BlockTransform;
-                            string   xrefName = btr.Name;
+                        // ── Find crossings (cached per alignment) ─────────
+                        if (!crossingsCache.TryGetValue(pv.AlignmentId, out var crossings))
+                        {
+                            crossings = new List<CrossingInfo>();
 
-                            foreach (ObjectId entId in btr)
+                            // Host drawing entities
+                            foreach (ObjectId id in ms!)
                             {
                                 try
                                 {
-                                    var obj = tx.GetObject(entId, OpenMode.ForRead) as Entity;
+                                    var obj = tx.GetObject(id, OpenMode.ForRead) as Entity;
                                     if (obj == null) continue;
-
-                                    // XREF layers appear as "xrefName|layerName"
-                                    string hostLayer = xrefName + "|" + obj.Layer;
-                                    if (!selectedLayers.Contains(hostLayer) &&
-                                        !selectedLayers.Contains(obj.Layer))
-                                        continue;
-
-                                    // Use the host-drawing layer name for the drawn line
-                                    string useLayer = selectedLayers.Contains(hostLayer)
-                                                      ? hostLayer : obj.Layer;
-
-                                    CollectCrossingsXref(obj, alignment, alignPts,
-                                                         xform, useLayer, crossings);
+                                    if (!selectedLayers.Contains(obj.Layer)) continue;
+                                    CollectCrossings(obj, alignment, alignPts,
+                                                     obj.Layer, crossings);
                                 }
                                 catch { }
                             }
+
+                            // XREF entities
+                            foreach (ObjectId id in ms)
+                            {
+                                try
+                                {
+                                    if (tx.GetObject(id, OpenMode.ForRead) is not BlockReference br)
+                                        continue;
+                                    var btr = tx.GetObject(br.BlockTableRecord, OpenMode.ForRead)
+                                              as BlockTableRecord;
+                                    if (btr == null) continue;
+                                    if (!btr.IsFromExternalReference && !btr.IsFromOverlayReference)
+                                        continue;
+
+                                    Matrix3d xform    = br.BlockTransform;
+                                    string   xrefName = btr.Name;
+
+                                    foreach (ObjectId entId in btr)
+                                    {
+                                        try
+                                        {
+                                            var obj = tx.GetObject(entId, OpenMode.ForRead) as Entity;
+                                            if (obj == null) continue;
+                                            string hostLayer = xrefName + "|" + obj.Layer;
+                                            if (!selectedLayers.Contains(hostLayer) &&
+                                                !selectedLayers.Contains(obj.Layer)) continue;
+                                            string useLayer = selectedLayers.Contains(hostLayer)
+                                                              ? hostLayer : obj.Layer;
+                                            CollectCrossingsXref(obj, alignment, alignPts,
+                                                                  xform, useLayer, crossings);
+                                        }
+                                        catch { }
+                                    }
+                                }
+                                catch { }
+                            }
+
+                            crossingsCache[pv.AlignmentId] = crossings;
+                            ed.WriteMessage($"\n  '{alignment.Name}': {crossings.Count} crossing(s) found.");
                         }
-                        catch { }
+
+                        // ── Draw vertical lines in this profile view ──────
+                        double pvElevMin = pv.ElevationMin;
+                        double pvElevMax = pv.ElevationMax;
+                        int drawn = 0;
+
+                        foreach (var cx in crossings)
+                        {
+                            if (cx.Station < pv.StationStart - 0.5 ||
+                                cx.Station > pv.StationEnd   + 0.5) continue;
+
+                            double xBot = 0, yBot = 0, xTop = 0, yTop = 0;
+                            if (!pv.FindXYAtStationAndElevation(cx.Station, pvElevMin, ref xBot, ref yBot)) continue;
+                            if (!pv.FindXYAtStationAndElevation(cx.Station, pvElevMax, ref xTop, ref yTop)) continue;
+
+                            var vLine = new Line(
+                                new Point3d(xBot, yBot, 0),
+                                new Point3d(xTop, yTop, 0));
+
+                            if (ltRead!.Has(cx.LayerName))
+                                vLine.LayerId = ltRead[cx.LayerName];
+
+                            msWrite!.AppendEntity(vLine);
+                            tx.AddNewlyCreatedDBObject(vLine, true);
+                            drawn++;
+                        }
+
+                        ed.WriteMessage($"\n  '{pv.Name}': {drawn} line(s) drawn.");
+                        totalDrawn += drawn;
                     }
 
-                    ed.WriteMessage($"\n  Crossings found: {crossings.Count}");
-
-                    if (crossings.Count == 0)
-                    {
-                        ed.WriteMessage("\n  No lines on the selected layers cross this alignment.\n");
-                        tx.Commit();
-                        return;
-                    }
-
-                    // ── Step 7: Draw vertical lines in profile view ───────
-                    var msWrite = tx.GetObject(
-                        bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
-
-                    // Pre-load layer table for lookups
-                    var ltRead = tx.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
-
-                    int drawn = 0;
-                    foreach (var cx in crossings)
-                    {
-                        // Check station is within profile view range
-                        if (cx.Station < pv.StationStart - 0.5 ||
-                            cx.Station > pv.StationEnd   + 0.5)
-                            continue;
-
-                        double xBot = 0, yBot = 0, xTop = 0, yTop = 0;
-
-                        bool botOk = pv.FindXYAtStationAndElevation(
-                            cx.Station, pvElevMin, ref xBot, ref yBot);
-                        bool topOk = pv.FindXYAtStationAndElevation(
-                            cx.Station, pvElevMax, ref xTop, ref yTop);
-
-                        if (!botOk || !topOk) continue;
-
-                        var vLine = new Line(
-                            new Point3d(xBot, yBot, 0),
-                            new Point3d(xTop, yTop, 0));
-
-                        // Set layer to the crossed line's layer
-                        if (ltRead!.Has(cx.LayerName))
-                            vLine.LayerId = ltRead[cx.LayerName];
-
-                        msWrite!.AppendEntity(vLine);
-                        tx.AddNewlyCreatedDBObject(vLine, true);
-                        drawn++;
-                    }
-
-                    ed.WriteMessage($"\n  Vertical lines drawn: {drawn}");
                     tx.Commit();
-
+                    ed.WriteMessage($"\n  Total lines drawn: {totalDrawn}");
                     ed.WriteMessage("\n  Mark Lines complete.");
                     ed.WriteMessage("\n═══════════════════════════════════════════════════════════\n");
                 }
