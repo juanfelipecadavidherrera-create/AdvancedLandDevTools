@@ -1,0 +1,132 @@
+<Window
+    x:Class="AdvancedLandDevTools.UI.PressCountDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Advanced Land Development Tools – Pressure Network Count"
+    Width="480" Height="380"
+    MinWidth="400" MinHeight="300"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResizeWithGrip"
+    Background="#202020"
+    FontFamily="Segoe UI"
+    FontSize="13">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="FluentDarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Header ───────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="{StaticResource AldtHeader}"
+                Padding="20,14">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="36" Height="36"
+                        Background="{StaticResource AldtAccentBtn}"
+                        CornerRadius="8" Margin="0,0,14,0">
+                    <TextBlock Text="P" Foreground="White" FontSize="18"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="ADVANCED LAND DEVELOPMENT TOOLS"
+                               Foreground="{StaticResource AldtAccent}" FontSize="9"
+                               FontWeight="SemiBold" Opacity="0.8"/>
+                    <TextBlock Text="Pressure Network Count"
+                               Foreground="White" FontSize="15"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Instruction ──────────────────────────────────────────── -->
+        <Border Grid.Row="1" Padding="16,10,16,4">
+            <TextBlock Text="Select the pressure network to count:"
+                       Foreground="{StaticResource AldtTextSecondary}"
+                       FontSize="12"/>
+        </Border>
+
+        <!-- ── Network list ─────────────────────────────────────────── -->
+        <Border Grid.Row="2" Margin="16,4,16,8"
+                Style="{StaticResource FluentCard}"
+                Padding="2">
+            <ListView x:Name="LstNetworks"
+                      Style="{StaticResource FluentListView}"
+                      SelectionMode="Single"
+                      MouseDoubleClick="LstNetworks_MouseDoubleClick"
+                      SelectionChanged="LstNetworks_SelectionChanged">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Network Name" Width="240">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}"
+                                               Foreground="{StaticResource AldtText}"
+                                               VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Pipes" Width="70">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding PipeCount}"
+                                               Foreground="{StaticResource AldtTextSecondary}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Fittings" Width="80">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FittingCount}"
+                                               Foreground="{StaticResource AldtTextSecondary}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </Border>
+
+        <!-- ── Footer ───────────────────────────────────────────────── -->
+        <Border Grid.Row="3" Background="{StaticResource AldtHeader}"
+                Padding="16,12">
+            <Grid>
+                <TextBlock x:Name="TxtHint"
+                           Text="Double-click or select and press OK."
+                           Foreground="{StaticResource AldtTextTertiary}"
+                           FontSize="11" VerticalAlignment="Center"
+                           HorizontalAlignment="Left"/>
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right">
+                    <Button Content="Cancel"
+                            Style="{StaticResource FluentSecondaryBtn}"
+                            IsCancel="True"
+                            Click="BtnCancel_Click"/>
+                    <Button x:Name="BtnOk"
+                            Content="OK"
+                            Style="{StaticResource FluentPrimaryBtn}"
+                            IsDefault="True"
+                            IsEnabled="False"
+                            Margin="10,0,0,0"
+                            Click="BtnOk_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>
