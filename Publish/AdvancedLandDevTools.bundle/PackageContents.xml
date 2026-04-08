@@ -32,19 +32,19 @@
       OS="Win64"
       Platform="AutoCAD*"
       SeriesMin="R25.0"
-      SeriesMax="R26.0"/>
+      SeriesMax="R27.0"/>
 
   <Components Description="Main plugin assembly">
     <RuntimeRequirements
         OS="Win64"
         Platform="AutoCAD*"
         SeriesMin="R25.0"
-        SeriesMax="R26.0"/>
+        SeriesMax="R27.0"/>
     <ComponentEntry
         AppName="AdvancedLandDevTools"
         Version="1.0.0"
         ModuleName="./Contents/AdvancedLandDevTools.dll"
-        AppDescription="Advanced Land Development Tools for Civil 3D 2026"
+        AppDescription="Advanced Land Development Tools for Civil 3D 2025/2026/2027"
         LoadOnCommandInvocation="false"
         LoadOnAutoCADStartup="true"
         AppType=".Net"/>
