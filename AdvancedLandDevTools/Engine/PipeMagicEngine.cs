@@ -13,6 +13,8 @@ namespace AdvancedLandDevTools.Engine
         public int ProfileViewsProcessed { get; set; }
         public int GravityNetworksAdded  { get; set; }
         public int PressurePipesAdded    { get; set; }
+        public int FittingsAdded             { get; set; }
+        public int ManholeStructuresAdded    { get; set; }
         public List<string> Log { get; } = new();
         public void AddSuccess(string m) => Log.Add($"  ✓  {m}");
         public void AddInfo   (string m) => Log.Add($"  ℹ  {m}");
@@ -38,13 +40,24 @@ namespace AdvancedLandDevTools.Engine
         private static bool _handlerRegistered = false;
 
         // ─────────────────────────────────────────────────────────────────────
-        public static PipeMagicResult Run(IList<ObjectId> profileViewIds)
+        public static PipeMagicResult Run(
+            IList<ObjectId>  profileViewIds,
+            bool             fittingDetector   = false,
+            IList<ObjectId>? manholeNetworkIds = null)
         {
             var result = new PipeMagicResult();
 
             Document doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) { result.AddFailure("No active document."); return result; }
             Database db = doc.Database;
+
+            // Safety reset — discard any leftover state from a previous incomplete run
+            _pendingJobs.Clear();
+            if (_handlerRegistered)
+            {
+                try { doc.CommandEnded -= OnCommandEnded; } catch { }
+                _handlerRegistered = false;
+            }
 
             // ── Collect gravity network ids + pressure pipe ids ───────────────
             var gravityNetIds   = new List<ObjectId>();
@@ -87,7 +100,7 @@ namespace AdvancedLandDevTools.Engine
                     int gBefore = result.GravityNetworksAdded;
                     int pBefore = result.PressurePipesAdded;
 
-                    QueueProjectionJobs(pvId, gravityNetIds, pressurePipeIds, db, result);
+                    QueueProjectionJobs(pvId, gravityNetIds, pressurePipeIds, db, result, fittingDetector, manholeNetworkIds);
 
                     if (result.GravityNetworksAdded > gBefore ||
                         result.PressurePipesAdded   > pBefore)
@@ -122,10 +135,18 @@ namespace AdvancedLandDevTools.Engine
             List<ObjectId>  gravityNetIds,
             List<ObjectId>  pressurePipeIds,
             Database        db,
-            PipeMagicResult result)
+            PipeMagicResult result,
+            bool            fittingDetector   = false,
+            IList<ObjectId> manholeNetworkIds = null)
         {
             var crossingGravityPipeIds  = new List<ObjectId>();
             var crossingPressurePipeIds = new List<ObjectId>();
+            // de-duplicated fittings across all crossing pressure pipes (by handle string)
+            var crossingFittingHandles    = new HashSet<string>();
+            var crossingFittingObjIds     = new List<ObjectId>();
+            // de-duplicated structures across all crossing gravity pipes (by handle string)
+            var crossingStructureHandles  = new HashSet<string>();
+            var crossingStructureObjIds   = new List<ObjectId>();
             string pvName   = "";
             string pvHandle = pvId.Handle.ToString();
 
@@ -157,12 +178,14 @@ namespace AdvancedLandDevTools.Engine
                                $"[{al.StartingStation:F0} – {al.EndingStation:F0}]");
 
                 // Gravity: check each pipe in every network individually
+                bool hasManholeNets = manholeNetworkIds != null && manholeNetworkIds.Count > 0;
                 foreach (ObjectId nid in gravityNetIds)
                 {
                     try
                     {
                         var net = tx.GetObject(nid, OpenMode.ForRead) as CivilDB.Network;
                         if (net == null) continue;
+                        bool includeManholes = hasManholeNets && manholeNetworkIds.Contains(nid);
                         foreach (ObjectId pid in net.GetPipeIds())
                         {
                             try
@@ -174,6 +197,30 @@ namespace AdvancedLandDevTools.Engine
                                     crossingGravityPipeIds.Add(pid);
                                     result.AddSuccess(
                                         $"  Gravity pipe '{pipe.Name}' crosses — queued.");
+
+                                    // Collect connected structures when manhole mode is ON
+                                    if (includeManholes)
+                                    {
+                                        foreach (var structId in new[] { pipe.StartStructureId, pipe.EndStructureId })
+                                        {
+                                            if (structId.IsNull || structId == ObjectId.Null) continue;
+                                            string key = structId.Handle.ToString();
+                                            if (crossingStructureHandles.Add(key))
+                                            {
+                                                crossingStructureObjIds.Add(structId);
+                                                try
+                                                {
+                                                    var st = tx.GetObject(structId, OpenMode.ForRead) as CivilDB.Structure;
+                                                    string stName = st?.Name ?? structId.Handle.ToString();
+                                                    result.AddSuccess($"    Structure '{stName}' detected — queued.");
+                                                }
+                                                catch
+                                                {
+                                                    result.AddSuccess($"    Structure {structId.Handle} detected — queued.");
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             catch { }
@@ -194,6 +241,30 @@ namespace AdvancedLandDevTools.Engine
                             crossingPressurePipeIds.Add(pid);
                             result.AddSuccess(
                                 $"  Pressure pipe '{pipe.Name}' crosses — queued.");
+
+                            // Collect connected fittings when detector is ON
+                            if (fittingDetector)
+                            {
+                                foreach (var fitId in new[] { pipe.StartPartId, pipe.EndPartId })
+                                {
+                                    if (fitId.IsNull || fitId == ObjectId.Null) continue;
+                                    string key = fitId.Handle.ToString();
+                                    if (crossingFittingHandles.Add(key))
+                                    {
+                                        crossingFittingObjIds.Add(fitId);
+                                        try
+                                        {
+                                            var fit = tx.GetObject(fitId, OpenMode.ForRead) as CivilDB.PressureFitting;
+                                            string fitName = fit?.Name ?? fitId.Handle.ToString();
+                                            result.AddSuccess($"    Fitting '{fitName}' detected — queued.");
+                                        }
+                                        catch
+                                        {
+                                            result.AddSuccess($"    Fitting {fitId.Handle} detected — queued.");
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     catch { }
@@ -259,6 +330,44 @@ namespace AdvancedLandDevTools.Engine
                     Db       = db
                 });
                 result.PressurePipesAdded++;
+            }
+
+            // Enqueue fitting jobs (only when detector is ON)
+            foreach (ObjectId fitId in crossingFittingObjIds)
+            {
+                string cmd =
+                    $"ADDPRESSUREPARTSTOPROF " +
+                    $"S " +
+                    $"{BuildHandent(fitId)}\n" +
+                    $"\n" +
+                    $"{pvHandent}\n";
+
+                _pendingJobs.Enqueue(new ProjectionJob
+                {
+                    Command  = cmd,
+                    PvHandle = pvHandle,
+                    Db       = db
+                });
+                result.FittingsAdded++;
+            }
+
+            // Enqueue manhole structure jobs (only when manhole mode is ON)
+            foreach (ObjectId structId in crossingStructureObjIds)
+            {
+                string cmd =
+                    $"ADDNETWORKPARTSTOPROF " +
+                    $"S " +
+                    $"{BuildHandent(structId)}\n" +
+                    $"\n" +
+                    $"{pvHandent}\n";
+
+                _pendingJobs.Enqueue(new ProjectionJob
+                {
+                    Command  = cmd,
+                    PvHandle = pvHandle,
+                    Db       = db
+                });
+                result.ManholeStructuresAdded++;
             }
         }
 
