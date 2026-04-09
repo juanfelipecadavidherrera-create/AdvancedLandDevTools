@@ -25,6 +25,7 @@ namespace AdvancedLandDevTools.UI
             ("GETPARENT ",       "Get Parent Alignment",  "PROFILES",  "\xE71B", "#4DB6AC", "Parent"),
             ("PIPEMAGIC ",       "Pipe Magic",            "PROFILES",  "\xE945", "#BA68C8", "Magic"),
             ("MARKLINES ",       "Mark Lines",            "PROFILES",  "\xED63", "#FFB74D", "Mark"),
+            ("PROFOFF ",         "Profile Off",           "PROFILES",  "\xE738", "#EF5350", "PrOff"),
 
             // ALIGN
             ("ALIGNDEPLOY ",     "Align Deploy",          "ALIGN",     "\xE8AB", "#81C784", "Deploy"),

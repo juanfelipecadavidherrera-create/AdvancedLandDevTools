@@ -37,6 +37,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(PipeSizingCommand))]
 [assembly: CommandClass(typeof(TrenchManagerCommand))]
 [assembly: CommandClass(typeof(EeeBendCommand))]
+[assembly: CommandClass(typeof(ProfOffCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -144,6 +145,7 @@ namespace AdvancedLandDevTools
                 "\n║    ELEVSLOPE       – Elevation Sloper                   ║" +
                 "\n║    PIPESIZING      – Pipe Sizing Calculator             ║" +
                 "\n║    EEEBEND         – Pressure Pipe Duck (Bypass)        ║" +
+                "\n║    PROFOFF         – Remove Part from Profile View      ║" +
                 "\n║  Cross Sections:                                        ║" +
                 "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
