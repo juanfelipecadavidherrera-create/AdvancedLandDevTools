@@ -152,7 +152,76 @@ namespace AdvancedLandDevTools.Commands
                     return;
                 }
 
-                // ── Step 4: Collect ELEV2 attributes + positions ────────
+                // ── Step 4: Determine which attribute holds elevations ───
+                string elevTag = "ELEV2";  // default
+
+                using (Transaction tx = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
+
+                    // Find the block definition to inspect attribute definitions
+                    BlockTableRecord? defBtr = null;
+                    foreach (ObjectId btrId in bt)
+                    {
+                        var btr = tx.GetObject(btrId, OpenMode.ForRead) as BlockTableRecord;
+                        if (btr != null && string.Equals(btr.Name, blockName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            defBtr = btr;
+                            break;
+                        }
+                    }
+
+                    if (defBtr != null)
+                    {
+                        var attrTags = new List<string>();
+                        bool hasElev2 = false;
+
+                        foreach (ObjectId entId in defBtr)
+                        {
+                            var attDef = tx.GetObject(entId, OpenMode.ForRead) as AttributeDefinition;
+                            if (attDef == null) continue;
+                            attrTags.Add(attDef.Tag);
+                            if (string.Equals(attDef.Tag, "ELEV2", StringComparison.OrdinalIgnoreCase))
+                                hasElev2 = true;
+                        }
+
+                        if (!hasElev2 && attrTags.Count > 0)
+                        {
+                            ed.WriteMessage("\n  ELEV2 attribute not found in this block.");
+                            ed.WriteMessage("\n  Available attributes:\n");
+                            for (int i = 0; i < attrTags.Count; i++)
+                                ed.WriteMessage($"    [{i + 1}] {attrTags[i]}\n");
+
+                            var pio2 = new PromptIntegerOptions(
+                                $"\n  Select attribute to use for elevations [1-{attrTags.Count}]: ")
+                            {
+                                LowerLimit = 1,
+                                UpperLimit = attrTags.Count,
+                                AllowNone = false
+                            };
+                            var pir2 = ed.GetInteger(pio2);
+                            if (pir2.Status != PromptStatus.OK)
+                            {
+                                ed.WriteMessage("\n  Command cancelled.\n");
+                                tx.Commit();
+                                return;
+                            }
+
+                            elevTag = attrTags[pir2.Value - 1];
+                            ed.WriteMessage($"\n  Using attribute: {elevTag}\n");
+                        }
+                        else if (!hasElev2 && attrTags.Count == 0)
+                        {
+                            ed.WriteMessage("\n  This block has no attributes. Cannot read elevations.\n");
+                            tx.Commit();
+                            return;
+                        }
+                    }
+
+                    tx.Commit();
+                }
+
+                // ── Step 5: Collect elevation attributes + positions ──────
                 var pointsToAdd = new List<(Point3d Position, double Elevation, string Info)>();
                 int skipped = 0;
 
@@ -186,13 +255,13 @@ namespace AdvancedLandDevTools.Commands
                             if (!string.Equals(entBlockName, blockName, StringComparison.OrdinalIgnoreCase))
                                 continue;
 
-                            // Search for ELEV2 attribute
+                            // Search for the selected elevation attribute
                             double elev = double.NaN;
                             foreach (ObjectId attId in br.AttributeCollection)
                             {
                                 var att = tx.GetObject(attId, OpenMode.ForRead) as AttributeReference;
                                 if (att != null &&
-                                    string.Equals(att.Tag, "ELEV2", StringComparison.OrdinalIgnoreCase))
+                                    string.Equals(att.Tag, elevTag, StringComparison.OrdinalIgnoreCase))
                                 {
                                     if (double.TryParse(att.TextString, out double parsed))
                                         elev = parsed;
@@ -222,16 +291,16 @@ namespace AdvancedLandDevTools.Commands
 
                 if (pointsToAdd.Count == 0)
                 {
-                    ed.WriteMessage($"\n  No blocks with valid ELEV2 attribute found. Skipped: {skipped}\n");
+                    ed.WriteMessage($"\n  No blocks with valid {elevTag} attribute found. Skipped: {skipped}\n");
                     return;
                 }
 
-                ed.WriteMessage($"\n  Found {pointsToAdd.Count} block(s) with ELEV2 attribute.");
+                ed.WriteMessage($"\n  Found {pointsToAdd.Count} block(s) with {elevTag} attribute.");
                 if (skipped > 0)
-                    ed.WriteMessage($" ({skipped} skipped — no ELEV2 or invalid value)");
+                    ed.WriteMessage($" ({skipped} skipped — no {elevTag} or invalid value)");
                 ed.WriteMessage("\n");
 
-                // ── Step 5: Add elevation points to TIN surface ─────────
+                // ── Step 6: Add elevation points to TIN surface ─────────
                 int added = 0;
                 int failed = 0;
 
