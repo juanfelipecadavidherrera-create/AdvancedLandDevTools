@@ -146,18 +146,22 @@ namespace AdvancedLandDevTools.Engine
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Place an MText label at each fitting's plan-view location.
+        //  Place an MText label at each fitting's plan-view location, then
+        //  group all placed entities into a single AutoCAD Group.
+        //  Returns (placed count, group name).
         // ─────────────────────────────────────────────────────────────────────
-        public static int PlaceFittingLabels(
+        public static (int Placed, string GroupName) PlaceFittingLabels(
             PressCountResult result, Database db, double textHeight)
         {
             int placed = 0;
+            var placedIds = new ObjectIdCollection();
 
             using var tx = db.TransactionManager.StartTransaction();
             var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
             var ms = tx.GetObject(bt![BlockTableRecord.ModelSpace], OpenMode.ForWrite)
                      as BlockTableRecord;
 
+            // ── Place one MText per fitting ───────────────────────────────────
             foreach (var fi in result.Fittings)
             {
                 try
@@ -172,13 +176,43 @@ namespace AdvancedLandDevTools.Engine
 
                     ms!.AppendEntity(mt);
                     tx.AddNewlyCreatedDBObject(mt, true);
+                    placedIds.Add(mt.ObjectId);
                     placed++;
                 }
                 catch { }
             }
 
+            // ── Group all placed MText entities ───────────────────────────────
+            string groupName = "";
+            if (placedIds.Count > 0)
+            {
+                try
+                {
+                    var groupDict = tx.GetObject(db.GroupDictionaryId, OpenMode.ForWrite)
+                                    as DBDictionary;
+
+                    // Build a unique group name derived from the network name
+                    string safeName = result.Network.Name
+                        .Replace(' ', '_').Replace('/', '-').Replace('\\', '-');
+                    string baseName = $"ALDT-{safeName}-Labels";
+                    groupName = baseName;
+                    int suffix = 1;
+                    while (groupDict!.Contains(groupName))
+                        groupName = $"{baseName}-{suffix++}";
+
+                    var grp = new Group(
+                        $"Fitting labels — network '{result.Network.Name}'",
+                        selectable: true);
+
+                    groupDict.SetAt(groupName, grp);
+                    tx.AddNewlyCreatedDBObject(grp, true);
+                    grp.Append(placedIds);
+                }
+                catch { groupName = ""; }
+            }
+
             tx.Commit();
-            return placed;
+            return (placed, groupName);
         }
 
         // ─────────────────────────────────────────────────────────────────────

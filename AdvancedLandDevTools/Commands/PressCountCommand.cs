@@ -133,12 +133,17 @@ namespace AdvancedLandDevTools.Commands
                     ? pdr.Value
                     : 1.0;
 
-                // ── Step 7: Place labels ──────────────────────────────────
-                int placed = PressCountEngine.PlaceFittingLabels(computed, db, textHeight);
+                // ── Step 7: Place labels and group them ──────────────────
+                var (placed, groupName) = PressCountEngine.PlaceFittingLabels(
+                    computed, db, textHeight);
 
                 ed.WriteMessage(
-                    $"\n  ✓  {placed} label(s) placed (text height = {textHeight:F3}).\n");
-                ed.WriteMessage("═══════════════════════════════════════════════════════\n");
+                    $"\n  ✓  {placed} label(s) placed (text height = {textHeight:F3}).");
+                if (!string.IsNullOrEmpty(groupName))
+                    ed.WriteMessage(
+                        $"\n  ✓  All labels grouped as AutoCAD Group '{groupName}'." +
+                        "\n     Select any label and use GROUP command to manage them.");
+                ed.WriteMessage("\n═══════════════════════════════════════════════════════\n");
             }
             catch (System.Exception ex)
             {
