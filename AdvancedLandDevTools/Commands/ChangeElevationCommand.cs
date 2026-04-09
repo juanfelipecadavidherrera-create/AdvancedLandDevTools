@@ -1,56 +1,59 @@
 using System;
-using System.Collections.Generic;
+using System.Reflection;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
-using CivilDB  = Autodesk.Civil.DatabaseServices;
-using CivilApp = Autodesk.Civil.ApplicationServices;
-using AcApp    = Autodesk.AutoCAD.ApplicationServices.Application;
+using CivilDB = Autodesk.Civil.DatabaseServices;
+using AcApp  = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace AdvancedLandDevTools.Commands
 {
     public class ChangeElevationCommand
     {
+        // Profile-view graph proxy DXF names (same as PROFOFF)
+        private const string DXF_NETWORK_PART  = "AECC_GRAPH_PROFILE_NETWORK_PART";
+        private const string DXF_PRESSURE_PART = "AECC_GRAPH_PROFILE_PRESSURE_PART";
+
         [CommandMethod("CHANGEELEVATION", CommandFlags.Modal)]
         public void ChangeElevation()
         {
             try
             {
-            if (!Engine.LicenseManager.EnsureLicensed()) return;
-            Document doc = AcApp.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
+                if (!Engine.LicenseManager.EnsureLicensed()) return;
 
-            Editor   ed = doc.Editor;
-            Database db = doc.Database;
+                Document doc = AcApp.DocumentManager.MdiActiveDocument;
+                if (doc == null) return;
 
-            ed.WriteMessage("\n");
-            ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
-            ed.WriteMessage("  Advanced Land Development Tools  |  Change Elevation     \n");
-            ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
+                Editor   ed = doc.Editor;
+                Database db = doc.Database;
 
-            // ── Step 1: Select pipe or profile view ─────────────────────────────
-            var peo = new PromptEntityOptions(
-                "\n  Select a pipe (plan or profile view): ");
-            peo.AllowObjectOnLockedLayer = true;
+                ed.WriteMessage("\n");
+                ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
+                ed.WriteMessage("  Advanced Land Development Tools  |  Change Elevation     \n");
+                ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
 
-            PromptEntityResult per = ed.GetEntity(peo);
-            if (per.Status != PromptStatus.OK)
-            {
-                ed.WriteMessage("\n  Command cancelled.\n");
-                return;
-            }
+                // ── Step 1: Select a pipe (plan or profile view) ──────────────
+                var peo = new PromptEntityOptions(
+                    "\n  Select a pipe (plan or profile view): ");
+                peo.AllowObjectOnLockedLayer = true;
 
-            // ── Step 2: Resolve pipe ────────────────────────────────────────────
-            ObjectId pipeId = ObjectId.Null;
-            bool     isPressure = false;
-
-            using (Transaction tx = db.TransactionManager.StartTransaction())
-            {
-                try
+                PromptEntityResult per = ed.GetEntity(peo);
+                if (per.Status != PromptStatus.OK)
                 {
-                    var ent = tx.GetObject(per.ObjectId, OpenMode.ForRead);
+                    ed.WriteMessage("\n  Command cancelled.\n");
+                    return;
+                }
+
+                // ── Step 2: Resolve the underlying pipe ObjectId ──────────────
+                ObjectId pipeId     = ObjectId.Null;
+                bool     isPressure = false;
+
+                using (var tx = db.TransactionManager.StartTransaction())
+                {
+                    string dxf = per.ObjectId.ObjectClass.DxfName;
+                    var    ent = tx.GetObject(per.ObjectId, OpenMode.ForRead);
 
                     if (ent is CivilDB.Pipe)
                     {
@@ -61,131 +64,159 @@ namespace AdvancedLandDevTools.Commands
                         pipeId     = per.ObjectId;
                         isPressure = true;
                     }
-                    else
+                    else if (dxf == DXF_NETWORK_PART || dxf == DXF_PRESSURE_PART)
                     {
-                        // Entity is a ProfileView directly, or a projected pipe
-                        // part inside a profile view — resolve the profile view.
-                        CivilDB.ProfileView pv = ent as CivilDB.ProfileView;
+                        // Profile-view graph proxy — resolve via ModelPartId reflection
+                        ObjectId partId = ResolveModelPartId(ent);
 
-                        if (pv == null)
+                        if (partId.IsNull)
                         {
-                            // Clicked on something inside a profile view (e.g. projected pipe).
-                            // Search all profile views to find which one contains the pick point.
-                            string dxfName = ent.GetRXClass().DxfName ?? "(null)";
-                            ed.WriteMessage($"\n  Entity type: {dxfName} — searching for enclosing profile view...");
-                            pv = FindProfileViewAtPoint(per.PickedPoint, tx, db);
-                        }
-
-                        if (pv == null)
-                        {
-                            ed.WriteMessage("\n  Could not find a profile view at the pick point.\n");
+                            ed.WriteMessage(
+                                "\n  Could not resolve underlying pipe from profile view proxy.\n");
                             tx.Abort();
                             return;
                         }
 
-                        ed.WriteMessage("\n  Profile view detected — locating pipe at pick point...");
-                        pipeId = FindPipeInProfileView(pv, per.PickedPoint, tx, ed, db, out isPressure);
-                    }
-                }
-                catch (System.Exception ex)
-                {
-                    ed.WriteMessage($"\n  Error resolving selection: {ex.Message}\n");
-                    tx.Abort();
-                    return;
-                }
-                tx.Abort();
-            }
-
-            if (pipeId.IsNull)
-            {
-                ed.WriteMessage("\n  No pipe found at that location.\n");
-                return;
-            }
-
-            // ── Step 3: Read pipe data, display, prompt, and modify ─────────────
-            using (Transaction tx = db.TransactionManager.StartTransaction())
-            {
-                try
-                {
-                    var ent = tx.GetObject(pipeId, OpenMode.ForWrite);
-
-                    if (!isPressure && ent is CivilDB.Pipe gp)
-                    {
-                        double outerR     = gp.OuterDiameterOrWidth / 2.0;
-                        double startCrown = gp.StartPoint.Z + outerR;
-                        double endCrown   = gp.EndPoint.Z   + outerR;
-
-                        ed.WriteMessage($"\n  Pipe:  {gp.Name}  (Gravity)");
-                        ed.WriteMessage($"\n  Start Outside Crown Elev:  {startCrown:F3}'");
-                        ed.WriteMessage($"\n  End Outside Crown Elev:    {endCrown:F3}'");
-
-                        if (Math.Abs(startCrown - endCrown) < 0.001)
+                        var part = tx.GetObject(partId, OpenMode.ForRead);
+                        if (part is CivilDB.Pipe)
                         {
-                            ed.WriteMessage("\n  Both ends already at the same elevation. No change needed.\n");
-                            tx.Abort();
-                            return;
+                            pipeId = partId;
                         }
-
-                        int choice = PromptChoice(ed, startCrown, endCrown);
-                        if (choice < 0) { ed.WriteMessage("\n  Command cancelled.\n"); tx.Abort(); return; }
-
-                        double targetCrown  = (choice == 1) ? startCrown : endCrown;
-                        double targetCenterZ = targetCrown - outerR;
-
-                        if (choice == 1)
-                            gp.EndPoint = new Point3d(gp.EndPoint.X, gp.EndPoint.Y, targetCenterZ);
+                        else if (part is CivilDB.PressurePipe)
+                        {
+                            pipeId     = partId;
+                            isPressure = true;
+                        }
                         else
-                            gp.StartPoint = new Point3d(gp.StartPoint.X, gp.StartPoint.Y, targetCenterZ);
-
-                        ed.WriteMessage($"\n  Both ends set to outside crown elevation: {targetCrown:F3}'");
-                    }
-                    else if (isPressure && ent is CivilDB.PressurePipe pp)
-                    {
-                        double outerR     = pp.OuterDiameter / 2.0;
-                        double startCrown = pp.StartPoint.Z + outerR;
-                        double endCrown   = pp.EndPoint.Z   + outerR;
-
-                        ed.WriteMessage($"\n  Pipe:  {pp.Name}  (Pressure)");
-                        ed.WriteMessage($"\n  Start Outside Crown Elev:  {startCrown:F3}'");
-                        ed.WriteMessage($"\n  End Outside Crown Elev:    {endCrown:F3}'");
-
-                        if (Math.Abs(startCrown - endCrown) < 0.001)
                         {
-                            ed.WriteMessage("\n  Both ends already at the same elevation. No change needed.\n");
+                            ed.WriteMessage(
+                                $"\n  Resolved part is not a pipe ({part.GetType().Name}) — " +
+                                "only pipes support elevation change.\n");
                             tx.Abort();
                             return;
                         }
-
-                        int choice = PromptChoice(ed, startCrown, endCrown);
-                        if (choice < 0) { ed.WriteMessage("\n  Command cancelled.\n"); tx.Abort(); return; }
-
-                        double targetCrown  = (choice == 1) ? startCrown : endCrown;
-                        double targetCenterZ = targetCrown - outerR;
-
-                        if (choice == 1)
-                            pp.EndPoint = new Point3d(pp.EndPoint.X, pp.EndPoint.Y, targetCenterZ);
-                        else
-                            pp.StartPoint = new Point3d(pp.StartPoint.X, pp.StartPoint.Y, targetCenterZ);
-
-                        ed.WriteMessage($"\n  Both ends set to outside crown elevation: {targetCrown:F3}'");
                     }
                     else
                     {
-                        ed.WriteMessage("\n  Could not open pipe for editing.\n");
+                        ed.WriteMessage(
+                            $"\n  Not a pipe (entity type: {dxf}) — " +
+                            "select a gravity or pressure pipe.\n");
                         tx.Abort();
                         return;
                     }
 
-                    tx.Commit();
-                    ed.WriteMessage("\n  Pipe elevation updated successfully.");
-                    ed.WriteMessage("\n═══════════════════════════════════════════════════════════\n");
-                }
-                catch (System.Exception ex)
-                {
-                    ed.WriteMessage($"\n  Error: {ex.Message}\n");
                     tx.Abort();
                 }
-            }
+
+                if (pipeId.IsNull)
+                {
+                    ed.WriteMessage("\n  No pipe found.\n");
+                    return;
+                }
+
+                // ── Step 3: Read, display, prompt, modify ─────────────────────
+                using (var tx = db.TransactionManager.StartTransaction())
+                {
+                    try
+                    {
+                        var ent = tx.GetObject(pipeId, OpenMode.ForWrite);
+
+                        if (!isPressure && ent is CivilDB.Pipe gp)
+                        {
+                            double outerR     = gp.OuterDiameterOrWidth / 2.0;
+                            double startCrown = gp.StartPoint.Z + outerR;
+                            double endCrown   = gp.EndPoint.Z   + outerR;
+
+                            ed.WriteMessage($"\n  Pipe:  {gp.Name}  (Gravity)");
+                            ed.WriteMessage($"\n  Start Outside Crown Elev:  {startCrown:F3}'");
+                            ed.WriteMessage($"\n  End Outside Crown Elev:    {endCrown:F3}'");
+
+                            if (Math.Abs(startCrown - endCrown) < 0.001)
+                            {
+                                ed.WriteMessage(
+                                    "\n  Both ends already at the same elevation. No change needed.\n");
+                                tx.Abort();
+                                return;
+                            }
+
+                            int choice = PromptChoice(ed, startCrown, endCrown);
+                            if (choice < 0)
+                            {
+                                ed.WriteMessage("\n  Command cancelled.\n");
+                                tx.Abort();
+                                return;
+                            }
+
+                            double targetCrown   = (choice == 1) ? startCrown : endCrown;
+                            double targetCenterZ = targetCrown - outerR;
+
+                            if (choice == 1)
+                                gp.EndPoint = new Point3d(
+                                    gp.EndPoint.X, gp.EndPoint.Y, targetCenterZ);
+                            else
+                                gp.StartPoint = new Point3d(
+                                    gp.StartPoint.X, gp.StartPoint.Y, targetCenterZ);
+
+                            ed.WriteMessage(
+                                $"\n  Both ends set to outside crown elevation: {targetCrown:F3}'");
+                        }
+                        else if (isPressure && ent is CivilDB.PressurePipe pp)
+                        {
+                            double outerR     = pp.OuterDiameter / 2.0;
+                            double startCrown = pp.StartPoint.Z + outerR;
+                            double endCrown   = pp.EndPoint.Z   + outerR;
+
+                            ed.WriteMessage($"\n  Pipe:  {pp.Name}  (Pressure)");
+                            ed.WriteMessage($"\n  Start Outside Crown Elev:  {startCrown:F3}'");
+                            ed.WriteMessage($"\n  End Outside Crown Elev:    {endCrown:F3}'");
+
+                            if (Math.Abs(startCrown - endCrown) < 0.001)
+                            {
+                                ed.WriteMessage(
+                                    "\n  Both ends already at the same elevation. No change needed.\n");
+                                tx.Abort();
+                                return;
+                            }
+
+                            int choice = PromptChoice(ed, startCrown, endCrown);
+                            if (choice < 0)
+                            {
+                                ed.WriteMessage("\n  Command cancelled.\n");
+                                tx.Abort();
+                                return;
+                            }
+
+                            double targetCrown   = (choice == 1) ? startCrown : endCrown;
+                            double targetCenterZ = targetCrown - outerR;
+
+                            if (choice == 1)
+                                pp.EndPoint = new Point3d(
+                                    pp.EndPoint.X, pp.EndPoint.Y, targetCenterZ);
+                            else
+                                pp.StartPoint = new Point3d(
+                                    pp.StartPoint.X, pp.StartPoint.Y, targetCenterZ);
+
+                            ed.WriteMessage(
+                                $"\n  Both ends set to outside crown elevation: {targetCrown:F3}'");
+                        }
+                        else
+                        {
+                            ed.WriteMessage("\n  Could not open pipe for editing.\n");
+                            tx.Abort();
+                            return;
+                        }
+
+                        tx.Commit();
+                        ed.WriteMessage("\n  Pipe elevation updated successfully.");
+                        ed.WriteMessage(
+                            "\n═══════════════════════════════════════════════════════════\n");
+                    }
+                    catch (System.Exception ex)
+                    {
+                        ed.WriteMessage($"\n  Error: {ex.Message}\n");
+                        tx.Abort();
+                    }
+                }
             }
             catch (System.Exception ex)
             {
@@ -195,233 +226,40 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Find the profile view that contains the given WCS point.
+        //  Resolve the underlying pipe ObjectId from a profile-view graph proxy.
+        //  Uses ModelPartId (confirmed working in PROFOFF) with fallbacks.
         // ─────────────────────────────────────────────────────────────────────
-        private static CivilDB.ProfileView? FindProfileViewAtPoint(
-            Point3d pickPoint, Transaction tx, Database db)
+        private static ObjectId ResolveModelPartId(DBObject proxy)
         {
-            RXClass pvClass = RXObject.GetClass(typeof(CivilDB.ProfileView));
+            var    type  = proxy.GetType();
+            var    flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-            var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-            var ms = tx.GetObject(
-                     bt![BlockTableRecord.ModelSpace], OpenMode.ForRead) as BlockTableRecord;
+            string[] candidates = {
+                "ModelPartId",
+                "PartId", "NetworkPartId", "BasePipeId", "SourceObjectId",
+                "EntityId", "CrossingPipeId", "ComponentObjectId",
+                "ReferencedObjectId", "SourceId", "PipeId", "StructureId"
+            };
 
-            foreach (ObjectId id in ms!)
+            foreach (string name in candidates)
             {
-                if (!id.ObjectClass.IsDerivedFrom(pvClass)) continue;
-
                 try
                 {
-                    var pv = tx.GetObject(id, OpenMode.ForRead) as CivilDB.ProfileView;
-                    if (pv == null) continue;
-
-                    double sta = 0, elev = 0;
-                    if (pv.FindStationAndElevationAtXY(
-                            pickPoint.X, pickPoint.Y, ref sta, ref elev))
+                    var prop = type.GetProperty(name, flags);
+                    if (prop?.PropertyType == typeof(ObjectId))
                     {
-                        return pv;
+                        var val = (ObjectId)prop.GetValue(proxy)!;
+                        if (!val.IsNull) return val;
                     }
                 }
                 catch { }
             }
 
-            return null;
+            return ObjectId.Null;
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Find the nearest pipe to the pick point inside a profile view.
-        //  Converts XY → station/elevation, then searches all pipe networks.
-        // ─────────────────────────────────────────────────────────────────────
-        private ObjectId FindPipeInProfileView(
-            CivilDB.ProfileView pv,
-            Point3d             pickPoint,
-            Transaction         tx,
-            Editor              ed,
-            Database            db,
-            out bool            isPressure)
-        {
-            isPressure = false;
-
-            // Convert screen pick to station / elevation in the profile view
-            double station = 0, elevation = 0;
-            bool inBounds = pv.FindStationAndElevationAtXY(
-                pickPoint.X, pickPoint.Y, ref station, ref elevation);
-
-            if (!inBounds)
-            {
-                ed.WriteMessage("\n  Pick point is outside the profile view bounds.");
-                return ObjectId.Null;
-            }
-
-            ed.WriteMessage($"\n  Profile View: '{pv.Name}'");
-            ed.WriteMessage($"\n  Pick → Station: {station:F2}, Elevation: {elevation:F3}");
-
-            // Get alignment
-            if (pv.AlignmentId.IsNull)
-            {
-                ed.WriteMessage("\n  Profile view has no alignment.");
-                return ObjectId.Null;
-            }
-            var alignment = tx.GetObject(pv.AlignmentId, OpenMode.ForRead) as CivilDB.Alignment;
-            if (alignment == null)
-            {
-                ed.WriteMessage("\n  Cannot open alignment.");
-                return ObjectId.Null;
-            }
-
-            var civDoc = CivilApp.CivilDocument.GetCivilDocument(db);
-
-            ObjectId bestId   = ObjectId.Null;
-            double   bestDist = double.MaxValue;
-            bool     bestIsPressure = false;
-            int      pipesChecked = 0;
-
-            // ── Search gravity pipe networks ────────────────────────────────────
-            foreach (ObjectId nid in civDoc.GetPipeNetworkIds())
-            {
-                try
-                {
-                    var net = tx.GetObject(nid, OpenMode.ForRead) as CivilDB.Network;
-                    if (net == null) continue;
-
-                    foreach (ObjectId pid in net.GetPipeIds())
-                    {
-                        try
-                        {
-                            var pipe = tx.GetObject(pid, OpenMode.ForRead) as CivilDB.Pipe;
-                            if (pipe == null) continue;
-
-                            pipesChecked++;
-
-                            double dist = PipeDistanceToPickInProfile(
-                                pipe.StartPoint, pipe.EndPoint,
-                                pipe.OuterDiameterOrWidth / 2.0,
-                                alignment, station, elevation);
-
-                            if (dist < 50.0)
-                                ed.WriteMessage($"\n    '{pipe.Name}'  dist={dist:F2}");
-
-                            if (dist < bestDist)
-                            {
-                                bestDist       = dist;
-                                bestId         = pid;
-                                bestIsPressure = false;
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-            }
-
-            // ── Search pressure pipes ───────────────────────────────────────────
-            var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-            var ms = tx.GetObject(
-                     bt![BlockTableRecord.ModelSpace], OpenMode.ForRead) as BlockTableRecord;
-
-            foreach (ObjectId id in ms!)
-            {
-                try
-                {
-                    if (tx.GetObject(id, OpenMode.ForRead) is CivilDB.PressurePipe pp)
-                    {
-                        pipesChecked++;
-
-                        double dist = PipeDistanceToPickInProfile(
-                            pp.StartPoint, pp.EndPoint,
-                            pp.OuterDiameter / 2.0,
-                            alignment, station, elevation);
-
-                        if (dist < 50.0)
-                            ed.WriteMessage($"\n    '{pp.Name}'  dist={dist:F2}");
-
-                        if (dist < bestDist)
-                        {
-                            bestDist       = dist;
-                            bestId         = id;
-                            bestIsPressure = true;
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            ed.WriteMessage($"\n  Total pipes checked: {pipesChecked}, best dist: {bestDist:F2}");
-
-            // Tolerance: pipe must be within 10 ft of picked elevation
-            if (bestDist > 10.0)
-            {
-                ed.WriteMessage($"\n  No pipe found near Station {station:F2}, Elev {elevation:F3}.");
-                return ObjectId.Null;
-            }
-
-            isPressure = bestIsPressure;
-
-            // Report which pipe was found
-            try
-            {
-                var found = tx.GetObject(bestId, OpenMode.ForRead);
-                string name = found is CivilDB.Pipe gf ? gf.Name :
-                              found is CivilDB.PressurePipe pf ? pf.Name : "?";
-                ed.WriteMessage($"\n  Found pipe: '{name}' (dist={bestDist:F2})");
-            }
-            catch { }
-
-            return bestId;
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Compute distance from a pipe to the picked station/elevation
-        //  in profile-view space.  Projects both pipe endpoints onto the
-        //  alignment (station/offset), then interpolates pipe elevation
-        //  at the picked station.  NO offset filter — pipes that run
-        //  along the alignment (same side) are valid candidates.
-        // ─────────────────────────────────────────────────────────────────────
-        private static double PipeDistanceToPickInProfile(
-            Point3d startPt, Point3d endPt, double outerRadius,
-            CivilDB.Alignment alignment,
-            double pickStation, double pickElevation)
-        {
-            try
-            {
-                double sta1 = 0, off1 = 0, sta2 = 0, off2 = 0;
-                alignment.StationOffset(startPt.X, startPt.Y, ref sta1, ref off1);
-                alignment.StationOffset(endPt.X,   endPt.Y,   ref sta2, ref off2);
-
-                double minSta = Math.Min(sta1, sta2);
-                double maxSta = Math.Max(sta1, sta2);
-
-                // ── Clamp pick station into the pipe's station range ──────
-                double clampedSta = Math.Max(minSta, Math.Min(maxSta, pickStation));
-                double dSta = Math.Abs(pickStation - clampedSta);
-
-                // ── Interpolate pipe center elevation at the clamped station
-                double t = (Math.Abs(sta2 - sta1) < 0.001)
-                           ? 0.5
-                           : (clampedSta - sta1) / (sta2 - sta1);
-                t = Math.Max(0.0, Math.Min(1.0, t));
-
-                double pipeCenterZ = startPt.Z + t * (endPt.Z - startPt.Z);
-
-                // ── Elevation distance — zero if pick is inside pipe ──────
-                double dElev = Math.Abs(pickElevation - pipeCenterZ);
-                if (dElev <= outerRadius) dElev = 0;
-
-                // Combined distance in profile-view space.
-                // Station and elevation axes may have very different scales,
-                // so use pure elevation distance when station is within range.
-                return (dSta < 1.0)
-                       ? dElev                                  // within station range
-                       : Math.Sqrt(dSta * dSta + dElev * dElev);
-            }
-            catch
-            {
-                return double.MaxValue;
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Prompt user to choose option 1 (start) or 2 (end)
+        //  Prompt user to pick option 1 (start) or 2 (end)
         // ─────────────────────────────────────────────────────────────────────
         private static int PromptChoice(Editor ed, double startCrown, double endCrown)
         {
@@ -439,8 +277,7 @@ namespace AdvancedLandDevTools.Commands
             pko.AllowNone = false;
 
             PromptResult pr = ed.GetKeywords(pko);
-            if (pr.Status != PromptStatus.OK)
-                return -1;
+            if (pr.Status != PromptStatus.OK) return -1;
 
             return pr.StringResult == "1" ? 1 : 2;
         }

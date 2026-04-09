@@ -34,6 +34,7 @@ namespace AdvancedLandDevTools.UI
             ("INVERTPULLUP ",    "Invert Pull Up",        "PIPES",     "\xE74A", "#FFD54F", "Invert"),
             ("CHANGEELEVATION ", "Change Elevation",      "PIPES",     "\xE70E", "#FF8A65", "Elev"),
             ("PIPESIZING ",      "Pipe Sizing Calc",      "PIPES",     "\xE81E", "#29B6F6", "Sizing"),
+            ("PRESSCOUNT ",      "Pressure Count",        "PIPES",     "\xE946", "#CE93D8", "PCount"),
 
             // SURFACES
             ("ELEVSLOPE ",       "Elev Slope",            "SURFACES",  "\xE879", "#66BB6A", "Slope"),

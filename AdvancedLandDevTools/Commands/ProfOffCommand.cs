@@ -1,23 +1,44 @@
 using System;
-using System.Collections.Generic;
+using System.Reflection;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
-using AcApp    = Autodesk.AutoCAD.ApplicationServices.Application;
-using CivilApp = Autodesk.Civil.ApplicationServices;
-using CivilDB  = Autodesk.Civil.DatabaseServices;
+using AcApp  = Autodesk.AutoCAD.ApplicationServices.Application;
+using CivilDB = Autodesk.Civil.DatabaseServices;
 
 namespace AdvancedLandDevTools.Commands
 {
     /// <summary>
-    /// PROFOFF — Remove pipes, structures, or pressure parts from a profile view.
-    /// Equivalent to unticking "Draw in profile view" in the part properties.
-    /// Supports gravity and pressure networks.  Loops until the user presses Escape.
+    /// PROFOFF — Remove pipes / structures from a Civil 3D profile view.
+    ///
+    /// Step 1 : click the profile view to lock in pvId.
+    /// Step 2 : click each pipe / structure drawn in the profile view.
+    ///
+    /// Civil 3D returns AECC_GRAPH_PROFILE_NETWORK_PART or
+    /// AECC_GRAPH_PROFILE_PRESSURE_PART when you click a part in a profile
+    /// view — these are visual proxy entities, not the model-space parts.
+    /// We resolve the underlying Pipe / Structure ObjectId via reflection and
+    /// then call RemoveFromProfileView on the real part.
     /// </summary>
     public class ProfOffCommand
     {
+        // DXF names of the profile-view graph proxy entities
+        private const string DXF_NETWORK_PART  = "AECC_GRAPH_PROFILE_NETWORK_PART";
+        private const string DXF_PRESSURE_PART = "AECC_GRAPH_PROFILE_PRESSURE_PART";
+
+        // Ordered list of property / method names to try when resolving
+        // the underlying part ObjectId from the graph proxy entity
+        private static readonly string[] _partIdProps = {
+            "ModelPartId",                                          // ProfileViewPressurePart / ProfileViewNetworkPart
+            "PartId", "NetworkPartId", "BasePipeId", "SourceObjectId",
+            "EntityId", "CrossingPipeId", "ComponentObjectId",
+            "ReferencedObjectId", "SourceId", "PipeId", "StructureId"
+        };
+        private static readonly string[] _partIdMethods = {
+            "GetPartId", "GetNetworkPartId", "GetSourceId", "GetEntityId"
+        };
+
         [CommandMethod("PROFOFF", CommandFlags.Modal)]
         public void Execute()
         {
@@ -32,104 +53,110 @@ namespace AdvancedLandDevTools.Commands
 
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
                 ed.WriteMessage("\n  Advanced Land Development Tools  |  Profile Off");
-                ed.WriteMessage("\n  Select pipes/structures in a profile view to hide them.");
-                ed.WriteMessage("\n  Press Escape or Enter to finish.");
+                ed.WriteMessage("\n  Step 1: click the profile view border or background.");
+                ed.WriteMessage("\n  Step 2: click each pipe / structure to hide.");
+                ed.WriteMessage("\n          Enter or Escape to finish.");
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
 
+                // ── Step 1: pick the profile view ────────────────────────────
+                ObjectId pvId = ObjectId.Null;
+
+                using (var tx = db.TransactionManager.StartTransaction())
+                {
+                    var pvOpt = new PromptEntityOptions(
+                        "\n  Select profile view (click border or background): ");
+                    pvOpt.SetRejectMessage(
+                        "\n  That is not a profile view — click on the view border or grid.");
+                    pvOpt.AddAllowedClass(typeof(CivilDB.ProfileView), exactMatch: true);
+
+                    var pvRes = ed.GetEntity(pvOpt);
+                    if (pvRes.Status != PromptStatus.OK)
+                    {
+                        ed.WriteMessage("\n  Cancelled.\n");
+                        tx.Abort();
+                        return;
+                    }
+
+                    var pv = tx.GetObject(pvRes.ObjectId, OpenMode.ForRead)
+                             as CivilDB.ProfileView;
+                    if (pv == null)
+                    {
+                        ed.WriteMessage("\n  Could not open profile view.\n");
+                        tx.Abort();
+                        return;
+                    }
+
+                    pvId = pv.ObjectId;
+                    ed.WriteMessage("\n  Profile view locked. Now click on parts to hide.\n");
+                    tx.Commit();
+                }
+
+                // ── Step 2: pick parts ────────────────────────────────────────
                 int removed = 0;
 
                 while (true)
                 {
-                    // ── Pick entity in profile view ──────────────────────────
                     var peo = new PromptEntityOptions(
-                        "\n  Select pipe or structure in profile view: ");
+                        "\n  Click on a pipe or structure in the profile view <Enter to finish>: ");
                     peo.AllowNone = true;
+
                     var per = ed.GetEntity(peo);
 
-                    if (per.Status == PromptStatus.Cancel ||
-                        per.Status == PromptStatus.None)
+                    if (per.Status == PromptStatus.None  ||
+                        per.Status == PromptStatus.Cancel)
                         break;
 
                     if (per.Status != PromptStatus.OK) continue;
 
-                    Point3d pickPt = per.PickedPoint;
+                    string dxf = per.ObjectId.ObjectClass.DxfName;
 
-                    using (Transaction tx = db.TransactionManager.StartTransaction())
+                    using (var tx = db.TransactionManager.StartTransaction())
                     {
-                        // ── Find the profile view at the pick point ──────────
-                        CivilDB.ProfileView? pv = null;
-                        var ent = tx.GetObject(per.ObjectId, OpenMode.ForRead);
-
-                        pv = ent as CivilDB.ProfileView
-                             ?? FindProfileViewAtPoint(pickPt, tx, db);
-
-                        if (pv == null)
-                        {
-                            ed.WriteMessage(
-                                "\n  Cannot find profile view at pick location.");
-                            tx.Abort();
-                            continue;
-                        }
-
-                        ObjectId pvId = pv.ObjectId;
-
-                        // ── Convert pick to station/elevation ────────────────
-                        double station = 0, elevation = 0;
-                        if (!pv.FindStationAndElevationAtXY(
-                                pickPt.X, pickPt.Y, ref station, ref elevation))
-                        {
-                            ed.WriteMessage(
-                                "\n  Pick point is outside profile view bounds.");
-                            tx.Abort();
-                            continue;
-                        }
-
-                        if (pv.AlignmentId.IsNull)
-                        {
-                            ed.WriteMessage("\n  Profile view has no alignment.");
-                            tx.Abort();
-                            continue;
-                        }
-
-                        var alignment = tx.GetObject(pv.AlignmentId, OpenMode.ForRead)
-                                        as CivilDB.Alignment;
-                        if (alignment == null)
-                        {
-                            ed.WriteMessage("\n  Cannot open alignment.");
-                            tx.Abort();
-                            continue;
-                        }
-
-                        // ── First: check if the clicked entity is directly a
-                        //    pipe/structure (user clicked on the projected part) ─
-                        bool handled = TryRemoveEntity(ent, pvId, tx, ed);
-
-                        // ── If not, search all networks for the nearest part ─
-                        if (!handled)
-                        {
-                            var civDoc = CivilApp.CivilDocument.GetCivilDocument(db);
-                            handled = FindAndRemoveNearestPart(
-                                civDoc, alignment, pvId, station, elevation,
-                                tx, ed, db);
-                        }
-
-                        if (handled)
+                        // ── Direct Civil part (fallback if Civil 3D returns the real entity)
+                        if (TryRemoveDirect(per.ObjectId, pvId, tx, ed))
                         {
                             removed++;
                             tx.Commit();
+                            continue;
                         }
-                        else
+
+                        // ── Graph proxy entity — resolve to the underlying part
+                        if (dxf == DXF_NETWORK_PART || dxf == DXF_PRESSURE_PART)
                         {
-                            ed.WriteMessage(
-                                "\n  No pipe or structure found near pick point.");
-                            tx.Abort();
+                            var proxy = tx.GetObject(per.ObjectId, OpenMode.ForRead);
+                            ObjectId partId = ResolvePartId(proxy, ed);
+
+                            if (partId.IsNull)
+                            {
+                                // ResolvePartId already printed diagnostic output
+                                tx.Abort();
+                                continue;
+                            }
+
+                            if (TryRemoveDirect(partId, pvId, tx, ed))
+                            {
+                                removed++;
+                                tx.Commit();
+                            }
+                            else
+                            {
+                                ed.WriteMessage(
+                                    "\n  Found the underlying part but could not remove it.");
+                                tx.Abort();
+                            }
+                            continue;
                         }
+
+                        // ── Unrecognised entity type
+                        ed.WriteMessage(
+                            $"\n  Unrecognised entity type: {dxf} — " +
+                            $"click directly on a pipe or structure symbol.");
+                        tx.Abort();
                     }
                 }
 
-                // ── Summary ──────────────────────────────────────────────────
                 ed.WriteMessage($"\n\n  ═══ PROFOFF COMPLETE ═══");
-                ed.WriteMessage($"\n  Removed {removed} part(s) from profile view(s).\n");
+                ed.WriteMessage($"\n  {removed} part(s) removed from profile view.\n");
             }
             catch (System.Exception ex)
             {
@@ -138,319 +165,113 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Try to remove a directly-clicked entity from the profile view
+        //  Try to open objectId directly as a Civil part and remove from view.
         // ─────────────────────────────────────────────────────────────────────
-        private static bool TryRemoveEntity(
-            DBObject ent, ObjectId pvId, Transaction tx, Editor ed)
+        private static bool TryRemoveDirect(
+            ObjectId id, ObjectId pvId, Transaction tx, Editor ed)
         {
             try
             {
-                // Gravity pipe
-                if (ent is CivilDB.Pipe pipe)
+                var ent = tx.GetObject(id, OpenMode.ForWrite);
+                string name = "";
+
+                if (ent is CivilDB.Pipe gp)
                 {
-                    pipe.UpgradeOpen();
-                    pipe.RemoveFromProfileView(pvId);
-                    ed.WriteMessage($"\n  ✓ Removed gravity pipe '{pipe.Name}' from profile view.");
+                    name = gp.Name; gp.RemoveFromProfileView(pvId);
+                    ed.WriteMessage($"\n  ✓ Removed gravity pipe '{name}'.");
                     return true;
                 }
-
-                // Gravity structure
-                if (ent is CivilDB.Structure structure)
+                if (ent is CivilDB.Structure gs)
                 {
-                    structure.UpgradeOpen();
-                    structure.RemoveFromProfileView(pvId);
-                    ed.WriteMessage($"\n  ✓ Removed structure '{structure.Name}' from profile view.");
+                    name = gs.Name; gs.RemoveFromProfileView(pvId);
+                    ed.WriteMessage($"\n  ✓ Removed structure '{name}'.");
                     return true;
                 }
-
-                // Pressure pipe
                 if (ent is CivilDB.PressurePipe pp)
                 {
-                    pp.UpgradeOpen();
-                    pp.RemoveFromProfileView(pvId);
-                    ed.WriteMessage($"\n  ✓ Removed pressure pipe '{pp.Name}' from profile view.");
+                    name = pp.Name; pp.RemoveFromProfileView(pvId);
+                    ed.WriteMessage($"\n  ✓ Removed pressure pipe '{name}'.");
                     return true;
                 }
-
-                // Pressure fitting
                 if (ent is CivilDB.PressureFitting pf)
                 {
-                    pf.UpgradeOpen();
-                    pf.RemoveFromProfileView(pvId);
-                    ed.WriteMessage($"\n  ✓ Removed pressure fitting '{pf.Name}' from profile view.");
+                    name = pf.Name; pf.RemoveFromProfileView(pvId);
+                    ed.WriteMessage($"\n  ✓ Removed pressure fitting '{name}'.");
                     return true;
                 }
-
-                // Pressure appurtenance
                 if (ent is CivilDB.PressureAppurtenance pa)
                 {
-                    pa.UpgradeOpen();
-                    pa.RemoveFromProfileView(pvId);
-                    ed.WriteMessage($"\n  ✓ Removed pressure appurtenance '{pa.Name}' from profile view.");
+                    name = pa.Name; pa.RemoveFromProfileView(pvId);
+                    ed.WriteMessage($"\n  ✓ Removed pressure appurtenance '{name}'.");
                     return true;
                 }
             }
             catch (System.Exception ex)
             {
-                ed.WriteMessage($"\n  Failed to remove part: {ex.Message}");
+                ed.WriteMessage($"\n  RemoveFromProfileView failed: {ex.Message}");
             }
-
             return false;
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Search all pipe networks for the nearest part to the pick point
-        //  in profile-view space (station / elevation).
+        //  Resolve the underlying network-part ObjectId from a graph proxy.
+        //  Tries common property/method names via reflection.
+        //  If none work, prints all ObjectId-typed members for diagnosis.
         // ─────────────────────────────────────────────────────────────────────
-        private static bool FindAndRemoveNearestPart(
-            CivilApp.CivilDocument civDoc,
-            CivilDB.Alignment      alignment,
-            ObjectId               pvId,
-            double                 pickStation,
-            double                 pickElevation,
-            Transaction            tx,
-            Editor                 ed,
-            Database               db)
+        private static ObjectId ResolvePartId(DBObject proxy, Editor ed)
         {
-            ObjectId bestId       = ObjectId.Null;
-            double   bestDist     = double.MaxValue;
-            string   bestType     = "";
-            string   bestName     = "";
+            var type  = proxy.GetType();
+            var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-            // ── Gravity networks: pipes + structures ─────────────────────────
-            foreach (ObjectId nid in civDoc.GetPipeNetworkIds())
+            // Try properties
+            foreach (string name in _partIdProps)
             {
                 try
                 {
-                    var net = tx.GetObject(nid, OpenMode.ForRead) as CivilDB.Network;
-                    if (net == null) continue;
-
-                    // Pipes
-                    foreach (ObjectId pid in net.GetPipeIds())
+                    var prop = type.GetProperty(name, flags);
+                    if (prop?.PropertyType == typeof(ObjectId))
                     {
-                        try
-                        {
-                            var pipe = tx.GetObject(pid, OpenMode.ForRead) as CivilDB.Pipe;
-                            if (pipe == null) continue;
-
-                            double dist = PipeDistanceInProfile(
-                                pipe.StartPoint, pipe.EndPoint,
-                                pipe.OuterDiameterOrWidth / 2.0,
-                                alignment, pickStation, pickElevation);
-
-                            if (dist < bestDist)
-                            {
-                                bestDist = dist;
-                                bestId   = pid;
-                                bestType = "gravity pipe";
-                                bestName = pipe.Name;
-                            }
-                        }
-                        catch { }
-                    }
-
-                    // Structures
-                    foreach (ObjectId sid in net.GetStructureIds())
-                    {
-                        try
-                        {
-                            var st = tx.GetObject(sid, OpenMode.ForRead) as CivilDB.Structure;
-                            if (st == null) continue;
-
-                            double dist = StructureDistanceInProfile(
-                                st.Position, alignment, pickStation, pickElevation);
-
-                            if (dist < bestDist)
-                            {
-                                bestDist = dist;
-                                bestId   = sid;
-                                bestType = "structure";
-                                bestName = st.Name;
-                            }
-                        }
-                        catch { }
+                        var val = (ObjectId)prop.GetValue(proxy)!;
+                        if (!val.IsNull) return val;
                     }
                 }
                 catch { }
             }
 
-            // ── Pressure pipes + fittings + appurtenances ────────────────────
-            var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-            var ms = tx.GetObject(
-                     bt![BlockTableRecord.ModelSpace], OpenMode.ForRead)
-                     as BlockTableRecord;
-
-            foreach (ObjectId id in ms!)
+            // Try methods with no parameters returning ObjectId
+            foreach (string name in _partIdMethods)
             {
                 try
                 {
-                    var obj = tx.GetObject(id, OpenMode.ForRead);
-
-                    if (obj is CivilDB.PressurePipe pp)
+                    var method = type.GetMethod(name, flags, null, Type.EmptyTypes, null);
+                    if (method?.ReturnType == typeof(ObjectId))
                     {
-                        double dist = PipeDistanceInProfile(
-                            pp.StartPoint, pp.EndPoint,
-                            pp.OuterDiameter / 2.0,
-                            alignment, pickStation, pickElevation);
-
-                        if (dist < bestDist)
-                        {
-                            bestDist = dist;
-                            bestId   = id;
-                            bestType = "pressure pipe";
-                            bestName = pp.Name;
-                        }
-                    }
-                    else if (obj is CivilDB.PressureFitting pf)
-                    {
-                        double dist = StructureDistanceInProfile(
-                            pf.Position, alignment, pickStation, pickElevation);
-
-                        if (dist < bestDist)
-                        {
-                            bestDist = dist;
-                            bestId   = id;
-                            bestType = "pressure fitting";
-                            bestName = pf.Name;
-                        }
-                    }
-                    else if (obj is CivilDB.PressureAppurtenance pa)
-                    {
-                        double dist = StructureDistanceInProfile(
-                            pa.Position, alignment, pickStation, pickElevation);
-
-                        if (dist < bestDist)
-                        {
-                            bestDist = dist;
-                            bestId   = id;
-                            bestType = "pressure appurtenance";
-                            bestName = pa.Name;
-                        }
+                        var val = (ObjectId)method.Invoke(proxy, null)!;
+                        if (!val.IsNull) return val;
                     }
                 }
                 catch { }
             }
 
-            // ── Tolerance check ──────────────────────────────────────────────
-            if (bestDist > 10.0 || bestId.IsNull)
-                return false;
+            // ── Diagnostic: print all ObjectId-typed members so we can find the right name
+            ed.WriteMessage($"\n  [DIAG] Graph proxy type: {type.FullName}");
+            ed.WriteMessage($"\n  [DIAG] ObjectId properties found:");
 
-            // ── Remove from profile view ─────────────────────────────────────
-            try
+            foreach (var prop in type.GetProperties(flags))
             {
-                var found = tx.GetObject(bestId, OpenMode.ForWrite);
-
-                if (found is CivilDB.Pipe gp)
-                    gp.RemoveFromProfileView(pvId);
-                else if (found is CivilDB.Structure gs)
-                    gs.RemoveFromProfileView(pvId);
-                else if (found is CivilDB.PressurePipe rpp)
-                    rpp.RemoveFromProfileView(pvId);
-                else if (found is CivilDB.PressureFitting rpf)
-                    rpf.RemoveFromProfileView(pvId);
-                else if (found is CivilDB.PressureAppurtenance rpa)
-                    rpa.RemoveFromProfileView(pvId);
-                else
-                    return false;
-
-                ed.WriteMessage(
-                    $"\n  ✓ Removed {bestType} '{bestName}' from profile view. (dist={bestDist:F2})");
-                return true;
-            }
-            catch (System.Exception ex)
-            {
-                ed.WriteMessage($"\n  Failed to remove {bestType} '{bestName}': {ex.Message}");
-                return false;
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Distance from a pipe (line segment) to pick in profile-view space
-        // ─────────────────────────────────────────────────────────────────────
-        private static double PipeDistanceInProfile(
-            Point3d startPt, Point3d endPt, double outerRadius,
-            CivilDB.Alignment alignment,
-            double pickStation, double pickElevation)
-        {
-            try
-            {
-                double sta1 = 0, off1 = 0, sta2 = 0, off2 = 0;
-                alignment.StationOffset(startPt.X, startPt.Y, ref sta1, ref off1);
-                alignment.StationOffset(endPt.X,   endPt.Y,   ref sta2, ref off2);
-
-                double minSta = Math.Min(sta1, sta2);
-                double maxSta = Math.Max(sta1, sta2);
-
-                double clampedSta = Math.Max(minSta, Math.Min(maxSta, pickStation));
-                double dSta = Math.Abs(pickStation - clampedSta);
-
-                double t = (Math.Abs(sta2 - sta1) < 0.001)
-                           ? 0.5
-                           : (clampedSta - sta1) / (sta2 - sta1);
-                t = Math.Max(0.0, Math.Min(1.0, t));
-
-                double pipeCenterZ = startPt.Z + t * (endPt.Z - startPt.Z);
-
-                double dElev = Math.Abs(pickElevation - pipeCenterZ);
-                if (dElev <= outerRadius) dElev = 0;
-
-                return (dSta < 1.0) ? dElev
-                                    : Math.Sqrt(dSta * dSta + dElev * dElev);
-            }
-            catch { return double.MaxValue; }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Distance from a point-like part (structure/fitting) to pick
-        // ─────────────────────────────────────────────────────────────────────
-        private static double StructureDistanceInProfile(
-            Point3d partPosition,
-            CivilDB.Alignment alignment,
-            double pickStation, double pickElevation)
-        {
-            try
-            {
-                double sta = 0, off = 0;
-                alignment.StationOffset(
-                    partPosition.X, partPosition.Y, ref sta, ref off);
-
-                double dSta  = Math.Abs(pickStation   - sta);
-                double dElev = Math.Abs(pickElevation - partPosition.Z);
-
-                return Math.Sqrt(dSta * dSta + dElev * dElev);
-            }
-            catch { return double.MaxValue; }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Find profile view whose bounds contain the given world point
-        // ─────────────────────────────────────────────────────────────────────
-        private static CivilDB.ProfileView? FindProfileViewAtPoint(
-            Point3d pickPoint, Transaction tx, Database db)
-        {
-            RXClass pvClass = RXObject.GetClass(typeof(CivilDB.ProfileView));
-
-            var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-            var ms = tx.GetObject(
-                     bt![BlockTableRecord.ModelSpace], OpenMode.ForRead)
-                     as BlockTableRecord;
-
-            foreach (ObjectId id in ms!)
-            {
-                if (!id.ObjectClass.IsDerivedFrom(pvClass)) continue;
+                if (prop.PropertyType != typeof(ObjectId)) continue;
                 try
                 {
-                    var pv = tx.GetObject(id, OpenMode.ForRead) as CivilDB.ProfileView;
-                    if (pv == null) continue;
-
-                    double sta = 0, elev = 0;
-                    if (pv.FindStationAndElevationAtXY(
-                            pickPoint.X, pickPoint.Y, ref sta, ref elev))
-                        return pv;
+                    var val = prop.GetValue(proxy);
+                    ed.WriteMessage($"\n    .{prop.Name} = {val}");
                 }
-                catch { }
+                catch (System.Exception ex)
+                {
+                    ed.WriteMessage($"\n    .{prop.Name} → threw {ex.GetType().Name}");
+                }
             }
-            return null;
+
+            return ObjectId.Null;
         }
     }
 }

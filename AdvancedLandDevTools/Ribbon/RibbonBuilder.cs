@@ -301,6 +301,33 @@ namespace AdvancedLandDevTools.Ribbon
             };
             piSource.Items.Add(btnEeeBend);
 
+            piSource.Items.Add(new RibbonSeparator());
+
+            // ── Pressure Count button ─────────────────────────────────────────
+            var btnPressCount = new RibbonButton
+            {
+                Id               = "ALDT_BTN_PRESSCOUNT",
+                Name             = "Pressure Count",
+                Text             = "Pressure\nCount",
+                Description      = "Select a Civil 3D pressure network to compute total 3D pipe " +
+                                   "length, number all fittings, and optionally place MText labels.",
+                ToolTip          = BuildToolTip(
+                    "Pressure Network Count",
+                    "Scans the drawing for pressure networks, lets you pick one, then " +
+                    "calculates the total 3D pipe length and assigns sequential numbers " +
+                    "to every fitting. Optionally places numbered MText labels at each " +
+                    "fitting location and groups them into a single AutoCAD Group.\n\nCommand: PRESSCOUNT"),
+                CommandHandler   = new RibbonCommandHandler("PRESSCOUNT "),
+                CommandParameter = "PRESSCOUNT ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildPressCountIcon(32),
+                Image            = BuildPressCountIcon(16)
+            };
+            piSource.Items.Add(btnPressCount);
+
             tab.Panels.Add(new RibbonPanel { Source = piSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -2831,6 +2858,91 @@ namespace AdvancedLandDevTools.Ribbon
             };
             Canvas.SetLeft(xl, s * 14.5); Canvas.SetTop(xl, s * 5.2);
             Add(xl);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Pressure Count icon — pipe run with numbered fitting markers
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildPressCountIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A0A2A"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Horizontal pressure main (cyan-blue pipe) ─────────────────────
+            // Shadow
+            Add(new Line { X1 = s*2, Y1 = s*16, X2 = s*30, Y2 = s*16,
+                Stroke = C("#0A1020"), StrokeThickness = s * 4.5 });
+            // Pipe body
+            Add(new Line { X1 = s*2, Y1 = s*16, X2 = s*30, Y2 = s*16,
+                Stroke = C("#7E57C2"), StrokeThickness = s * 3.5 });
+            // Highlight
+            Add(new Line { X1 = s*2, Y1 = s*14.8, X2 = s*30, Y2 = s*14.8,
+                Stroke = C("#B39DDB"), StrokeThickness = s * 0.8, Opacity = 0.5 });
+
+            // ── Three fitting dots at x = 8, 16, 24 ──────────────────────────
+            double[] fxs = { 8, 16, 24 };
+            string[] nums = { "1", "2", "3" };
+            for (int i = 0; i < fxs.Length; i++)
+            {
+                double fx = fxs[i];
+                // Outer ring (lavender)
+                Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = s * 6, Height = s * 6,
+                    Fill = C("#CE93D8"), Stroke = C("#6A1B9A"), StrokeThickness = s * 0.8
+                });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * (fx - 3));
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * 13);
+
+                // Number label above fitting
+                var lbl = new System.Windows.Controls.TextBlock
+                {
+                    Text = nums[i],
+                    Foreground = C("#F3E5F5"),
+                    FontSize = s * 5,
+                    FontWeight = System.Windows.FontWeights.Bold
+                };
+                Canvas.SetLeft(lbl, s * (fx - 1.8));
+                Canvas.SetTop(lbl,  s * 4);
+                Add(lbl);
+
+                // Tick line from number down to fitting
+                Add(new Line
+                {
+                    X1 = s * fx, Y1 = s * 10,
+                    X2 = s * fx, Y2 = s * 13,
+                    Stroke = C("#CE93D8"), StrokeThickness = s * 0.7, Opacity = 0.7
+                });
+            }
+
+            // ── "3D" badge (bottom-right) ─────────────────────────────────────
+            Add(new Rectangle
+            {
+                Width = s * 8, Height = s * 6,
+                Fill = C("#4A148C"), RadiusX = s * 1.5, RadiusY = s * 1.5
+            });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 22);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * 23);
+
+            var badge = new System.Windows.Controls.TextBlock
+            {
+                Text = "3D",
+                Foreground = C("#EDE7F6"),
+                FontSize = s * 4.5,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(badge, s * 23.2);
+            Canvas.SetTop(badge,  s * 23.2);
+            Add(badge);
 
             return RenderToBitmap(canvas, size, size);
         }
