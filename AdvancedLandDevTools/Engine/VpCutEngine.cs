@@ -96,13 +96,25 @@ namespace AdvancedLandDevTools.Engine
                 result.Info($"  ViewCenter(DCS)=({src.ViewCenter.X:F2},{src.ViewCenter.Y:F2})");
                 result.Info($"  ViewTarget(WCS)=({src.ViewTarget.X:F2},{src.ViewTarget.Y:F2},{src.ViewTarget.Z:F2})");
                 result.Info($"  PS center=({src.CenterPoint.X:F2},{src.CenterPoint.Y:F2})  size={src.Width:F2}x{src.Height:F2}");
-
                 foreach (ObjectId shapeId in shapeIds)
                 {
                     try
                     {
-                        var curve = tx.GetObject(shapeId, OpenMode.ForRead) as Curve;
-                        if (curve == null || !curve.Closed)
+                        var ent = tx.GetObject(shapeId, OpenMode.ForRead);
+
+                        // Polylines (lightweight, 2D, or 3D) are accepted regardless of their
+                        // Closed flag — any polyline with 3+ vertices can form a clip boundary.
+                        // All other curve types must report Closed = true (circles, ellipses, etc.)
+                        bool isPolyline = ent is Polyline || ent is Polyline2d || ent is Polyline3d;
+
+                        var curve = ent as Curve;
+                        if (curve == null)
+                        {
+                            result.Fail($"{shapeId.Handle}: not a curve — skipped.");
+                            continue;
+                        }
+
+                        if (!isPolyline && !curve.Closed)
                         {
                             result.Fail($"{shapeId.Handle}: not a closed curve — skipped.");
                             continue;
@@ -111,11 +123,10 @@ namespace AdvancedLandDevTools.Engine
                         var msVerts = GetCurveVertices(curve);
                         if (msVerts.Count < 3)
                         {
-                            result.Fail($"{shapeId.Handle}: too few vertices — skipped.");
+                            result.Fail($"{shapeId.Handle}: too few vertices ({msVerts.Count}) — skipped.");
                             continue;
                         }
 
-                        // Transform each vertex from model space (WCS) to paper space
                         var psPts = new List<Point2d>();
                         foreach (var ms in msVerts)
                             psPts.Add(MsToPsPoint(ms, src));
@@ -126,7 +137,6 @@ namespace AdvancedLandDevTools.Engine
                             Handle    = shapeId.Handle.ToString(),
                             Verts     = msVerts.Count
                         });
-
                         result.Info($"  Shape {shapeId.Handle}: {msVerts.Count} verts → clip ready");
                     }
                     catch (Exception ex)

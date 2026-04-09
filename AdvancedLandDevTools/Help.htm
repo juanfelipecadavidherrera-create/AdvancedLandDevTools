@@ -22,12 +22,13 @@
   td { padding: 8px 14px; border-bottom: 1px solid #454545; }
   tr:hover { background: #2d2d2d; }
   .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #454545; color: #6d6d6d; font-size: 13px; }
+  .badge { display: inline-block; background: #0078D4; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
 </style>
 </head>
 <body>
 
-<h1>Advanced Land Development Tools v1.0</h1>
-<p>A productivity suite for Autodesk Civil 3D 2025/2026 designed for land development professionals. All commands are accessible from the <strong>Advanced Land Dev Tools</strong> ribbon tab or the floating Mini Toolbar.</p>
+<h1>Advanced Land Development Tools v1.0.0</h1>
+<p>A productivity suite for Autodesk Civil 3D 2025 / 2026 / 2027 designed for land development professionals. All commands are accessible from the <strong>Advanced Land Dev Tools</strong> ribbon tab or the floating Mini Toolbar.</p>
 
 <h2>Installation</h2>
 <div class="section">
@@ -37,9 +38,10 @@
 
 <h2>Licensing</h2>
 <div class="section">
-<p>The plugin includes a <strong>14-day free trial</strong> starting from the first use. During the trial, all commands are fully functional.</p>
-<p>After the trial period, purchase a license from the <a href="https://apps.autodesk.com">Autodesk App Store</a> to continue using the plugin. The license is verified automatically through your Autodesk account.</p>
+<p>The plugin includes a <strong>30-day free trial</strong> starting from the first use. During the trial, all commands are fully functional.</p>
+<p>After the trial period, purchase a license from the <a href="https://apps.autodesk.com">Autodesk App Store</a> to continue using the plugin. The license is verified automatically through your Autodesk account — no manual activation is required.</p>
 <p><strong>Offline use:</strong> If you have a valid license and lose internet connectivity, the plugin will continue working for up to 3 days before requiring a connection to re-verify.</p>
+<p><strong>Subscription renewal:</strong> If your subscription lapses and is later renewed, the plugin restores full access automatically on the next license check — no reinstallation needed.</p>
 </div>
 
 <h2>Commands</h2>
@@ -60,14 +62,24 @@ When working in a drawing with dozens of profile views, it's easy to lose track 
 
 <div class="cmd">
 <strong>PIPEMAGIC</strong> — Pipe Crossing Projection<br>
-Projecting pipe networks into profile views is a critical but tedious step in utility coordination. PIPEMAGIC automates it completely. Select one or more profile views and the tool scans all pipe networks in the drawing — both gravity and pressure — detects which ones cross each alignment, and projects them into the corresponding profile view automatically. No need to manually identify crossings or run the projection dialog for each network one by one. This is invaluable for drainage reviews, utility conflict detection, and construction plan preparation.
-<div class="workflow"><strong>Workflow:</strong> Select one or more profile views → all crossing pipe networks (gravity and pressure) are detected and projected automatically.</div>
+Projecting pipe networks into profile views is a critical but tedious step in utility coordination. PIPEMAGIC automates it completely. Select one or more profile views and the tool scans all pipe networks in the drawing — both gravity and pressure — detects which ones cross each alignment, and projects them into the corresponding profile view automatically. No need to manually identify crossings or run the projection dialog for each network one by one.<br><br>
+<strong>Pressure Fitting Detector</strong> — When enabled, PIPEMAGIC also reads the start and end fittings connected to each crossing pressure pipe and projects them into the profile view alongside the pipes. Activate by typing <code>On</code> at the Pressure Fitting Detector prompt.<br><br>
+<strong>Manhole Mode</strong> — When enabled (mutually exclusive with Pressure Fitting Detector), PIPEMAGIC reads the start and end structures connected to each crossing gravity pipe and projects them into the profile view. After enabling, the command lists all gravity networks in the drawing and lets you choose which networks to include — for example, including only the sewer network while leaving drainage structures out.
+<div class="workflow"><strong>Workflow:</strong> Select one or more profile views → choose Pressure Fitting Detector [On/Off] → choose Manhole Mode [On/Off] (if Fitting Detector is off) → if Manhole Mode is on, select which gravity networks to include → all crossing pipes, fittings, and/or structures are detected and projected automatically.</div>
 </div>
 
 <div class="cmd">
 <strong>MARKLINES</strong> — Mark Crossing Lines<br>
-Utility lines, right-of-way boundaries, easements, and other linear features drawn as lines or polylines in plan view often need to be referenced in profile views. MARKLINES finds every point where selected lines or polylines cross an alignment and draws a full-height vertical marker line at that station in the profile view. This gives you instant visual reference for where utilities or boundaries cross your road or corridor — without manually measuring stations or placing lines by hand.
-<div class="workflow"><strong>Workflow:</strong> Select layers containing lines/polylines → pick a profile view → vertical markers are drawn at every crossing station.</div>
+Utility lines, right-of-way boundaries, easements, and other linear features drawn as lines or polylines in plan view often need to be referenced in profile views. MARKLINES finds every point where selected lines or polylines cross an alignment and draws a full-height vertical marker line at that station in the profile view. This gives you instant visual reference for where utilities or boundaries cross your road or corridor — without manually measuring stations or placing lines by hand.<br><br>
+Multiple profile views can be processed in a single command run. After selecting the layers to scan, keep picking profile views one by one and press Enter when done. Profile views that share the same alignment reuse the same crossing scan, so there is no performance penalty for selecting many views at once.
+<div class="workflow"><strong>Workflow:</strong> Select layers containing lines/polylines → pick one or more profile views (Enter when done) → vertical markers are drawn at every crossing station across all selected views.</div>
+</div>
+
+<div class="cmd">
+<strong>VPCUT</strong> — Viewport Clip <span class="badge">Layout</span><br>
+Paper space viewports are rectangular by default. VPCUT lets you clip any viewport to an arbitrary shape defined by geometry already drawn in model space — perfect for lot-shaped viewports, curved road boundaries, irregular parcels, or any non-rectangular presentation frame. Select the viewport in a layout, then switch into it and select the closed shape or polyline that defines the clip boundary. The tool applies the shape as a non-rectangular clip, instantly giving the viewport that custom-cut look without any external tools.<br><br>
+Supported boundary types: circles, closed polylines (including those drawn by snapping back to the start point, not just those closed with the C option), rectangles, splines, and any other closed curve.
+<div class="workflow"><strong>Workflow:</strong> Switch to a paper space layout → select the viewport to clip → switch into model space → select the closed shape or polyline that defines the boundary → the viewport is clipped to that shape.</div>
 </div>
 
 <h3>Alignments</h3>
@@ -138,10 +150,18 @@ The Mini Toolbar is a compact floating panel that gives you one-click access to 
 <div class="section">
 <table>
 <tr><th>Requirement</th><th>Detail</th></tr>
-<tr><td>Host Application</td><td>Autodesk Civil 3D 2025 or 2026</td></tr>
+<tr><td>Host Application</td><td>Autodesk Civil 3D 2025, 2026, or 2027</td></tr>
 <tr><td>Operating System</td><td>Windows 10/11 (64-bit)</td></tr>
 <tr><td>Runtime</td><td>.NET 8.0 (included with Civil 3D 2025+)</td></tr>
 <tr><td>Internet</td><td>Required for property information lookups (FEMA, County, Groundwater, PLSS) and license verification</td></tr>
+</table>
+</div>
+
+<h2>Version History</h2>
+<div class="section">
+<table>
+<tr><th>Version</th><th>Changes</th></tr>
+<tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES (multi-profile view), VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GROUNDWATER, AREAMANAGER, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>
 
@@ -153,7 +173,7 @@ The Mini Toolbar is a compact floating panel that gives you one-click access to 
 
 <div class="footer">
 <p>&copy; 2026 Juan Felipe Cadavid. All rights reserved.<br>
-Advanced Land Development Tools is proprietary software. Unauthorized distribution is prohibited.</p>
+Advanced Land Development Tools v1.0.0 is proprietary software. Unauthorized distribution is prohibited.</p>
 </div>
 
 </body>

@@ -31,9 +31,6 @@ namespace AdvancedLandDevTools.Commands
                 // ── Step 1: Select the source viewport ───────────────────
                 ed.WriteMessage("\n[VPCUT] Select the source viewport to cut:\n");
 
-                var vpFilter = new SelectionFilter(new[] {
-                    new TypedValue((int)DxfCode.Start, "VIEWPORT")
-                });
                 var vpResult = ed.GetEntity(
                     new PromptEntityOptions("\nSelect viewport: ")
                     {
@@ -42,7 +39,6 @@ namespace AdvancedLandDevTools.Commands
 
                 if (vpResult.Status != PromptStatus.OK) return;
 
-                // Validate it's a viewport (not the paper space border viewport)
                 ObjectId vpId = vpResult.ObjectId;
                 using (Transaction txCheck = doc.Database.TransactionManager.StartTransaction())
                 {
@@ -61,52 +57,37 @@ namespace AdvancedLandDevTools.Commands
                     txCheck.Abort();
                 }
 
-                // ── Step 2: Switch into the viewport (model space) ───────
-                // Use MSPACE to enter the viewport, then let user select shapes
-                ed.WriteMessage("\n[VPCUT] Entering viewport — select closed shapes in model space.\n");
-                ed.WriteMessage("[VPCUT] Select closed polylines, circles, or other closed curves.\n");
+                // ── Step 2: Enter viewport, select shapes in model space ──
+                ed.WriteMessage("\n[VPCUT] Entering viewport — select closed shapes or polylines.\n");
 
-                // Switch to model space through the viewport
                 ed.SwitchToModelSpace();
+                try { Application.SetSystemVariable("CVPORT", GetViewportNumber(doc.Database, vpId)); }
+                catch { }
 
-                // Activate the specific viewport
-                try
-                {
-                    Application.SetSystemVariable("CVPORT", GetViewportNumber(doc.Database, vpId));
-                }
-                catch { /* viewport may already be active */ }
-
-                // ── Step 3: Select closed shapes in model space ──────────
                 var shapeResult = ed.GetSelection(
                     new PromptSelectionOptions
                     {
-                        MessageForAdding = "\nSelect closed shapes (polylines, circles, etc.): ",
-                        AllowDuplicates = false
+                        MessageForAdding = "\nSelect closed shapes or polylines: ",
+                        AllowDuplicates  = false
                     });
+
+                ed.SwitchToPaperSpace();
 
                 if (shapeResult.Status != PromptStatus.OK || shapeResult.Value.Count == 0)
                 {
                     ed.WriteMessage("\n[VPCUT] No shapes selected — cancelled.\n");
-                    ed.SwitchToPaperSpace();
                     return;
                 }
 
                 var shapeIds = new List<ObjectId>();
                 foreach (SelectedObject so in shapeResult.Value)
-                {
-                    if (so != null)
-                        shapeIds.Add(so.ObjectId);
-                }
+                    if (so != null) shapeIds.Add(so.ObjectId);
 
-                // ── Step 4: Switch back to paper space ───────────────────
-                ed.SwitchToPaperSpace();
-
-                // ── Step 5: Run the engine ───────────────────────────────
+                // ── Step 3: Run the engine ────────────────────────────────
                 ed.WriteMessage($"\n[VPCUT] Processing {shapeIds.Count} shape(s)...\n");
 
                 var result = VpCutEngine.Run(vpId, shapeIds);
 
-                // ── Report ───────────────────────────────────────────────
                 foreach (var line in result.Log)
                     ed.WriteMessage($"\n{line}");
 

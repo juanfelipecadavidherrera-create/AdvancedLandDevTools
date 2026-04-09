@@ -37,6 +37,10 @@ namespace AdvancedLandDevTools.Engine
         /// <summary>When true, road structural layers (asphalt/base/subgrade) are drawn under this segment.</summary>
         [JsonProperty("isRoad")]
         public bool IsRoad { get; set; }
+
+        /// <summary>When true, an earth/grass fill layer (2 ft deep) is drawn under this segment. Mutually exclusive with IsRoad.</summary>
+        [JsonProperty("isGrass")]
+        public bool IsGrass { get; set; }
     }
 
     public class SectionProfile
@@ -77,6 +81,9 @@ namespace AdvancedLandDevTools.Engine
 
         /// <summary>Contiguous road surface regions for structural layers.</summary>
         public List<List<(double X, double Y)>> RoadRegions { get; set; } = new();
+
+        /// <summary>Contiguous grass surface regions for earth hatch layer.</summary>
+        public List<List<(double X, double Y)>> GrassRegions { get; set; } = new();
 
         public double CenterlineBaseY => 0;
         public double CenterlineTopY { get; set; }
@@ -139,8 +146,9 @@ namespace AdvancedLandDevTools.Engine
                 AddBlockOutline(geo, seg, sx, sy, -1);
             }
 
-            // Build road regions from both sides
+            // Build road and grass regions from both sides
             BuildRoadRegions(geo, profile);
+            BuildGrassRegions(geo, profile);
 
             return geo;
         }
@@ -148,73 +156,91 @@ namespace AdvancedLandDevTools.Engine
         /// <summary>Build contiguous road surface regions for structural layer drawing.</summary>
         private static void BuildRoadRegions(SectionGeometry geo, SectionProfile profile)
         {
-            // Build full surface: left reversed + right (skip duplicate origin)
-            var fullSurface = new List<(double X, double Y)>();
-            var fullIsRoad = new List<bool>();
+            // Process each side independently, walking center → outward.
+            // LeftPoints / RightPoints are already in that order, so no reversal needed.
+            BuildSideRoadRegions(geo, profile.RightSegments, geo.RightPoints);
+            BuildSideRoadRegions(geo, profile.LeftSegments,  geo.LeftPoints);
+        }
 
-            // Left side reversed (outermost → center)
-            // Each left segment's sub-points map to LeftPoints[1..N]
-            int lIdx = geo.LeftPoints.Count - 1;
-            for (int s = profile.LeftSegments.Count - 1; s >= 0; s--)
-            {
-                int count = SubPointCount(profile.LeftSegments[s]);
-                for (int k = 0; k < count; k++)
-                {
-                    if (lIdx >= 0)
-                    {
-                        fullSurface.Add(geo.LeftPoints[lIdx]);
-                        fullIsRoad.Add(profile.LeftSegments[s].IsRoad);
-                        lIdx--;
-                    }
-                }
-            }
-            // Add center point (origin)
-            fullSurface.Add(geo.LeftPoints[0]);
-            fullIsRoad.Add(false); // center point itself
+        /// <summary>
+        /// Walks one side center → outward and collects contiguous IsRoad runs into
+        /// RoadRegions.  Each region starts at the boundary point that precedes the run
+        /// (center origin or the far edge of the preceding block) and ends at the boundary
+        /// point that follows it — no block sub-points are ever included.
+        /// </summary>
+        private static void BuildSideRoadRegions(SectionGeometry geo,
+            List<SectionSegment> segments, List<(double X, double Y)> points)
+        {
+            List<(double X, double Y)>? current = null;
+            // ptIdx tracks the index of the boundary point before the current segment's
+            // sub-points.  points[0] is always the center/origin.
+            int ptIdx = 0;
 
-            // Right side (center → outermost), skip first (already added)
-            int rIdx = 1;
-            foreach (var seg in profile.RightSegments)
+            foreach (var seg in segments)
             {
                 int count = SubPointCount(seg);
-                for (int k = 0; k < count; k++)
-                {
-                    if (rIdx < geo.RightPoints.Count)
-                    {
-                        fullSurface.Add(geo.RightPoints[rIdx]);
-                        fullIsRoad.Add(seg.IsRoad);
-                        rIdx++;
-                    }
-                }
-            }
 
-            // Extract contiguous road regions
-            List<(double X, double Y)>? current = null;
-            for (int i = 0; i < fullSurface.Count; i++)
-            {
-                if (fullIsRoad[i])
+                if (seg.IsRoad)
                 {
                     if (current == null)
                     {
-                        current = new List<(double, double)>();
-                        // Add previous point as region start if available
-                        if (i > 0) current.Add(fullSurface[i - 1]);
+                        // Open a new region starting at the current boundary point
+                        // (center for the first road segment, block far-edge otherwise).
+                        current = new List<(double X, double Y)> { points[ptIdx] };
                     }
-                    current.Add(fullSurface[i]);
+                    for (int k = 1; k <= count; k++)
+                        current.Add(points[ptIdx + k]);
                 }
-                else
+                else if (current != null)
                 {
-                    if (current != null)
-                    {
-                        // Close region with this non-road point
-                        current.Add(fullSurface[i]);
-                        geo.RoadRegions.Add(current);
-                        current = null;
-                    }
+                    // Close the road region at points[ptIdx] — the exact road/block boundary.
+                    // The block's own sub-points are never touched.
+                    if (current.Count >= 2) geo.RoadRegions.Add(current);
+                    current = null;
                 }
+
+                ptIdx += count;
             }
+
             if (current != null && current.Count >= 2)
                 geo.RoadRegions.Add(current);
+        }
+
+        /// <summary>Build contiguous grass surface regions for earth hatch drawing.</summary>
+        private static void BuildGrassRegions(SectionGeometry geo, SectionProfile profile)
+        {
+            BuildSideGrassRegions(geo, profile.RightSegments, geo.RightPoints);
+            BuildSideGrassRegions(geo, profile.LeftSegments,  geo.LeftPoints);
+        }
+
+        private static void BuildSideGrassRegions(SectionGeometry geo,
+            List<SectionSegment> segments, List<(double X, double Y)> points)
+        {
+            List<(double X, double Y)>? current = null;
+            int ptIdx = 0;
+
+            foreach (var seg in segments)
+            {
+                int count = SubPointCount(seg);
+
+                if (seg.IsGrass)
+                {
+                    if (current == null)
+                        current = new List<(double X, double Y)> { points[ptIdx] };
+                    for (int k = 1; k <= count; k++)
+                        current.Add(points[ptIdx + k]);
+                }
+                else if (current != null)
+                {
+                    if (current.Count >= 2) geo.GrassRegions.Add(current);
+                    current = null;
+                }
+
+                ptIdx += count;
+            }
+
+            if (current != null && current.Count >= 2)
+                geo.GrassRegions.Add(current);
         }
 
         /// <summary>Returns sub-point deltas for a segment. dirSign = +1 for right, -1 for left.</summary>
@@ -223,35 +249,38 @@ namespace AdvancedLandDevTools.Engine
             switch (seg.Type)
             {
                 case SegmentType.TypeF:
-                    // Type F Curb & Gutter — 2 ft total horizontal
-                    // Surface ends at curb TOP (elevated +0.5 ft) so next segment starts elevated.
-                    // 1) 1.5 ft gutter pan sloping down 2%
-                    // 2) Vertical curb face: 0.53 ft rise (net +0.5 above start)
-                    // 3) 0.5 ft flat curb top
+                    // Type F Curb & Gutter — 2 ft total horizontal (surveyed geometry)
+                    // Surface profile (3 sub-points → SubPointCount = 3):
+                    // 1) Gutter pan: 1.5 ft horiz, -0.0546 ft vertical (gutter flows toward curb)
+                    // 2) Curb face + nose fillet: 0.1667 ft horiz, +0.5118 ft rise
+                    // 3) Flat curb top: 0.3333 ft horiz
                     return new List<(double, double)>
                     {
-                        (dirSign * 1.50, -0.025),   // gutter pan (2% down)
-                        (dirSign * 0.00,  0.525),    // vertical curb face
-                        (dirSign * 0.50,  0.00)      // flat curb top
+                        (dirSign * 1.5000, -0.0546),   // gutter pan end at curb face
+                        (dirSign * 0.1667,  0.5118),   // curb face + nose fillet
+                        (dirSign * 0.3333,  0.0000)    // flat curb top
                     };
 
                 case SegmentType.TypeD:
-                    // Type D Mountable Curb — 0.5 ft total horizontal
-                    // Surface ends at curb TOP (elevated +0.33 ft) so next segment starts elevated.
-                    // 1) Front rolled slope: 4 in rise over 0.25 ft
-                    // 2) Flat top: 0.25 ft
+                    // Type D Mountable/Rolled Curb — 0.6666 ft wide, 0.5 ft rise (surveyed)
+                    // Surface profile (3 sub-points → SubPointCount = 3):
+                    // 1) Straight slope up curb face: 0.1351 ft horiz, +0.3738 ft rise
+                    // 2) Arc rollover to flat top: 0.1617 ft horiz, +0.1262 ft rise
+                    // 3) Flat top to back: 0.3698 ft horiz
                     return new List<(double, double)>
                     {
-                        (dirSign * 0.25,  0.33),     // front slope up (4 in)
-                        (dirSign * 0.25,  0.00)      // flat top
+                        (dirSign * 0.1351,  0.3738),  // curb face slope
+                        (dirSign * 0.1617,  0.1262),  // arc rollover (simplified)
+                        (dirSign * 0.3698,  0.0000)   // flat top
                     };
 
                 case SegmentType.ValleyGutter:
-                    // Valley Gutter — 2 ft total horizontal, V-shaped depression
+                    // Valley Gutter — 2 ft wide, V-shaped depression (surveyed)
+                    // Road surface on each side; valley floor 0.1211 ft below road surface.
                     return new List<(double, double)>
                     {
-                        (dirSign * 1.0, -0.083),     // down to center (~1 in)
-                        (dirSign * 1.0,  0.083)      // back up from center
+                        (dirSign * 1.0, -0.1211),    // down to valley floor
+                        (dirSign * 1.0,  0.1211)     // back up to road surface
                     };
 
                 default: // Normal
@@ -270,59 +299,150 @@ namespace AdvancedLandDevTools.Engine
             switch (seg.Type)
             {
                 case SegmentType.TypeF:
-                    // Type F: 2 ft wide. Curb top at sy + 0.5 ft.
-                    // 12" (1 ft) deep below curb top at back, 6" (0.5 ft) slab at gutter.
-                    double fTop = sy + 0.500;
-                    outline = new List<(double, double)>
-                    {
-                        (sx,               sy),                // gutter start (top)
-                        (sx + dir * 1.50,  sy - 0.025),       // gutter lip at curb face
-                        (sx + dir * 1.50,  fTop),              // top of curb face
-                        (sx + dir * 2.00,  fTop),              // curb top end
-                        (sx + dir * 2.00,  fTop - 1.00),      // back bottom (12" below top)
-                        (sx,               sy - 0.50),         // front bottom (6" slab)
-                        (sx,               sy)                 // close
-                    };
+                {
+                    // Type F Curb & Gutter — real surveyed geometry.
+                    // Coordinate origin (sx, sy) = road surface at gutter front edge.
+                    // Offsets derived from AutoCAD LIST data (normalized to block corner).
+                    //
+                    // Toe fillet arc : start (1.2811, 0.5352)→end (1.5000, 0.7832), bulge +0.3782
+                    // Nose fillet arc: start (1.5000, 1.1284)→end (1.6667, 1.2950), bulge -0.4142
+                    //
+                    // Bulge is multiplied by dir so arcs mirror correctly on the left side.
+
+                    double toeX0 = sx + dir * 1.2811, toeY0 = sy - 0.3026;
+                    double toeX1 = sx + dir * 1.5000, toeY1 = sy - 0.0546;
+
+                    double noseX0 = sx + dir * 1.5000, noseY0 = sy + 0.2906;
+                    double noseX1 = sx + dir * 1.6667, noseY1 = sy + 0.4572;
+
+                    outline = new List<(double, double)>();
+                    outline.Add((sx,                   sy));            // front top (road surface)
+                    outline.Add((sx + dir * 1.0,       sy - 0.3378));  // gutter low point
+                    outline.Add((toeX0,                toeY0));         // toe fillet start
+
+                    foreach (var p in TessellateArc(toeX0, toeY0, toeX1, toeY1,  0.3782 * dir))
+                        outline.Add(p);                                  // toe fillet arc
+
+                    outline.Add((noseX0,               noseY0));        // up curb face (nose fillet start)
+
+                    foreach (var p in TessellateArc(noseX0, noseY0, noseX1, noseY1, -0.4142 * dir))
+                        outline.Add(p);                                  // nose fillet arc
+
+                    outline.Add((sx + dir * 2.0000,    sy + 0.4572));  // curb top back corner
+                    outline.Add((sx + dir * 2.0000,    sy - 0.8378));  // back bottom
+                    outline.Add((sx,                   sy - 0.8378));  // front bottom
+                    outline.Add((sx,                   sy));            // close
                     break;
+                }
 
                 case SegmentType.TypeD:
-                    // Type D: 0.5 ft wide. Curb top at sy + 0.33 ft.
-                    // 18" (1.5 ft) deep below curb top.
-                    double dTop = sy + 0.33;
-                    outline = new List<(double, double)>
-                    {
-                        (sx,               sy),                // front base (top)
-                        (sx + dir * 0.25,  dTop),              // slope peak
-                        (sx + dir * 0.50,  dTop),              // flat top end
-                        (sx + dir * 0.50,  dTop - 1.50),      // back bottom (18" below top)
-                        (sx,               sy - 1.50),         // front bottom (18" below start)
-                        (sx,               sy)                 // close
-                    };
+                {
+                    // Type D Rolled/Mountable Curb — real surveyed geometry.
+                    // (sx, sy) = road surface at curb front face (road side).
+                    // Block: 0.6666 ft wide, 1.0 ft below road + 0.5 ft above road.
+                    //
+                    // Rollover arc: from curb nose (0.1351, +0.3738) to flat top (0.2968, +0.5)
+                    //   bulge = -0.3442 * dir  (CW for right side, CCW mirrored for left)
+
+                    double arcX0 = sx + dir * 0.1351, arcY0 = sy + 0.3738;
+                    double arcX1 = sx + dir * 0.2968, arcY1 = sy + 0.5000;
+
+                    outline = new List<(double, double)>();
+                    outline.Add((sx,                    sy));           // road surface (front face base)
+                    outline.Add((arcX0,                 arcY0));        // curb nose (top of sloped face)
+
+                    foreach (var p in TessellateArc(arcX0, arcY0, arcX1, arcY1, -0.3442 * dir))
+                        outline.Add(p);                                  // rollover arc to flat top
+
+                    outline.Add((sx + dir * 0.6666,    sy + 0.5000)); // back top
+                    outline.Add((sx + dir * 0.6666,    sy - 1.0000)); // back bottom (1 ft below road)
+                    outline.Add((sx,                    sy - 1.0000)); // front bottom
+                    outline.Add((sx,                    sy));           // close
                     break;
+                }
 
                 case SegmentType.ValleyGutter:
-                    // Valley Gutter: 2 ft wide, 1.5 ft (18") deep, V on top, flat bottom
-                    outline = new List<(double, double)>
-                    {
-                        (sx,               sy),                // left edge top
-                        (sx + dir * 1.00,  sy - 0.083),       // center V bottom
-                        (sx + dir * 2.00,  sy),               // right edge top
-                        (sx + dir * 2.00,  sy - 1.50),        // right bottom (18" deep)
-                        (sx,               sy - 1.50),         // left bottom (18" deep)
-                        (sx,               sy)                 // close
-                    };
+                {
+                    // Valley Gutter — real surveyed geometry.
+                    // (sx, sy) = road surface at left edge of gutter.
+                    // Width: 2.0128 ft total. Road surface 0.8930 ft above slab base.
+                    // Valley floor 0.1211 ft below road surface at x=1.0128.
+                    // Two edge fillets: radius 0.0556 ft, bulge -0.4460.
+                    //
+                    // Left fillet : (0.0128, -0.0552) → (0.0743,  0.000), bulge -0.4460 * dir
+                    // Right fillet: (1.9513,  0.000) → (2.0128, -0.0552), bulge -0.4460 * dir
+
+                    double lfX0 = sx + dir * 0.0128, lfY0 = sy - 0.0552;
+                    double lfX1 = sx + dir * 0.0743, lfY1 = sy;
+
+                    double rfX0 = sx + dir * 1.9513, rfY0 = sy;
+                    double rfX1 = sx + dir * 2.0128, rfY1 = sy - 0.0552;
+
+                    outline = new List<(double, double)>();
+                    outline.Add((sx,                    sy));           // left edge road surface
+                    outline.Add((lfX0,                  lfY0));         // left fillet start
+
+                    foreach (var p in TessellateArc(lfX0, lfY0, lfX1, lfY1, -0.4460 * dir))
+                        outline.Add(p);                                  // left fillet arc
+
+                    outline.Add((sx + dir * 1.0128,    sy - 0.1211)); // valley floor
+                    outline.Add((rfX0,                  rfY0));         // right road surface level
+
+                    foreach (var p in TessellateArc(rfX0, rfY0, rfX1, rfY1, -0.4460 * dir))
+                        outline.Add(p);                                  // right fillet arc
+
+                    outline.Add((sx + dir * 2.0128,    sy - 0.8930)); // right bottom
+                    outline.Add((sx,                    sy - 0.8930)); // left bottom
+                    outline.Add((sx,                    sy));           // close
                     break;
+                }
             }
 
             if (outline != null)
                 geo.BlockOutlines.Add(outline);
         }
 
+        /// <summary>
+        /// Tessellates a polyline arc segment (defined by start, end, and AutoCAD bulge value)
+        /// into a list of points excluding the start but including the end.
+        /// For mirrored (left-side) arcs pass bulge * dir so curvature flips correctly.
+        /// </summary>
+        private static List<(double X, double Y)> TessellateArc(
+            double x1, double y1, double x2, double y2, double bulge, int segments = 6)
+        {
+            var pts = new List<(double, double)>();
+            double dx = x2 - x1, dy = y2 - y1;
+            double d = Math.Sqrt(dx * dx + dy * dy);
+            if (d < 1e-9) { pts.Add((x2, y2)); return pts; }
+
+            double alpha = 4.0 * Math.Atan(Math.Abs(bulge));
+            double r = d / (2.0 * Math.Sin(alpha / 2.0));
+            double distToCenter = Math.Sqrt(Math.Max(0.0, r * r - (d / 2.0) * (d / 2.0)));
+
+            // Perpendicular unit vector to chord
+            double px = -dy / d, py = dx / d;
+
+            // Positive bulge → CCW arc → center is to the left of travel direction
+            double s = bulge > 0 ? 1.0 : -1.0;
+            double cx = (x1 + x2) / 2.0 + s * px * distToCenter;
+            double cy = (y1 + y2) / 2.0 + s * py * distToCenter;
+
+            double startAngle = Math.Atan2(y1 - cy, x1 - cx);
+            double sweep = alpha * (bulge > 0 ? 1.0 : -1.0);
+
+            for (int i = 1; i <= segments; i++)
+            {
+                double angle = startAngle + sweep * i / segments;
+                pts.Add((cx + r * Math.Cos(angle), cy + r * Math.Sin(angle)));
+            }
+            return pts;
+        }
+
         /// <summary>Number of sub-points emitted by a segment (for preview label indexing).</summary>
         public static int SubPointCount(SectionSegment seg) => seg.Type switch
         {
             SegmentType.TypeF => 3,
-            SegmentType.TypeD => 2,
+            SegmentType.TypeD => 3,
             SegmentType.ValleyGutter => 2,
             _ => 1
         };

@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using Newtonsoft.Json;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
@@ -13,31 +15,56 @@ namespace AdvancedLandDevTools.UI
     public partial class MiniToolbar : Window
     {
         // ═════════════════════════════════════════════════════════════════════
-        //  Command registry — Tag → display label (for settings panel)
+        //  Command registry — Tag, Label, Section, Icon (MDL2), Color hex, Short label
         // ═════════════════════════════════════════════════════════════════════
-        private static readonly (string Tag, string Label, string Section)[] _commands = new[]
+        private static readonly (string Tag, string Label, string Section,
+            string Icon, string Color, string Short)[] _commands = new[]
         {
-            ("BULKSUR ",         "Bulk Surface Profile",  "PROFILES"),
-            ("GETPARENT ",       "Get Parent Alignment",  "PROFILES"),
-            ("PIPEMAGIC ",       "Pipe Magic",            "PROFILES"),
-            ("MARKLINES ",       "Mark Lines",            "PROFILES"),
-            ("ALIGNDEPLOY ",     "Align Deploy",          "ALIGN"),
-            ("INVERTPULLUP ",    "Invert Pull Up",        "PIPES"),
-            ("CHANGEELEVATION ", "Change Elevation",      "PIPES"),
-            ("ELEVSLOPE ",       "Elev Slope",            "SURFACES"),
-            ("LOWRIM ",          "Lowest Rim",            "SURFACES"),
-            ("FLOODZONE ",       "FEMA Flood Zone",       "INFO"),
-            ("FLOODCRITERIA ",   "County Flood",          "INFO"),
-            ("SECTIONLOOKUP ",   "PLSS Section",          "INFO"),
-            ("GWMAY ",           "Water Table May",       "INFO"),
-            ("GWOCT ",           "Water Table Oct",       "INFO"),
-            ("AREAMANAGER ",     "Area Manager",          "AREAS"),
-            ("VPCUT ",           "VP Cut",                "VIEWPORT"),
-            ("VTPANEL ",         "VT Panel",              "VEHICLE"),
-            ("VTDRIVE ",         "Interactive Drive",     "VEHICLE"),
-            ("VTSWEEP ",         "Swept Path",            "VEHICLE"),
-            ("VTPARK ",          "Parking Layout",        "VEHICLE"),
+            // PROFILES
+            ("BULKSUR ",         "Bulk Surface Profile",  "PROFILES",  "\xE8A5", "#4FC3F7", "Bulk"),
+            ("GETPARENT ",       "Get Parent Alignment",  "PROFILES",  "\xE71B", "#4DB6AC", "Parent"),
+            ("PIPEMAGIC ",       "Pipe Magic",            "PROFILES",  "\xE945", "#BA68C8", "Magic"),
+            ("MARKLINES ",       "Mark Lines",            "PROFILES",  "\xED63", "#FFB74D", "Mark"),
+
+            // ALIGN
+            ("ALIGNDEPLOY ",     "Align Deploy",          "ALIGN",     "\xE8AB", "#81C784", "Deploy"),
+
+            // PIPES
+            ("INVERTPULLUP ",    "Invert Pull Up",        "PIPES",     "\xE74A", "#FFD54F", "Invert"),
+            ("CHANGEELEVATION ", "Change Elevation",      "PIPES",     "\xE70E", "#FF8A65", "Elev"),
+            ("PIPESIZING ",      "Pipe Sizing Calc",      "PIPES",     "\xE81E", "#29B6F6", "Sizing"),
+
+            // SURFACES
+            ("ELEVSLOPE ",       "Elev Slope",            "SURFACES",  "\xE879", "#66BB6A", "Slope"),
+            ("BLOCKTOSURFACE ",  "Block to Surface",      "SURFACES",  "\xE8B7", "#FF7043", "B2S"),
+            ("TEXTTOSURFACE ",   "Text to Surface",       "SURFACES",  "\xE8D2", "#FFB74D", "Txt2S"),
+            ("LOWRIM ",          "Lowest Rim",            "SURFACES",  "\xE74B", "#EF5350", "LoRim"),
+
+            // INFO
+            ("FLOODZONE ",       "FEMA Flood Zone",       "INFO",      "\xE773", "#EF5350", "FEMA"),
+            ("FLOODCRITERIA ",   "County Flood",          "INFO",      "\xE81D", "#FF7043", "County"),
+            ("SECTIONLOOKUP ",   "PLSS Section",          "INFO",      "\xE909", "#AED581", "PLSS"),
+            ("GWMAY ",           "Water Table May",       "INFO",      "\xE787", "#29B6F6", "GWMay"),
+            ("GWOCT ",           "Water Table Oct",       "INFO",      "\xE787", "#42A5F5", "GWOct"),
+
+            // AREAS & EXCAVATION
+            ("AREAMANAGER ",     "Area Manager",          "AREAS",     "\xE80F", "#66BB6A", "Areas"),
+            ("EXF ",             "EXF Trench Manager",    "AREAS",     "\xE81E", "#FF8A65", "Trench"),
+
+            // VIEWPORT
+            ("VPCUT ",           "VP Cut",                "VIEWPORT",  "\xE8C6", "#42A5F5", "Cut"),
+
+            // SECTIONS
+            ("SECDRAW ",         "Section Drawer",        "SECTIONS",  "\xE8A0", "#00897B", "SecDr"),
+
+            // VEHICLE
+            ("VTDRIVE ",         "Interactive Drive",     "VEHICLE",   "\xE7BA", "#66BB6A", "Drive"),
+            ("VTPANEL ",         "VT Panel",              "VEHICLE",   "\xE80F", "#4FC3F7", "Panel"),
+            ("VTSWEEP ",         "Swept Path",            "VEHICLE",   "\xE81E", "#FFB74D", "Sweep"),
+            ("VTPARK ",          "Parking Layout",        "VEHICLE",   "\xE81E", "#BA68C8", "Park"),
         };
+
+        private const int COLUMNS = 4;
 
         private static readonly string _prefsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -49,7 +76,7 @@ namespace AdvancedLandDevTools.UI
         {
             InitializeComponent();
             LoadPrefs();
-            ApplyVisibility();
+            BuildButtons();
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -82,6 +109,173 @@ namespace AdvancedLandDevTools.UI
         }
 
         // ═════════════════════════════════════════════════════════════════════
+        //  Build the 4-column grid layout from the command registry
+        // ═════════════════════════════════════════════════════════════════════
+
+        private void BuildButtons()
+        {
+            ButtonContainer.Children.Clear();
+
+            // Group commands by section, preserving order
+            var sections = new List<(string Section, List<int> Indices)>();
+            string lastSection = "";
+
+            for (int i = 0; i < _commands.Length; i++)
+            {
+                if (_commands[i].Section != lastSection)
+                {
+                    lastSection = _commands[i].Section;
+                    sections.Add((lastSection, new List<int>()));
+                }
+                sections[^1].Indices.Add(i);
+            }
+
+            for (int s = 0; s < sections.Count; s++)
+            {
+                var (section, indices) = sections[s];
+
+                // Section header
+                var header = new TextBlock
+                {
+                    Text = section,
+                    Foreground = new SolidColorBrush(
+                        (Color)ColorConverter.ConvertFromString("#60CDFF")),
+                    FontSize = 7.5,
+                    FontWeight = FontWeights.SemiBold,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Margin = new Thickness(2, 0, 0, 3),
+                    Opacity = 0.6,
+                    Tag = $"HEADER_{section}"
+                };
+                ButtonContainer.Children.Add(header);
+
+                // WrapPanel with 4-column layout
+                var wrap = new WrapPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Tag = $"WRAP_{section}"
+                };
+
+                foreach (int idx in indices)
+                {
+                    var cmd = _commands[idx];
+                    bool show = !_visibility.ContainsKey(cmd.Tag) || _visibility[cmd.Tag];
+
+                    var btn = CreateToolButton(cmd.Tag, cmd.Icon, cmd.Color,
+                        cmd.Short, $"{cmd.Label} ({cmd.Tag.Trim()})");
+                    btn.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    wrap.Children.Add(btn);
+                }
+
+                ButtonContainer.Children.Add(wrap);
+
+                // Divider between sections
+                if (s < sections.Count - 1)
+                {
+                    var divider = new Border
+                    {
+                        Height = 1,
+                        Background = new SolidColorBrush(
+                            (Color)ColorConverter.ConvertFromString("#454545")),
+                        Margin = new Thickness(2, 4, 2, 4),
+                        Tag = $"DIV_{section}"
+                    };
+                    ButtonContainer.Children.Add(divider);
+                }
+            }
+
+            HideEmptySections();
+        }
+
+        private Button CreateToolButton(string tag, string icon, string colorHex,
+            string shortLabel, string tooltip)
+        {
+            var color = (Color)ColorConverter.ConvertFromString(colorHex);
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            var hoverBg = new SolidColorBrush(Color.FromArgb(0x33, color.R, color.G, color.B));
+            hoverBg.Freeze();
+
+            var iconTb = new TextBlock
+            {
+                Text = icon,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 15,
+                Foreground = brush,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+
+            var labelTb = new TextBlock
+            {
+                Text = shortLabel,
+                FontSize = 7,
+                Foreground = brush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, -1, 0, 0),
+                Opacity = 0.7
+            };
+
+            var stack = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            stack.Children.Add(iconTb);
+            stack.Children.Add(labelTb);
+
+            var border = new Border
+            {
+                Width = 44,
+                Height = 36,
+                Background = Brushes.Transparent,
+                CornerRadius = new CornerRadius(6),
+                Margin = new Thickness(0, 1, 0, 1),
+                Cursor = Cursors.Hand,
+                Child = stack
+            };
+
+            var btn = new Button
+            {
+                Tag = tag,
+                ToolTip = tooltip,
+                Template = CreateButtonTemplate(hoverBg),
+                Content = border
+            };
+            btn.Click += ToolButton_Click;
+
+            return btn;
+        }
+
+        private static ControlTemplate CreateButtonTemplate(Brush hoverBg)
+        {
+            // Simple template: transparent background, hover shows tint
+            var template = new ControlTemplate(typeof(Button));
+
+            var bdFactory = new FrameworkElementFactory(typeof(Border));
+            bdFactory.Name = "Bd";
+            bdFactory.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            bdFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+
+            var cpFactory = new FrameworkElementFactory(typeof(ContentPresenter));
+            cpFactory.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cpFactory.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bdFactory.AppendChild(cpFactory);
+
+            template.VisualTree = bdFactory;
+
+            // Hover trigger
+            var hoverTrigger = new Trigger
+            {
+                Property = UIElement.IsMouseOverProperty,
+                Value = true
+            };
+            hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, hoverBg, "Bd"));
+            template.Triggers.Add(hoverTrigger);
+
+            return template;
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
         //  Settings popup
         // ═════════════════════════════════════════════════════════════════════
 
@@ -97,7 +291,7 @@ namespace AdvancedLandDevTools.UI
             SettingsPanel.Children.Clear();
 
             string lastSection = "";
-            foreach (var (tag, label, section) in _commands)
+            foreach (var (tag, label, section, _, _, _) in _commands)
             {
                 if (section != lastSection)
                 {
@@ -105,8 +299,8 @@ namespace AdvancedLandDevTools.UI
                     var sectionLabel = new TextBlock
                     {
                         Text = section,
-                        Foreground = new System.Windows.Media.SolidColorBrush(
-                            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#60CDFF")),
+                        Foreground = new SolidColorBrush(
+                            (Color)ColorConverter.ConvertFromString("#60CDFF")),
                         FontSize = 10,
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, section == "PROFILES" ? 0 : 6, 0, 2),
@@ -122,8 +316,8 @@ namespace AdvancedLandDevTools.UI
                     Content = label,
                     IsChecked = isVisible,
                     Tag = tag,
-                    Foreground = new System.Windows.Media.SolidColorBrush(
-                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#FFFFFF")),
+                    Foreground = new SolidColorBrush(
+                        (Color)ColorConverter.ConvertFromString("#FFFFFF")),
                     FontSize = 11,
                     Margin = new Thickness(2, 1, 0, 1),
                     Cursor = Cursors.Hand
@@ -150,81 +344,51 @@ namespace AdvancedLandDevTools.UI
 
         private void ApplyVisibility()
         {
-            // Find all tool buttons by their Tag and toggle visibility
-            var allButtons = FindToolButtons(PanelContent);
-            foreach (var btn in allButtons)
+            // Toggle button visibility inside each WrapPanel
+            foreach (UIElement child in ButtonContainer.Children)
             {
-                if (btn.Tag is string tag && tag.Length > 0)
+                if (child is WrapPanel wrap)
                 {
-                    bool show = !_visibility.ContainsKey(tag) || _visibility[tag];
-                    btn.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    foreach (UIElement wc in wrap.Children)
+                    {
+                        if (wc is Button btn && btn.Tag is string tag && tag.Trim().Length > 0)
+                        {
+                            bool show = !_visibility.ContainsKey(tag) || _visibility[tag];
+                            btn.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                        }
+                    }
                 }
             }
 
-            // Hide section headers + dividers if all commands in that section are hidden
             HideEmptySections();
         }
 
         private void HideEmptySections()
         {
-            // Walk through PanelContent children — section headers are TextBlocks,
-            // dividers are Borders, buttons are Buttons with Tags
-            var children = PanelContent.Children.Cast<UIElement>().ToList();
+            // Walk ButtonContainer children in groups of (header, wrap, divider?)
+            var children = ButtonContainer.Children.Cast<UIElement>().ToList();
 
-            int i = 0;
-            while (i < children.Count)
+            for (int i = 0; i < children.Count; i++)
             {
                 var el = children[i];
 
-                // Check if this is a section header TextBlock (cyan, small font)
-                if (el is TextBlock tb && tb.FontSize <= 8 && tb.Foreground is System.Windows.Media.SolidColorBrush brush)
+                // Find WrapPanel — check if any buttons visible
+                if (el is WrapPanel wrap)
                 {
-                    string colorHex = brush.Color.ToString();
-                    // Section headers use #60CDFF
-                    if (colorHex.Contains("60CDFF") || colorHex.Contains("60cdff"))
-                    {
-                        // Collect all buttons until next section header or end
-                        int start = i;
-                        int j = i + 1;
-                        bool anyVisible = false;
+                    bool anyVisible = wrap.Children.Cast<UIElement>()
+                        .Any(c => c is Button && c.Visibility == Visibility.Visible);
 
-                        while (j < children.Count)
-                        {
-                            var next = children[j];
-                            // Stop at next section header
-                            if (next is TextBlock nextTb && nextTb.FontSize <= 8)
-                                break;
-                            // Stop at divider before next section
-                            if (next is Border bd && bd.Height == 1 && j + 1 < children.Count &&
-                                children[j + 1] is TextBlock)
-                                break;
+                    wrap.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
 
-                            if (next is Button btn && btn.Visibility == Visibility.Visible)
-                                anyVisible = true;
-                            j++;
-                        }
+                    // Header is the element before the wrap
+                    if (i > 0 && children[i - 1] is TextBlock header)
+                        header.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
 
-                        // Also check the divider above (if any)
-                        if (start > 0 && children[start - 1] is Border divAbove && divAbove.Height == 1)
-                            divAbove.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
-
-                        tb.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
-                    }
+                    // Divider is the element after the wrap
+                    if (i + 1 < children.Count && children[i + 1] is Border divider && divider.Height == 1)
+                        divider.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
                 }
-                i++;
             }
-        }
-
-        private static List<Button> FindToolButtons(Panel panel)
-        {
-            var result = new List<Button>();
-            foreach (UIElement child in panel.Children)
-            {
-                if (child is Button btn && btn.Tag is string tag && tag.Trim().Length > 0
-                    && btn.Name != "BtnClose" && btn.Name != "BtnSettings")
-                    result.Add(btn);
-            }
-            return result;
         }
 
         // ═════════════════════════════════════════════════════════════════════

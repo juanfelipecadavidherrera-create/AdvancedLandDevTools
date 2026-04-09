@@ -248,6 +248,59 @@ namespace AdvancedLandDevTools.Ribbon
             };
             piSource.Items.Add(btnChangeElev);
 
+            piSource.Items.Add(new RibbonSeparator());
+
+            // ── Pipe Sizing button ────────────────────────────────────────────
+            var btnPipeSizing = new RibbonButton
+            {
+                Id               = "ALDT_BTN_PIPESIZING",
+                Name             = "Pipe Sizing",
+                Text             = "Pipe\nSizing",
+                Description      = "Rational Method + Manning's Equation pipe sizing calculator. " +
+                                   "Check pipe capacity and velocity for a given diameter and slope.",
+                ToolTip          = BuildToolTip(
+                    "Pipe Sizing Calculator",
+                    "Calculates stormwater runoff (Rational Method: Q = CiA) and " +
+                    "pipe flow capacity (Manning's Equation). Checks if the selected " +
+                    "pipe diameter passes capacity and velocity criteria.\n\nCommand: PIPESIZING"),
+                CommandHandler   = new RibbonCommandHandler("PIPESIZING "),
+                CommandParameter = "PIPESIZING ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildPipeSizingIcon(32),
+                Image            = BuildPipeSizingIcon(16)
+            };
+            piSource.Items.Add(btnPipeSizing);
+
+            piSource.Items.Add(new RibbonSeparator());
+
+            // ── EEE Bend (Duck) button ────────────────────────────────────────
+            var btnEeeBend = new RibbonButton
+            {
+                Id               = "ALDT_BTN_EEEBEND",
+                Name             = "EEE Bend",
+                Text             = "EEE\nBend",
+                Description      = "Inserts a pressure-network pipe duck around a crossing pipe " +
+                                   "in a profile view. Adds 4 bends and 5 pipe segments.",
+                ToolTip          = BuildToolTip(
+                    "EEE Bend — Pressure Pipe Duck",
+                    "Select a pressure pipe run in a profile, click the crossing location, " +
+                    "enter the crossing invert elevation. The command places 4 bends to " +
+                    "route the pipe under the crossing: ±10 ft horizontal offset, " +
+                    "then 11.6 ft diagonals at 1H:10V slope.\n\nCommand: EEEBEND"),
+                CommandHandler   = new RibbonCommandHandler("EEEBEND "),
+                CommandParameter = "EEEBEND ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildEeeBendIcon(32),
+                Image            = BuildEeeBendIcon(16)
+            };
+            piSource.Items.Add(btnEeeBend);
+
             tab.Panels.Add(new RibbonPanel { Source = piSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -309,6 +362,57 @@ namespace AdvancedLandDevTools.Ribbon
                 Image            = BuildLowRimIcon(16)
             };
             sfSource.Items.Add(btnLowRim);
+
+            sfSource.Items.Add(new RibbonSeparator());
+
+            // ── Block to Surface button ──────────────────────────────────
+            var btnB2S = new RibbonButton
+            {
+                Id               = "ALDT_BTN_BLOCKTOSURFACE",
+                Name             = "Block to Surface",
+                Text             = "Block to\nSurface",
+                Description      = "Read ELEV2 attribute from block references and add " +
+                                   "elevation points to a TIN surface at each block location.",
+                ToolTip          = BuildToolTip(
+                    "Block to Surface",
+                    "Select a TIN surface and a block reference. Finds all instances " +
+                    "of that block, reads their ELEV2 attribute for elevation, and " +
+                    "adds a surface point at each block's coordinates.\n\nCommand: BLOCKTOSURFACE"),
+                CommandHandler   = new RibbonCommandHandler("BLOCKTOSURFACE "),
+                CommandParameter = "BLOCKTOSURFACE ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildBlockToSurfaceIcon(32),
+                Image            = BuildBlockToSurfaceIcon(16)
+            };
+            sfSource.Items.Add(btnB2S);
+
+            // ── Text to Surface button ────────────────────────────────────
+            var btnT2S = new RibbonButton
+            {
+                Id               = "ALDT_BTN_TEXTTOSURFACE",
+                Name             = "Text to Surface",
+                Text             = "Text to\nSurface",
+                Description      = "Read elevation numbers from MTexts and MLeaders and " +
+                                   "add surface points to a TIN surface.",
+                ToolTip          = BuildToolTip(
+                    "Text to Surface",
+                    "Select MTexts and/or MLeaders that contain elevation numbers. " +
+                    "Parses the text content (handles '7.62\\' format), places the point " +
+                    "at the MText location or the MLeader arrowhead tip, and adds it to " +
+                    "the chosen TIN surface.\n\nCommand: TEXTTOSURFACE"),
+                CommandHandler   = new RibbonCommandHandler("TEXTTOSURFACE "),
+                CommandParameter = "TEXTTOSURFACE ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildTextToSurfaceIcon(32),
+                Image            = BuildTextToSurfaceIcon(16)
+            };
+            sfSource.Items.Add(btnT2S);
 
             tab.Panels.Add(new RibbonPanel { Source = sfSource });
 
@@ -580,6 +684,30 @@ namespace AdvancedLandDevTools.Ribbon
             };
             qaSource.Items.Add(btnAreaManager);
 
+            // ── EXF Trench Manager button ─────────────────────────────────
+            var btnTrenchManager = new RibbonButton
+            {
+                Id               = "ALDT_BTN_TRENCHMANAGER",
+                Name             = "EXF Trench Manager",
+                Text             = "Trench\nManager",
+                Description      = "Open the EXF Trench Manager palette to track linear " +
+                                   "trench lengths per project.",
+                ToolTip          = BuildToolTip(
+                    "EXF Trench Manager",
+                    "Toggle the EXF Trench Manager dockable panel. Select a polyline and " +
+                    "the tool stores the longest consecutive segment (e.g. longest side " +
+                    "of a rectangle). Zoom to any stored trench.\n\nCommand: EXF"),
+                CommandHandler   = new RibbonCommandHandler("EXF "),
+                CommandParameter = "EXF ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildTrenchManagerIcon(32),
+                Image            = BuildTrenchManagerIcon(16)
+            };
+            qaSource.Items.Add(btnTrenchManager);
+
             tab.Panels.Add(new RibbonPanel { Source = qaSource });
 
             // ═══════════════════════════════════════════════════════════════
@@ -610,8 +738,8 @@ namespace AdvancedLandDevTools.Ribbon
                 ShowImage        = true,
                 Size             = RibbonItemSize.Large,
                 Orientation      = System.Windows.Controls.Orientation.Vertical,
-                LargeImage       = BuildButtonIcon("#00897B", "SD"),
-                Image            = BuildButtonIcon16("#00897B", "SD")
+                LargeImage       = BuildSectionDrawerIcon(32),
+                Image            = BuildSectionDrawerIcon(16)
             };
             secSource.Items.Add(btnSecDraw);
 
@@ -1735,6 +1863,91 @@ namespace AdvancedLandDevTools.Ribbon
             return RenderToBitmap(canvas, size, size);
         }
 
+        // ── EXF Trench Manager icon — trench cross-section + ruler ───────
+        private static ImageSource BuildTrenchManagerIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Earth / ground fill ───────────────────────────────────────────
+            Add(new Rectangle { Width = size, Height = s * 14,
+                Fill = C("#3E2723") });
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 18);
+
+            // ── Trench cut-out (U shape in earth) ────────────────────────────
+            // Left wall
+            Add(new Rectangle { Width = s * 6, Height = s * 14,
+                Fill = C("#1A1A2E") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 8);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 18);
+
+            // Right wall
+            Add(new Rectangle { Width = s * 6, Height = s * 14,
+                Fill = C("#1A1A2E") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 18);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 18);
+
+            // Trench bottom (slightly lighter)
+            Add(new Rectangle { Width = s * 10, Height = s * 3,
+                Fill = C("#263238") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 8);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 29);
+
+            // ── Trench outline ───────────────────────────────────────────────
+            var outline = C("#FF8A65");
+            double lw = s * 1.4;
+            // Left wall line
+            Add(new Line { X1=s*8,  Y1=s*18, X2=s*8,  Y2=s*32, Stroke=outline, StrokeThickness=lw });
+            // Right wall line
+            Add(new Line { X1=s*24, Y1=s*18, X2=s*24, Y2=s*32, Stroke=outline, StrokeThickness=lw });
+            // Bottom line
+            Add(new Line { X1=s*8,  Y1=s*29, X2=s*24, Y2=s*29, Stroke=outline, StrokeThickness=lw });
+
+            // ── Ground surface line ──────────────────────────────────────────
+            Add(new Line { X1=s*0, Y1=s*18, X2=s*32, Y2=s*18,
+                Stroke=C("#8D6E63"), StrokeThickness=s*1.5 });
+
+            // ── Dimension arrow showing longest segment (top arrow) ───────────
+            var dimColor = C("#4DD0E1");
+            double aw = s * 1.3;
+            // Arrow shaft
+            Add(new Line { X1=s*8, Y1=s*12, X2=s*24, Y2=s*12,
+                Stroke=dimColor, StrokeThickness=aw });
+            // Left tick
+            Add(new Line { X1=s*8, Y1=s*10, X2=s*8, Y2=s*14,
+                Stroke=dimColor, StrokeThickness=aw });
+            // Right tick
+            Add(new Line { X1=s*24, Y1=s*10, X2=s*24, Y2=s*14,
+                Stroke=dimColor, StrokeThickness=aw });
+
+            // ── Small ruler ticks on top ─────────────────────────────────────
+            Add(new Line { X1=s*12, Y1=s*12, X2=s*12, Y2=s*10,
+                Stroke=dimColor, StrokeThickness=s*0.8 });
+            Add(new Line { X1=s*16, Y1=s*12, X2=s*16, Y2=s*10,
+                Stroke=dimColor, StrokeThickness=s*0.8 });
+            Add(new Line { X1=s*20, Y1=s*12, X2=s*20, Y2=s*10,
+                Stroke=dimColor, StrokeThickness=s*0.8 });
+
+            // ── Length label ─────────────────────────────────────────────────
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text = "L",
+                FontSize = s * 7,
+                FontWeight = System.Windows.FontWeights.Bold,
+                Foreground = C("#FFF176")
+            };
+            Canvas.SetLeft(lbl, s * 14); Canvas.SetTop(lbl, s * 2); Add(lbl);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
         // ── Area Manager icon ─────────────────────────────────────────
         private static ImageSource BuildAreaManagerIcon(int size)
         {
@@ -2062,6 +2275,432 @@ namespace AdvancedLandDevTools.Ribbon
             return RenderToBitmap(canvas, size, size);
         }
 
+        // ═════════════════════════════════════════════════════════════════════
+        //  Pipe Sizing icon — pipe cross-section (left) + ruler (right)
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildPipeSizingIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1B2A"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Left half: pipe cross-section ─────────────────────────────────
+            // Pipe outer wall (thick ring, steel grey)
+            Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = s * 15, Height = s * 15,
+                Stroke = C("#78909C"), StrokeThickness = s * 2.5,
+                Fill = C("#102030")
+            });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 1);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 8.5);
+
+            // Water fill — lower portion of pipe interior
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*2.5},{s*16} A {s*7},{s*7} 0 0 0 {s*14.5},{s*16} Z"),
+                Fill = C("#1565C0"),
+                Opacity = 0.85
+            });
+
+            // Pipe inner bore highlight (top arc, lighter)
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*3.5},{s*16} A {s*5},{s*5} 0 0 1 {s*13.5},{s*16}"),
+                Stroke = C("#B0BEC5"), StrokeThickness = s * 0.7,
+                Fill = C("Transparent")
+            });
+
+            // Diameter dimension line (horizontal across pipe center)
+            Add(new Line { X1 = s*1, Y1 = s*16, X2 = s*16, Y2 = s*16,
+                Stroke = C("#4FC3F7"), StrokeThickness = s * 0.8 });
+            // End ticks
+            Add(new Line { X1 = s*1,  Y1 = s*14.5, X2 = s*1,  Y2 = s*17.5,
+                Stroke = C("#4FC3F7"), StrokeThickness = s * 0.8 });
+            Add(new Line { X1 = s*16, Y1 = s*14.5, X2 = s*16, Y2 = s*17.5,
+                Stroke = C("#4FC3F7"), StrokeThickness = s * 0.8 });
+
+            // "Ø" diameter label below dimension line
+            var diaLbl = new System.Windows.Controls.TextBlock
+            {
+                Text = "Ø", Foreground = C("#4FC3F7"),
+                FontSize = s * 5, FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(diaLbl, s * 5.5); Canvas.SetTop(diaLbl, s * 19);
+            Add(diaLbl);
+
+            // ── Right half: ruler ─────────────────────────────────────────────
+            // Ruler body (tan/wood tone)
+            Add(new Rectangle
+            {
+                Width = s * 8, Height = s * 28,
+                Fill = C("#F5C97A"),
+                RadiusX = s * 1, RadiusY = s * 1,
+                Stroke = C("#C8971E"), StrokeThickness = s * 0.7
+            });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 22);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1], s * 2);
+
+            // Ruler tick marks (5 major ticks)
+            double[] tickYs = { 4, 8, 12, 16, 20, 24 };
+            foreach (double ty in tickYs)
+            {
+                bool major = ((int)ty % 8 == 0);
+                double tickW = major ? s * 4 : s * 2.5;
+                Add(new Line
+                {
+                    X1 = s * 22, Y1 = s * ty,
+                    X2 = s * 22 + tickW, Y2 = s * ty,
+                    Stroke = C("#7B5800"), StrokeThickness = s * 0.8
+                });
+            }
+
+            // "in" label on ruler
+            var rulerLbl = new System.Windows.Controls.TextBlock
+            {
+                Text = "in", Foreground = C("#5D3A00"),
+                FontSize = s * 3.5, FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(rulerLbl, s * 23); Canvas.SetTop(rulerLbl, s * 26);
+            Add(rulerLbl);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Block to Surface icon — 3-D cube + arrow pointing down into surface
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildBlockToSurfaceIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Isometric cube (top-left area) ────────────────────────────────
+            // Top face (lightest)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*16, s*3),   // top
+                    new System.Windows.Point(s*25, s*8),   // right
+                    new System.Windows.Point(s*16, s*13),  // bottom
+                    new System.Windows.Point(s*7,  s*8),   // left
+                }),
+                Fill = C("#FF8A65")
+            });
+
+            // Left face (darker)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*7,  s*8),
+                    new System.Windows.Point(s*16, s*13),
+                    new System.Windows.Point(s*16, s*22),
+                    new System.Windows.Point(s*7,  s*17),
+                }),
+                Fill = C("#BF360C")
+            });
+
+            // Right face (medium)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*25, s*8),
+                    new System.Windows.Point(s*25, s*17),
+                    new System.Windows.Point(s*16, s*22),
+                    new System.Windows.Point(s*16, s*13),
+                }),
+                Fill = C("#E64A19")
+            });
+
+            // Cube edge outlines
+            var edgeColor = C("#FF7043");
+            double et = s * 0.8;
+            // Top face outline
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*16, s*3),
+                    new System.Windows.Point(s*25, s*8),
+                    new System.Windows.Point(s*16, s*13),
+                    new System.Windows.Point(s*7,  s*8),
+                }),
+                Fill = C("Transparent"), Stroke = edgeColor, StrokeThickness = et
+            });
+            // Vertical left edge
+            Add(new Line { X1=s*7, Y1=s*8, X2=s*7, Y2=s*17, Stroke=edgeColor, StrokeThickness=et });
+            // Vertical right edge
+            Add(new Line { X1=s*25, Y1=s*8, X2=s*25, Y2=s*17, Stroke=edgeColor, StrokeThickness=et });
+            // Bottom edges
+            Add(new Line { X1=s*7, Y1=s*17, X2=s*16, Y2=s*22, Stroke=edgeColor, StrokeThickness=et });
+            Add(new Line { X1=s*25, Y1=s*17, X2=s*16, Y2=s*22, Stroke=edgeColor, StrokeThickness=et });
+
+            // ── Downward arrow below the cube ─────────────────────────────────
+            // Arrow shaft
+            Add(new Line { X1=s*16, Y1=s*22, X2=s*16, Y2=s*28,
+                Stroke=C("#FFCC02"), StrokeThickness=s*2 });
+            // Arrowhead
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*16, s*31),  // tip
+                    new System.Windows.Point(s*11, s*26),  // left
+                    new System.Windows.Point(s*21, s*26),  // right
+                }),
+                Fill = C("#FFCC02")
+            });
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Text to Surface icon — MText label + leader arrow → terrain surface
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildTextToSurfaceIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Surface terrain fill (bottom third) ───────────────────────────
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*0,  s*22),
+                    new System.Windows.Point(s*7,  s*19),
+                    new System.Windows.Point(s*14, s*22),
+                    new System.Windows.Point(s*21, s*18),
+                    new System.Windows.Point(s*32, s*21),
+                    new System.Windows.Point(s*32, s*32),
+                    new System.Windows.Point(s*0,  s*32),
+                }),
+                Fill = C("#1B3A1B")
+            });
+
+            // Surface terrain outline (TIN mesh look)
+            Add(new Polyline
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*0,  s*22),
+                    new System.Windows.Point(s*7,  s*19),
+                    new System.Windows.Point(s*14, s*22),
+                    new System.Windows.Point(s*21, s*18),
+                    new System.Windows.Point(s*32, s*21),
+                }),
+                Stroke = C("#66BB6A"), StrokeThickness = s * 1.6,
+                StrokeLineJoin = PenLineJoin.Round
+            });
+
+            // TIN triangle interior lines
+            Add(new Line { X1=s*7,  Y1=s*19, X2=s*14, Y2=s*22,
+                Stroke=C("#388E3C"), StrokeThickness=s*0.8 });
+            Add(new Line { X1=s*14, Y1=s*22, X2=s*21, Y2=s*18,
+                Stroke=C("#388E3C"), StrokeThickness=s*0.8 });
+
+            // ── MTEXT box (top-left) ──────────────────────────────────────────
+            var frame = new Rectangle
+            {
+                Width = s * 14, Height = s * 10,
+                Stroke = C("#80DEEA"), StrokeThickness = s * 1.3,
+                Fill = C("#0D2030"),
+                RadiusX = s * 1.5, RadiusY = s * 1.5
+            };
+            Canvas.SetLeft(frame, s * 1); Canvas.SetTop(frame, s * 2); Add(frame);
+
+            // Text lines inside the box
+            Add(new Line { X1=s*3,  Y1=s*5.5, X2=s*13, Y2=s*5.5,
+                Stroke=C("#B2EBF2"), StrokeThickness=s*1.2 });
+            Add(new Line { X1=s*3,  Y1=s*8,   X2=s*11, Y2=s*8,
+                Stroke=C("#80DEEA"), StrokeThickness=s*1.0 });
+            Add(new Line { X1=s*3,  Y1=s*10,  X2=s*12, Y2=s*10,
+                Stroke=C("#80DEEA"), StrokeThickness=s*1.0 });
+
+            // ── Leader line: shoulder → diagonal → arrowhead tip ─────────────
+            var leaderBrush = C("#4DD0E1");
+            double lw = s * 1.4;
+
+            // Horizontal shoulder from text box right edge
+            Add(new Line { X1=s*15, Y1=s*7, X2=s*20, Y2=s*7,
+                Stroke=leaderBrush, StrokeThickness=lw });
+
+            // Diagonal down to surface
+            Add(new Line { X1=s*20, Y1=s*7, X2=s*27, Y2=s*18,
+                Stroke=leaderBrush, StrokeThickness=lw });
+
+            // Arrowhead at (27, 18) pointing toward surface
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*27, s*19),   // tip
+                    new System.Windows.Point(s*24, s*14),   // back-left
+                    new System.Windows.Point(s*29, s*14),   // back-right
+                }),
+                Fill = leaderBrush
+            });
+
+            // Elevation number label next to arrowhead (small "7.62")
+            var elev = new System.Windows.Controls.TextBlock
+            {
+                Text = "7.62",
+                FontSize = s * 6,
+                FontWeight = System.Windows.FontWeights.SemiBold,
+                Foreground = C("#FFF176")
+            };
+            Canvas.SetLeft(elev, s * 17); Canvas.SetTop(elev, s * 9); Add(elev);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Section Drawer icon — road cross-section profile + pencil drawing it
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildSectionDrawerIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // ── Background ─────────────────────────────────────────────────────
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Road cross-section layers (left ~70 %) ─────────────────────────
+
+            // Earth / subgrade
+            var earth = new Rectangle { Width = s*21, Height = s*10, Fill = C("#4E342E") };
+            Canvas.SetLeft(earth, s*2); Canvas.SetTop(earth, s*21); Add(earth);
+
+            // Gravel base (tan)
+            var grav = new Rectangle { Width = s*16, Height = s*5, Fill = C("#8D6E63") };
+            Canvas.SetLeft(grav, s*2); Canvas.SetTop(grav, s*17); Add(grav);
+
+            // Asphalt (dark blue-gray)
+            var asp = new Rectangle { Width = s*16, Height = s*5, Fill = C("#546E7A") };
+            Canvas.SetLeft(asp, s*2); Canvas.SetTop(asp, s*13); Add(asp);
+
+            // TypeF curb block (concrete gray) — rises above road surface
+            var curb = new Rectangle { Width = s*5, Height = s*18, Fill = C("#90A4AE") };
+            Canvas.SetLeft(curb, s*18); Canvas.SetTop(curb, s*10); Add(curb);
+
+            // Layer dividers
+            Add(new Line { X1=s*2, Y1=s*17, X2=s*18, Y2=s*17,
+                Stroke=C("#37474F"), StrokeThickness=s*0.8 });
+            Add(new Line { X1=s*2, Y1=s*21, X2=s*23, Y2=s*21,
+                Stroke=C("#263238"), StrokeThickness=s*0.7 });
+
+            // ── Cyan surface profile line: road → curb face → curb top ─────────
+            double lw = s * 1.4;
+            Add(new Line { X1=s*2,  Y1=s*13, X2=s*18, Y2=s*13, Stroke=C("#00BCD4"), StrokeThickness=lw });
+            Add(new Line { X1=s*18, Y1=s*13, X2=s*18, Y2=s*10, Stroke=C("#00BCD4"), StrokeThickness=lw });
+            Add(new Line { X1=s*18, Y1=s*10, X2=s*23, Y2=s*10, Stroke=C("#00BCD4"), StrokeThickness=lw });
+
+            // ── Centerline tick (yellow dashes, left edge) ─────────────────────
+            Add(new Line { X1=s*4, Y1=s*8, X2=s*4, Y2=s*13,
+                Stroke=C("#FFCC02"), StrokeThickness=s*1.5,
+                StrokeDashArray=new DoubleCollection { 2.0, 1.5 } });
+
+            // ── Pencil (upper-right, tip at curb-top profile, body to corner) ───
+            //
+            //  Tip       (22, 10)
+            //  Side A    (23,  8)   Side B (21, 11)   — near tip
+            //  Body end  (29,  4)   end B  (27,  7)   — body/eraser join
+            //  Eraser    (30,  2)   end B  (28,  5)
+            //
+            //  Body parallelogram check: A + endB - B = endA → (23+27-21, 8+7-11) = (29,4) ✓
+            //  Eraser parallelogram:     endA + erasB - endB = erasA → (29+28-27, 4+5-7) = (30,2) ✓
+
+            // Tip cone (wood / tan)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*22, s*10),
+                    new System.Windows.Point(s*23, s*8),
+                    new System.Windows.Point(s*21, s*11),
+                }),
+                Fill = C("#D7CCC8")
+            });
+
+            // Pencil body (yellow)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*23, s*8),
+                    new System.Windows.Point(s*21, s*11),
+                    new System.Windows.Point(s*27, s*7),
+                    new System.Windows.Point(s*29, s*4),
+                }),
+                Fill = C("#FFC107")
+            });
+
+            // Eraser strip (pink)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*29, s*4),
+                    new System.Windows.Point(s*27, s*7),
+                    new System.Windows.Point(s*28, s*5),
+                    new System.Windows.Point(s*30, s*2),
+                }),
+                Fill = C("#F48FB1")
+            });
+
+            // Pencil outline (dark)
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s*22, s*10),
+                    new System.Windows.Point(s*23, s*8),
+                    new System.Windows.Point(s*29, s*4),
+                    new System.Windows.Point(s*30, s*2),
+                    new System.Windows.Point(s*28, s*5),
+                    new System.Windows.Point(s*27, s*7),
+                    new System.Windows.Point(s*21, s*11),
+                }),
+                Fill = Brushes.Transparent,
+                Stroke = C("#5D4037"), StrokeThickness = s * 0.7
+            });
+
+            // Graphite dot at tip
+            var dot = new Ellipse { Width = s*2, Height = s*2, Fill = C("#263238") };
+            Canvas.SetLeft(dot, s*21); Canvas.SetTop(dot, s*9); Add(dot);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
         private static ImageSource BuildVtParkIcon(int size)
         {
             double s = size / 32.0;
@@ -2094,6 +2733,104 @@ namespace AdvancedLandDevTools.Ribbon
             };
             Canvas.SetLeft(label, s * 10); Canvas.SetTop(label, s * 18);
             Add(label);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  EEE Bend icon — side-view profile of a pipe duck
+        //  Shows: horizontal pipe, two upper bends (dots), two diagonal legs,
+        //  a bottom horizontal run, all on a dark blue background.
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildEeeBendIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1B2A"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Pipe path (duck / bypass shape) in profile view ───────────────
+            // Layout (all in 32-unit space, scaled by s):
+            //   Horizontal run: y=10, x=1..8   (left of duck)
+            //   Upper-Left bend:  (8, 10)
+            //   Diagonal left:    (8,10) → (10, 22)
+            //   Bottom run:       x=10..22, y=22
+            //   Diagonal right:   (22,22) → (24, 10)
+            //   Upper-Right bend: (24, 10)
+            //   Horizontal run:   x=24..31, y=10 (right of duck)
+
+            string pipePath =
+                $"M {s*1},{s*10} L {s*8},{s*10} " +
+                $"L {s*10},{s*22} " +
+                $"L {s*22},{s*22} " +
+                $"L {s*24},{s*10} " +
+                $"L {s*31},{s*10}";
+
+            // Shadow / outline (slightly thicker, dark)
+            Add(new Path
+            {
+                Data = Geometry.Parse(pipePath),
+                Stroke = C("#0A2030"), StrokeThickness = s * 3.5,
+                Fill = C("Transparent"), StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+            });
+
+            // Main pipe stroke (cyan-blue)
+            Add(new Path
+            {
+                Data = Geometry.Parse(pipePath),
+                Stroke = C("#29B6F6"), StrokeThickness = s * 2.5,
+                Fill = C("Transparent"), StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+            });
+
+            // ── Upper bend markers (orange dots) ──────────────────────────────
+            foreach (var (cx, cy) in new[] { (8.0, 10.0), (24.0, 10.0) })
+            {
+                Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = s * 4, Height = s * 4,
+                    Fill = C("#FF8A65"), Stroke = C("#BF360C"), StrokeThickness = s * 0.5
+                });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * (cx - 2));
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * (cy - 2));
+            }
+
+            // ── Lower bend markers (yellow dots) ─────────────────────────────
+            foreach (var (cx, cy) in new[] { (10.0, 22.0), (22.0, 22.0) })
+            {
+                Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = s * 4, Height = s * 4,
+                    Fill = C("#FFF176"), Stroke = C("#F57F17"), StrokeThickness = s * 0.5
+                });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * (cx - 2));
+                Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * (cy - 2));
+            }
+
+            // ── "Crossing pipe" — orange horizontal bar above the duck ────────
+            Add(new Rectangle
+            {
+                Width = s * 10, Height = s * 3,
+                Fill = C("#FF8A65"), Opacity = 0.85,
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count - 1], s * 11);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count - 1],  s * 5);
+
+            // "X" label on crossing pipe
+            var xl = new System.Windows.Controls.TextBlock
+            {
+                Text = "X", Foreground = C("#0D1B2A"),
+                FontSize = s * 4, FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(xl, s * 14.5); Canvas.SetTop(xl, s * 5.2);
+            Add(xl);
 
             return RenderToBitmap(canvas, size, size);
         }

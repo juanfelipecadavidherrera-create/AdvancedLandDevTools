@@ -32,6 +32,11 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(VtDriveCommand))]
 [assembly: CommandClass(typeof(VtEditCommand))]
 [assembly: CommandClass(typeof(SectionDrawerCommand))]
+[assembly: CommandClass(typeof(BlockToSurfaceCommand))]
+[assembly: CommandClass(typeof(TextToSurfaceCommand))]
+[assembly: CommandClass(typeof(PipeSizingCommand))]
+[assembly: CommandClass(typeof(TrenchManagerCommand))]
+[assembly: CommandClass(typeof(EeeBendCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -129,19 +134,27 @@ namespace AdvancedLandDevTools
                 "\n║    MARKLINES       – Mark Crossing Lines in PV          ║" +
                 "\n║  Alignments:                                            ║" +
                 "\n║    ALIGNDEPLOY     – Align Deploy                       ║" +
+                "\n║  Surfaces:                                              ║" +
+                "\n║    BLOCKTOSURFACE  – Add Block Elevations to Surface    ║" +
+                "\n║    TEXTTOSURFACE   – Add Text/Leader Elevations to Surf ║" +
                 "\n║  Pipes:                                                 ║" +
                 "\n║    INVERTPULLUP    – Invert Pull Up                     ║" +
                 "\n║    CHANGEELEVATION – Pipe Elevation Equalizer           ║" +
                 "\n║    LOWRIM          – Lowest Rim Elevation Finder        ║" +
                 "\n║    ELEVSLOPE       – Elevation Sloper                   ║" +
+                "\n║    PIPESIZING      – Pipe Sizing Calculator             ║" +
+                "\n║    EEEBEND         – Pressure Pipe Duck (Bypass)        ║" +
+                "\n║  Cross Sections:                                        ║" +
+                "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
                 "\n║    FLOODZONE       – FEMA Flood Zone Lookup             ║" +
                 "\n║    FLOODCRITERIA   – MDC County Flood Criteria          ║" +
                 "\n║    SECTIONLOOKUP   – PLSS Township/Range/Section        ║" +
                 "\n║    GWMAY           – Water Table (Avg May)              ║" +
                 "\n║    GWOCT           – Water Table (October 2040)         ║" +
-                "\n║  Areas:                                                 ║" +
+                "\n║  Areas & Excavation:                                    ║" +
                 "\n║    AREAMANAGER     – Area Manager Palette               ║" +
+                "\n║    EXF             – EXF Trench Manager Palette         ║" +
                 "\n║  Viewports:                                             ║" +
                 "\n║    VPCUT           – Viewport Cut (clip from shapes)    ║" +
                 "\n║  Vehicle Tracking:                                      ║" +
