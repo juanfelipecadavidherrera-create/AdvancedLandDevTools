@@ -122,6 +122,22 @@ Remove a specific pipe or structure from a profile view by clicking directly on 
 </div>
 
 <div class="cmd">
+<strong>PVSTYLE</strong> -- Profile View Style Override <span class="badge-new">v1.1.0</span><br>
+Changes the per-profile-view style override for a pipe or structure -- the "Style Override" column in Profile View Properties. The global pipe style is never modified; only the display inside the selected profile view changes.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>PVSTYLE</code>.</li>
+<li>Click on the profile view border or background to lock the view (Step 1).</li>
+<li>Click on a pipe or structure symbol inside the profile view (Step 2).</li>
+<li>A numbered list of all available pipe or structure styles appears in the command window.</li>
+<li>Type the number of the style you want and press Enter.</li>
+<li>Repeat for additional parts. Press Enter or Escape to finish.</li>
+</ol>
+<em>Tip: The style list includes every pipe/structure style defined in the drawing, not just those currently in use -- so styles like "SEWER CROSSING ONLY" will appear even if no pipe is currently using them globally.</em>
+</div>
+</div>
+
+<div class="cmd">
 <strong>VPCUT</strong> -- Viewport Clip <span class="badge">Layout</span><br>
 Clips a paper space viewport to an arbitrary closed shape drawn in model space -- perfect for lot-shaped viewports, curved road boundaries, or any non-rectangular presentation frame.<br><br>
 Supported boundary types: circles, closed polylines, rectangles, splines, and any other closed curve.
@@ -470,7 +486,7 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.1.0</td><td>New command: PROFOFF -- remove pipes and structures from a profile view by direct selection using Civil 3D graph proxy entity detection. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added -- opens this help window from within Civil 3D.</td></tr>
+<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added -- opens this help window from within Civil 3D.</td></tr>
 <tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>

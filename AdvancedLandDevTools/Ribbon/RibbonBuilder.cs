@@ -179,6 +179,32 @@ namespace AdvancedLandDevTools.Ribbon
             };
             pvSource.Items.Add(btnProfOff);
 
+            pvSource.Items.Add(new RibbonSeparator());
+
+            // ── PV Style Override button ──────────────────────────────────────
+            var btnPvStyle = new RibbonButton
+            {
+                Id               = "ALDT_BTN_PVSTYLE",
+                Name             = "PV Style Override",
+                Text             = "PV Style\nOverride",
+                Description      = "Change the per-profile-view style override for a pipe or structure. " +
+                                   "Does not affect the global pipe style.",
+                ToolTip          = BuildToolTip(
+                    "PV Style Override",
+                    "Step 1: click the profile view border. " +
+                    "Step 2: click a pipe or structure, then pick a style from the list. " +
+                    "Sets the Style Override column in Profile View Properties.\n\nCommand: PVSTYLE"),
+                CommandHandler   = new RibbonCommandHandler("PVSTYLE "),
+                CommandParameter = "PVSTYLE ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildPvStyleIcon(32),
+                Image            = BuildPvStyleIcon(16)
+            };
+            pvSource.Items.Add(btnPvStyle);
+
             tab.Panels.Add(new RibbonPanel { Source = pvSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -3020,6 +3046,66 @@ namespace AdvancedLandDevTools.Ribbon
                 StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
             Add(new Line { X1 = s*(cx+r), Y1 = s*(cy-r), X2 = s*(cx-r), Y2 = s*(cy+r),
                 Stroke = C("#EF5350"), StrokeThickness = s * 2.2,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  PV Style Override icon — profile view grid with a paint-brush indicator
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildPvStyleIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A0D2A"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Profile view grid ──────────────────────────────────────────────
+            foreach (double y in new[] { 8.0, 16.0, 24.0 })
+                Add(new Line { X1 = s*3, Y1 = s*y, X2 = s*29, Y2 = s*y,
+                    Stroke = C("#2A3A4A"), StrokeThickness = s * 0.7 });
+            foreach (double x in new[] { 3.0, 10.3, 17.6, 24.9 })
+                Add(new Line { X1 = s*x, Y1 = s*4, X2 = s*x, Y2 = s*28,
+                    Stroke = C("#2A3A4A"), StrokeThickness = s * 0.7 });
+
+            // ── Profile view border ────────────────────────────────────────────
+            Add(new Rectangle { Width = s*26, Height = s*24,
+                Stroke = C("#546E8A"), StrokeThickness = s * 1.0,
+                Fill = C("Transparent"), RadiusX = s*1, RadiusY = s*1 });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*3);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*4);
+
+            // ── Pipe line (purple-tinted, matching PVSTYLE color) ─────────────
+            Add(new Line { X1 = s*3, Y1 = s*20, X2 = s*22, Y2 = s*13,
+                Stroke = C("#CE93D8"), StrokeThickness = s * 2.5, Opacity = 0.7 });
+
+            // ── Paint palette circle (style indicator) — bottom-right ─────────
+            // Outer circle shadow
+            Add(new Ellipse { Width = s*13, Height = s*13,
+                Fill = C("#4A1060"), Stroke = C("#CE93D8"), StrokeThickness = s * 1.0 });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*18);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*17);
+
+            // Three color dots on the palette
+            foreach (var (dx, dy, col) in new[] {
+                (21.5, 20.5, "#EF5350"),
+                (24.5, 22.0, "#FFD54F"),
+                (22.0, 25.0, "#4FC3F7") })
+            {
+                Add(new Ellipse { Width = s*2.2, Height = s*2.2, Fill = C(col) });
+                Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*dx);
+                Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*dy);
+            }
+
+            // Brush handle line
+            Add(new Line { X1 = s*27, Y1 = s*19, X2 = s*30, Y2 = s*16,
+                Stroke = C("#CE93D8"), StrokeThickness = s * 1.8,
                 StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
 
             return RenderToBitmap(canvas, size, size);
