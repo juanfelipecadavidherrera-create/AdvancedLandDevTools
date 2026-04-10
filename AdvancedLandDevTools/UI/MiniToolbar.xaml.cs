@@ -26,6 +26,7 @@ namespace AdvancedLandDevTools.UI
             ("PIPEMAGIC ",       "Pipe Magic",            "PROFILES",  "\xE945", "#BA68C8", "Magic"),
             ("MARKLINES ",       "Mark Lines",            "PROFILES",  "\xED63", "#FFB74D", "Mark"),
             ("PROFOFF ",         "Profile Off",           "PROFILES",  "\xE738", "#EF5350", "PrOff"),
+            ("PVSTYLE ",         "PV Style Override",     "PROFILES",  "\xE771", "#CE93D8", "Style"),
 
             // ALIGN
             ("ALIGNDEPLOY ",     "Align Deploy",          "ALIGN",     "\xE8AB", "#81C784", "Deploy"),

@@ -39,6 +39,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(EeeBendCommand))]
 [assembly: CommandClass(typeof(ProfOffCommand))]
 [assembly: CommandClass(typeof(AldtHelpCommand))]
+[assembly: CommandClass(typeof(PvStyleCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -147,6 +148,7 @@ namespace AdvancedLandDevTools
                 "\n║    PIPESIZING      – Pipe Sizing Calculator             ║" +
                 "\n║    EEEBEND         – Pressure Pipe Duck (Bypass)        ║" +
                 "\n║    PROFOFF         – Remove Part from Profile View      ║" +
+                "\n║    PVSTYLE         – Profile View Style Override        ║" +
                 "\n║  Cross Sections:                                        ║" +
                 "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
