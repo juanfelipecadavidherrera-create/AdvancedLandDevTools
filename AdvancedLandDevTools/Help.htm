@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Advanced Land Development Tools — Help</title>
+<title>Advanced Land Development Tools -- Help</title>
 <style>
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px 40px; line-height: 1.6; }
   h1 { color: #60CDFF; border-bottom: 2px solid #0078D4; padding-bottom: 10px; }
@@ -23,11 +24,14 @@
   tr:hover { background: #2d2d2d; }
   .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #454545; color: #6d6d6d; font-size: 13px; }
   .badge { display: inline-block; background: #0078D4; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+  .badge-new { display: inline-block; background: #2e7d32; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+  ol { margin: 8px 0 0 0; padding-left: 20px; }
+  ol li { margin-bottom: 4px; font-size: 13px; }
 </style>
 </head>
 <body>
 
-<h1>Advanced Land Development Tools v1.0.0</h1>
+<h1>Advanced Land Development Tools v1.1.0</h1>
 <p>A productivity suite for Autodesk Civil 3D 2025 / 2026 / 2027 designed for land development professionals. All commands are accessible from the <strong>Advanced Land Dev Tools</strong> ribbon tab or the floating Mini Toolbar.</p>
 
 <h2>Installation</h2>
@@ -39,9 +43,9 @@
 <h2>Licensing</h2>
 <div class="section">
 <p>The plugin includes a <strong>30-day free trial</strong> starting from the first use. During the trial, all commands are fully functional.</p>
-<p>After the trial period, purchase a license from the <a href="https://apps.autodesk.com">Autodesk App Store</a> to continue using the plugin. The license is verified automatically through your Autodesk account — no manual activation is required.</p>
+<p>After the trial period, purchase a license from the <a href="https://apps.autodesk.com">Autodesk App Store</a> to continue using the plugin. The license is verified automatically through your Autodesk account -- no manual activation is required.</p>
 <p><strong>Offline use:</strong> If you have a valid license and lose internet connectivity, the plugin will continue working for up to 3 days before requiring a connection to re-verify.</p>
-<p><strong>Subscription renewal:</strong> If your subscription lapses and is later renewed, the plugin restores full access automatically on the next license check — no reinstallation needed.</p>
+<p><strong>Subscription renewal:</strong> If your subscription lapses and is later renewed, the plugin restores full access automatically on the next license check -- no reinstallation needed.</p>
 </div>
 
 <h2>Commands</h2>
@@ -49,101 +53,406 @@
 <h3>Profile Views</h3>
 
 <div class="cmd">
-<strong>BULKSUR</strong> — Bulk Surface Profile Creator<br>
-Creating surface profiles one alignment at a time is one of the most repetitive tasks in land development. BULKSUR eliminates that bottleneck entirely. Select any number of alignments in your drawing, configure your station range, elevation range, and profile view style, then pick a single insertion point. The tool generates every surface profile and profile view in one batch, automatically spacing them vertically so they don't overlap. What normally takes 20–30 minutes of clicking through dialogs is reduced to a few seconds.
-<div class="workflow"><strong>Workflow:</strong> Select alignments → configure settings in dialog → pick insertion point → all profile views are created and stacked automatically.</div>
+<strong>BULKSUR</strong> -- Bulk Surface Profile Creator<br>
+Creating surface profiles one alignment at a time is one of the most repetitive tasks in land development. BULKSUR eliminates that bottleneck entirely. Select any number of alignments, configure your station range, elevation range, and profile view style, then pick a single insertion point. The tool generates every surface profile and profile view in one batch, automatically spacing them vertically so they do not overlap.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>BULKSUR</code> from the ribbon or command line.</li>
+<li>In the dialog, select which alignments to process and configure profile view style, station range, and elevation range.</li>
+<li>Click OK, then pick an insertion point in model space.</li>
+<li>All profile views are created and stacked automatically at the chosen point.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>GETPARENT</strong> — Get Parent Alignment<br>
-When working in a drawing with dozens of profile views, it's easy to lose track of which alignment a particular profile view belongs to. GETPARENT solves this instantly. Click any profile view and the tool identifies its parent alignment, highlights it in the drawing, and reports its name and station range in the command line. This is especially useful in large subdivision projects where profile views may have been moved or regrouped far from their source alignments.
-<div class="workflow"><strong>Workflow:</strong> Click any profile view → parent alignment is selected and its name and station range are reported.</div>
+<strong>GETPARENT</strong> -- Get Parent Alignment<br>
+Click any profile view and the tool identifies its parent alignment, highlights it in the drawing, and reports its name and station range in the command line. Useful in large subdivision projects where profile views may have been moved far from their source alignments.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>GETPARENT</code>.</li>
+<li>Click any profile view in the drawing.</li>
+<li>The parent alignment is selected and its name and station range are reported.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>PIPEMAGIC</strong> — Pipe Crossing Projection<br>
-Projecting pipe networks into profile views is a critical but tedious step in utility coordination. PIPEMAGIC automates it completely. Select one or more profile views and the tool scans all pipe networks in the drawing — both gravity and pressure — detects which ones cross each alignment, and projects them into the corresponding profile view automatically. No need to manually identify crossings or run the projection dialog for each network one by one.<br><br>
-<strong>Pressure Fitting Detector</strong> — When enabled, PIPEMAGIC also reads the start and end fittings connected to each crossing pressure pipe and projects them into the profile view alongside the pipes. Activate by typing <code>On</code> at the Pressure Fitting Detector prompt.<br><br>
-<strong>Manhole Mode</strong> — When enabled (mutually exclusive with Pressure Fitting Detector), PIPEMAGIC reads the start and end structures connected to each crossing gravity pipe and projects them into the profile view. After enabling, the command lists all gravity networks in the drawing and lets you choose which networks to include — for example, including only the sewer network while leaving drainage structures out.
-<div class="workflow"><strong>Workflow:</strong> Select one or more profile views → choose Pressure Fitting Detector [On/Off] → choose Manhole Mode [On/Off] (if Fitting Detector is off) → if Manhole Mode is on, select which gravity networks to include → all crossing pipes, fittings, and/or structures are detected and projected automatically.</div>
+<strong>PIPEMAGIC</strong> -- Pipe Crossing Projection<br>
+Select one or more profile views and PIPEMAGIC scans all pipe networks in the drawing -- both gravity and pressure -- detects which ones cross each alignment, and projects them into the corresponding profile view automatically.<br><br>
+<strong>Pressure Fitting Detector</strong> -- When enabled, also projects the start and end fittings of each crossing pressure pipe into the profile view. Activate by typing <code>On</code> at the prompt.<br><br>
+<strong>Manhole Mode</strong> -- When enabled (mutually exclusive with Fitting Detector), projects the start and end structures of each crossing gravity pipe. You can choose which gravity networks to include.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>PIPEMAGIC</code>.</li>
+<li>Select one or more profile views (press Enter when done).</li>
+<li>At the <em>Pressure Fitting Detector [On/Off]</em> prompt, type <code>On</code> or <code>Off</code>.</li>
+<li>If Fitting Detector is Off, you are prompted for <em>Manhole Mode [On/Off]</em>.</li>
+<li>If Manhole Mode is On, select which gravity networks to include from the list.</li>
+<li>All crossing pipes, fittings, and/or structures are projected automatically.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>MARKLINES</strong> — Mark Crossing Lines<br>
-Utility lines, right-of-way boundaries, easements, and other linear features drawn as lines or polylines in plan view often need to be referenced in profile views. MARKLINES finds every point where selected lines or polylines cross an alignment and draws a full-height vertical marker line at that station in the profile view. This gives you instant visual reference for where utilities or boundaries cross your road or corridor — without manually measuring stations or placing lines by hand.<br><br>
-Multiple profile views can be processed in a single command run. After selecting the layers to scan, keep picking profile views one by one and press Enter when done. Profile views that share the same alignment reuse the same crossing scan, so there is no performance penalty for selecting many views at once.
-<div class="workflow"><strong>Workflow:</strong> Select layers containing lines/polylines → pick one or more profile views (Enter when done) → vertical markers are drawn at every crossing station across all selected views.</div>
+<strong>MARKLINES</strong> -- Mark Crossing Lines<br>
+Finds every point where selected lines or polylines cross an alignment and draws a full-height vertical marker line at that station in the profile view. Multiple profile views can be processed in a single run.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>MARKLINES</code>.</li>
+<li>In the layer selection dialog, choose the layers containing lines or polylines to scan.</li>
+<li>Pick profile views one by one in the drawing (press Enter when done).</li>
+<li>Vertical marker lines are drawn at every crossing station across all selected views.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>VPCUT</strong> — Viewport Clip <span class="badge">Layout</span><br>
-Paper space viewports are rectangular by default. VPCUT lets you clip any viewport to an arbitrary shape defined by geometry already drawn in model space — perfect for lot-shaped viewports, curved road boundaries, irregular parcels, or any non-rectangular presentation frame. Select the viewport in a layout, then switch into it and select the closed shape or polyline that defines the clip boundary. The tool applies the shape as a non-rectangular clip, instantly giving the viewport that custom-cut look without any external tools.<br><br>
-Supported boundary types: circles, closed polylines (including those drawn by snapping back to the start point, not just those closed with the C option), rectangles, splines, and any other closed curve.
-<div class="workflow"><strong>Workflow:</strong> Switch to a paper space layout → select the viewport to clip → switch into model space → select the closed shape or polyline that defines the boundary → the viewport is clipped to that shape.</div>
+<strong>PROFOFF</strong> -- Profile Off <span class="badge-new">v1.1.0</span><br>
+Remove a specific pipe or structure from a profile view by clicking directly on it. The part is removed from that profile view only -- it remains in the model and is still shown in all other views.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>PROFOFF</code>.</li>
+<li>Click on the profile view border or background to identify the view (Step 1).</li>
+<li>Click on each pipe or structure crossing symbol to hide it (Step 2).</li>
+<li>Repeat for as many parts as needed. Press Enter or Escape to finish.</li>
+</ol>
+<em>Tip: Click the crossing circle or line symbol for the pipe inside the profile view. Works with gravity pipes, structures, pressure pipes, pressure fittings, and pressure appurtenances.</em>
+</div>
+</div>
+
+<div class="cmd">
+<strong>VPCUT</strong> -- Viewport Clip <span class="badge">Layout</span><br>
+Clips a paper space viewport to an arbitrary closed shape drawn in model space -- perfect for lot-shaped viewports, curved road boundaries, or any non-rectangular presentation frame.<br><br>
+Supported boundary types: circles, closed polylines, rectangles, splines, and any other closed curve.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Switch to a paper space layout.</li>
+<li>Run <code>VPCUT</code> and select the viewport to clip.</li>
+<li>Switch into model space and select the closed shape that defines the clip boundary.</li>
+<li>The viewport is clipped to that shape instantly.</li>
+</ol>
+</div>
 </div>
 
 <h3>Alignments</h3>
 
 <div class="cmd">
-<strong>ALIGNDEPLOY</strong> — Alignment Deploy<br>
-In subdivision and site layout work, you often need to place the same cross alignment (like a driveway, cul-de-sac, or side street template) at regular intervals along a main road alignment. ALIGNDEPLOY automates this repetitive placement. Select your main alignment and a cross alignment, specify the interval, and the tool places rotated copies of the cross alignment at each station along the main alignment, properly oriented perpendicular to the road centerline. This dramatically speeds up preliminary layout for lot access, drainage crossings, or any repeating cross-pattern.
-<div class="workflow"><strong>Workflow:</strong> Select main alignment → select cross alignment → enter interval → copies are deployed along the main alignment at the specified spacing.</div>
+<strong>ALIGNDEPLOY</strong> -- Alignment Deploy<br>
+Places rotated copies of a cross alignment at regular intervals along a main alignment, properly oriented perpendicular to the road centerline. Ideal for driveways, cul-de-sacs, drainage crossings, or any repeating cross-pattern.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>ALIGNDEPLOY</code>.</li>
+<li>Select the main (long) alignment.</li>
+<li>Select the cross (short) alignment to copy.</li>
+<li>Enter the deployment interval in drawing units.</li>
+<li>Copies are placed along the main alignment at the specified spacing.</li>
+</ol>
+</div>
 </div>
 
 <h3>Pipes</h3>
 
 <div class="cmd">
-<strong>INVERTPULLUP</strong> — Invert Pull Up<br>
-During construction plan reviews and field coordination, engineers frequently need to know the exact invert elevation at a specific point along a pipe — not just at the structures. INVERTPULLUP makes this a one-click operation. Click any gravity or pressure pipe, then click the point along it where you need the invert. The tool calculates the precise elevation using linear interpolation between the pipe's start and end inverts, then places a station-offset label directly in the drawing with the calculated value. This eliminates manual slope calculations and reduces the risk of field errors.
-<div class="workflow"><strong>Workflow:</strong> Click a pipe → click a point on that pipe → invert elevation is calculated and a station-offset label is placed automatically.</div>
+<strong>INVERTPULLUP</strong> -- Invert Pull Up<br>
+Click any gravity or pressure pipe, then click a point along it. The tool calculates the exact invert elevation via linear interpolation and places a station-offset label at that location. Eliminates manual slope calculations.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>INVERTPULLUP</code>.</li>
+<li>Click on a gravity or pressure pipe.</li>
+<li>Click a point along that pipe where you need the invert elevation.</li>
+<li>The invert is calculated and a station-offset label is placed automatically.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>CHANGEELEVATION</strong> — Change Pipe Elevation<br>
-When designing or adjusting pipe networks, you sometimes need to make a pipe segment perfectly level — matching both ends to the same invert elevation. CHANGEELEVATION simplifies this. Select any gravity or pressure pipe and the tool displays both the start and end invert elevations. Choose which elevation to apply, and the tool sets both ends to that value, making the pipe level. This is particularly useful for adjusting stub-outs, lateral connections, or correcting pipe segments during design iterations.
-<div class="workflow"><strong>Workflow:</strong> Select a pipe → view start and end inverts → choose which elevation to apply to both ends → pipe is leveled.</div>
+<strong>CHANGEELEVATION</strong> -- Change Pipe Elevation<br>
+Select a gravity or pressure pipe to display both crown elevations, then choose which one to apply to both ends, making the pipe level. Works by selecting the pipe directly in plan view or by clicking the pipe crossing symbol inside a profile view.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>CHANGEELEVATION</code>.</li>
+<li>Click on a pipe in plan view, or click a pipe crossing symbol inside a profile view.</li>
+<li>The start and end outside crown elevations are displayed.</li>
+<li>Type <code>1</code> to use the start elevation or <code>2</code> to use the end elevation.</li>
+<li>Both ends of the pipe are set to the chosen elevation.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>PIPESIZING</strong> -- Pipe Sizing Calculator<br>
+Opens a calculator window for stormwater pipe sizing. Enter the drainage area, runoff coefficient, and design storm intensity; then check a specific pipe diameter and slope against Manning's Equation capacity and velocity criteria.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>PIPESIZING</code>.</li>
+<li>Enter the drainage area (acres), runoff coefficient C, and rainfall intensity (in/hr).</li>
+<li>Enter the pipe diameter and slope to check.</li>
+<li>The tool calculates required flow (Q = CiA), pipe capacity, and velocity, and reports pass/fail.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>EEEBEND</strong> -- EEE Bend (Pressure Pipe Duck)<br>
+Automates the placement of a pressure pipe bypass ("duck") in a profile view. Select the pressure pipe run, click the crossing location, enter the target invert elevation -- the command places all four bends and five pipe segments automatically.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>EEEBEND</code>.</li>
+<li>Select a pressure pipe run in a profile view.</li>
+<li>Click the crossing location along the pipe.</li>
+<li>Enter the invert elevation at the crossing low point.</li>
+<li>Four bends and five pipe segments are placed creating the duck profile automatically.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>PRESSCOUNT</strong> -- Pressure Network Count<br>
+Scans the drawing, lets you select a pressure network, calculates total 3D pipe length, assigns sequential numbers to every fitting, and optionally places MText labels at each fitting location in plan view. All labels are grouped into a single named AutoCAD Group.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>PRESSCOUNT</code>.</li>
+<li>In the dialog, select the pressure network to analyze.</li>
+<li>Click OK. Total 3D pipe length and fitting count are reported.</li>
+<li>Choose whether to place MText labels at each fitting location.</li>
+<li>If yes, enter the desired text height. Labels are placed and grouped automatically.</li>
+</ol>
+</div>
+</div>
+
+<h3>Surfaces</h3>
+
+<div class="cmd">
+<strong>ELEVSLOPE</strong> -- Elevation Sloper<br>
+Pick a starting point on a TIN surface, enter a slope and distance, then click to place a new surface point at the calculated elevation. Ideal for projecting elevations along a designed grade.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>ELEVSLOPE</code>.</li>
+<li>Pick a starting point on a TIN surface.</li>
+<li>Enter the slope and direction.</li>
+<li>A new surface point is added at the calculated elevation.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>BLOCKTOSURFACE</strong> -- Block to Surface<br>
+Reads a specified elevation attribute from selected blocks and adds their X, Y locations and attribute-derived elevations as breakpoints to a Civil 3D TIN surface. Useful for incorporating survey point data delivered as AutoCAD blocks.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>BLOCKTOSURFACE</code>.</li>
+<li>Select the blocks containing elevation attributes.</li>
+<li>Specify the attribute tag name that holds the elevation value.</li>
+<li>Select the target TIN surface. Block locations are added as point data.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>TEXTTOSURFACE</strong> -- Text to Surface<br>
+Reads the numeric content of selected Text or MText entities and adds each entity's location to a Civil 3D TIN surface as a point. Useful for converting spot elevation annotations into usable surface data.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>TEXTTOSURFACE</code>.</li>
+<li>Select the text or MText entities containing elevation values.</li>
+<li>Select the target TIN surface. Each text location and parsed elevation are added.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>LOWRIM</strong> -- Lowest Rim Elevation<br>
+Scans selected Civil 3D structures and identifies the one with the lowest rim elevation -- typically the controlling structure for a drainage system or the first to overflow.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>LOWRIM</code>.</li>
+<li>Select the Civil 3D structures to check.</li>
+<li>The structure with the lowest rim elevation is highlighted and its name and elevation are reported.</li>
+</ol>
+</div>
 </div>
 
 <h3>Property Information</h3>
 
 <div class="cmd">
-<strong>FLOODZONE</strong> — FEMA Flood Zone Lookup<br>
-Knowing the FEMA flood zone designation for a property is one of the first things required in any land development project. It determines building elevation requirements, insurance obligations, and permitting conditions. FLOODZONE queries the FEMA National Flood Hazard Layer (NFHL) in real time based on a point you pick in the drawing. It returns the flood zone designation (e.g., AE, X, AH), base flood elevation (BFE), whether the location is in a Special Flood Hazard Area (SFHA), and the FIRM panel number. You can optionally place the results as an MText label directly in the drawing for reference.
-<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → FEMA data is queried live → flood zone, BFE, SFHA status, and FIRM panel are reported → optionally place a label.</div>
+<strong>FLOODZONE</strong> -- FEMA Flood Zone Lookup<br>
+Queries the FEMA National Flood Hazard Layer (NFHL) in real time and returns the flood zone designation (AE, X, AH, etc.), base flood elevation (BFE), SFHA status, and FIRM panel number for any point you pick. Optionally places results as an MText label.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>FLOODZONE</code>.</li>
+<li>Pick a point in the drawing.</li>
+<li>Flood zone, BFE, SFHA status, and FIRM panel number are reported.</li>
+<li>Optionally place results as an MText label at the picked point.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>FLOODCRITERIA</strong> — County Flood Criteria<br>
-In Miami-Dade County, development permits require that finished floor elevations meet the county's Flood Criteria — a dataset separate from FEMA maps. FLOODCRITERIA queries the Miami-Dade County Flood Criteria 2022 dataset and reports the minimum finished floor elevation (in ft NGVD) for the location you pick. This saves a trip to the county's GIS portal and ensures you have the correct regulatory elevation early in design.
-<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → Miami-Dade County Flood Criteria is queried → minimum finished floor elevation is reported.</div>
+<strong>FLOODCRITERIA</strong> -- County Flood Criteria<br>
+Queries the Miami-Dade County Flood Criteria 2022 dataset and reports the minimum finished floor elevation (ft NGVD) for the location you pick. Required for MDC development permits.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>FLOODCRITERIA</code>.</li>
+<li>Pick a point in the drawing.</li>
+<li>The Miami-Dade County minimum finished floor elevation is reported.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>SECTIONLOOKUP</strong> — PLSS Section Lookup<br>
-Legal descriptions and permit applications in Florida frequently require the PLSS (Public Land Survey System) section, township, and range. SECTIONLOOKUP queries the South Florida Water Management District (SFWMD) PLSS service and returns the Section number, Township, Range, and the combined SSTTRR code for any point you pick in the drawing. This eliminates the need to look up this information on separate GIS websites or paper maps.
-<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → SFWMD PLSS service is queried → Section, Township, Range, and SSTTRR code are reported.</div>
+<strong>SECTIONLOOKUP</strong> -- PLSS Section Lookup<br>
+Queries the SFWMD PLSS service and returns the Section, Township, Range, and SSTTRR code for any point you pick. Required for legal descriptions and permit applications in Florida.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>SECTIONLOOKUP</code>.</li>
+<li>Pick a point in the drawing.</li>
+<li>Section, Township, Range, and SSTTRR code are reported.</li>
+</ol>
+</div>
 </div>
 
 <div class="cmd">
-<strong>GROUNDWATER</strong> — Water Table Lookup<br>
-Groundwater elevation is a critical design parameter for stormwater management, foundation design, and exfiltration trench sizing. GROUNDWATER queries the Miami-Dade County Groundwater Level dataset (based on USGS model projections) and returns the water table elevation at the picked point in both NAVD 88 and NGVD 29 datums. Having both values readily available avoids datum conversion errors that can lead to costly design mistakes.
-<div class="workflow"><strong>Workflow:</strong> Pick a point in the drawing → groundwater level is queried → elevation is reported in both NAVD 88 and NGVD 29.</div>
+<strong>GWMAY</strong> -- Water Table (Average May)<br>
+Queries the Miami-Dade County groundwater dataset and returns the average May water table elevation at the picked point in both NAVD 88 and NGVD 29. Used for seasonal high water table in stormwater and exfiltration design.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>GWMAY</code>.</li>
+<li>Pick a point in the drawing.</li>
+<li>Average May groundwater elevation is reported in NAVD 88 and NGVD 29.</li>
+</ol>
+</div>
 </div>
 
-<h3>Areas</h3>
+<div class="cmd">
+<strong>GWOCT</strong> -- Water Table (October 2040 Projection)<br>
+Returns the projected October 2040 groundwater elevation at the picked point. Used for sea level rise resilience assessments and future-proofing drainage and foundation design in Miami-Dade County.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>GWOCT</code>.</li>
+<li>Pick a point in the drawing.</li>
+<li>Projected October 2040 groundwater elevation is reported in NAVD 88 and NGVD 29.</li>
+</ol>
+</div>
+</div>
+
+<h3>Areas &amp; Excavation</h3>
 
 <div class="cmd">
-<strong>AREAMANAGER</strong> — Area Manager<br>
-Tracking areas across a land development project — impervious surfaces, pervious areas, lakes, building footprints — is essential for stormwater calculations, zoning compliance, and permit applications. The Area Manager is a dockable palette (similar to Toolspace) that stays open while you work. Create a project, then add areas by selecting hatches or closed polylines in your drawing. Each area is stored with its name, square footage, layer, and boundary coordinates. You can organize areas into custom categories (e.g., "Impervious", "Pervious", "Lake") and rename them at any time. If a hatch is deleted from the drawing, the data is preserved — click Redraw to recreate it at its original location and zoom to it. Export a complete area report to CSV with per-category subtotals for easy integration into permit applications and engineering calculations. All project data is saved locally and persists across Civil 3D sessions.
-<div class="workflow"><strong>Workflow:</strong> Type <code>AREAMANAGER</code> → create/select a project → click Add Area → select a hatch or closed boundary → area is stored and displayed → rename, categorize, redraw, or export as needed.</div>
+<strong>AREAMANAGER</strong> -- Area Manager<br>
+A dockable palette for tracking impervious/pervious areas, lakes, and footprints across a project. Add areas by selecting hatches or closed polylines. Organize into categories, redraw deleted hatches, and export to CSV with per-category subtotals.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>AREAMANAGER</code> to open the palette.</li>
+<li>Create or select a project.</li>
+<li>Click Add Area and select a hatch or closed polyline.</li>
+<li>Name and categorize each area. Use Export to generate a CSV report.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>EXF</strong> -- EXF Trench Manager<br>
+A dockable palette for tracking exfiltration trench lengths across a project. Select polylines or line segments representing trench runs; the tool accumulates total linear footage for permit submittals and contractor pay requests.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>EXF</code> to open the Trench Manager palette.</li>
+<li>Click Add Trench and select the polylines or lines representing trench runs.</li>
+<li>Total trench length is updated automatically.</li>
+</ol>
+</div>
+</div>
+
+<h3>Cross Sections</h3>
+
+<div class="cmd">
+<strong>SECDRAW</strong> -- Section Drawer<br>
+Opens a designer window where you build a cross-section by chaining slope segments (lane, shoulder, swale, cut/fill slope, etc.). Draws the section into model space at 1:1 scale with labeled dimensions.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>SECDRAW</code>.</li>
+<li>Add segments by entering width and slope for each element.</li>
+<li>Preview the section profile in the window.</li>
+<li>Click Draw and pick an insertion point in model space.</li>
+</ol>
+</div>
+</div>
+
+<h3>Vehicle Tracking</h3>
+
+<div class="cmd">
+<strong>VTPANEL</strong> -- Vehicle Tracking Panel<br>
+The central hub for all vehicle tracking operations. Lists available vehicle templates, lets you configure vehicle parameters, and provides access to swept path, drive, and parking tools.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>VTPANEL</code> to open the Vehicle Tracking palette.</li>
+<li>Select a vehicle template from the list.</li>
+<li>Launch swept path, drive mode, or parking tools from the panel.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>VTSWEEP</strong> -- Swept Path Analysis<br>
+Traces the selected vehicle along a polyline path and draws the swept envelope -- showing the full vehicle footprint through the maneuver. Essential for checking driveway geometry, intersection turning radii, and fire truck access.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Open <code>VTPANEL</code> and select a vehicle.</li>
+<li>Run <code>VTSWEEP</code> and draw or select the path polyline.</li>
+<li>The swept path envelope is drawn automatically.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>VTDRIVE</strong> -- Interactive Drive Mode<br>
+Steer a vehicle through a maneuver in real time using the keyboard or mouse. The swept path is recorded and drawn as the vehicle moves. Useful for tight turning situations and fire access routes where the exact path is not predetermined.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Open <code>VTPANEL</code> and select a vehicle.</li>
+<li>Run <code>VTDRIVE</code> and click a starting position and direction.</li>
+<li>Use arrow keys or mouse to steer. The swept path draws in real time.</li>
+<li>Press Enter to finish and keep the path.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>VTPARK</strong> -- Parking Layout Generator<br>
+Generates a parking layout -- stall lines and drive aisle -- for a selected vehicle type and configuration. Placed in model space at 1:1 scale. Speeds up preliminary parking design and ADA/zoning compliance checks.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Open <code>VTPANEL</code> and select a vehicle.</li>
+<li>Run <code>VTPARK</code>, configure stall angle and count.</li>
+<li>Pick an insertion point. The parking layout is generated with stall lines and aisle dimensions.</li>
+</ol>
+</div>
 </div>
 
 <h3>Quick Access</h3>
 
 <div class="cmd">
-<strong>ALDTTOOLBAR</strong> — Toggle Mini Toolbar<br>
-The Mini Toolbar is a compact floating panel that gives you one-click access to every ALDT command without switching ribbon tabs. It stays on top of the drawing area, so you can keep working in any Civil 3D ribbon tab (Home, Modify, Analyze, etc.) and still have all ALDT tools within reach. Drag the toolbar anywhere on screen to reposition it. Click the X button to close it, or type <code>ALDTTOOLBAR</code> again to toggle it back. The toolbar is organized by category — Profiles, Alignments, Pipes, Info, and Layout — with color-coded icons for fast visual identification.
-<div class="workflow"><strong>Workflow:</strong> Type <code>ALDTTOOLBAR</code> or click the Mini Toolbar button on the ribbon → toolbar appears → click any icon to run the command → drag to reposition.</div>
+<strong>ALDTTOOLBAR</strong> -- Toggle Mini Toolbar<br>
+A compact floating panel with one-click access to every ALDT command. Stays on top of the drawing area and is organized by category with color-coded icons. Drag to reposition. Use the gear icon to show or hide individual commands.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>ALDTTOOLBAR</code> or click the Mini Toolbar button on the ALDT ribbon.</li>
+<li>Click any icon to run the corresponding command.</li>
+<li>Drag to reposition. Click X to close. Click the gear icon to customize visibility.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd">
+<strong>ALDTHELP</strong> -- Open Help Window<br>
+Opens this help document in a resizable window directly inside Civil 3D. All commands, workflows, and usage notes are available without leaving the application.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>ALDTHELP</code> from the ribbon or command line.</li>
+<li>The help window opens. Scroll to find any command.</li>
+<li>Close the window when done.</li>
+</ol>
+</div>
 </div>
 
 <h2>System Requirements</h2>
@@ -161,7 +470,8 @@ The Mini Toolbar is a compact floating panel that gives you one-click access to 
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES (multi-profile view), VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GROUNDWATER, AREAMANAGER, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
+<tr><td>1.1.0</td><td>New command: PROFOFF -- remove pipes and structures from a profile view by direct selection using Civil 3D graph proxy entity detection. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added -- opens this help window from within Civil 3D.</td></tr>
+<tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>
 
@@ -173,7 +483,7 @@ The Mini Toolbar is a compact floating panel that gives you one-click access to 
 
 <div class="footer">
 <p>&copy; 2026 Juan Felipe Cadavid. All rights reserved.<br>
-Advanced Land Development Tools v1.0.0 is proprietary software. Unauthorized distribution is prohibited.</p>
+Advanced Land Development Tools v1.1.0 is proprietary software. Unauthorized distribution is prohibited.</p>
 </div>
 
 </body>

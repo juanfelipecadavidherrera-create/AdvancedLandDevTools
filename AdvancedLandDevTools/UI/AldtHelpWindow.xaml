@@ -1,0 +1,90 @@
+<Window
+    x:Class="AdvancedLandDevTools.UI.AldtHelpWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Advanced Land Development Tools — Help v1.1.0"
+    Width="960" Height="720"
+    MinWidth="700" MinHeight="500"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="CanResizeWithGrip"
+    Background="#1a1a1a"
+    FontFamily="Segoe UI"
+    FontSize="13">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Header ──────────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="#1e2a38" Padding="20,12">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="34" Height="34"
+                        Background="#0078D4"
+                        CornerRadius="8" Margin="0,0,14,0">
+                    <TextBlock Text="?" Foreground="White" FontSize="18"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="ADVANCED LAND DEVELOPMENT TOOLS"
+                               Foreground="#60CDFF" FontSize="9"
+                               FontWeight="SemiBold" Opacity="0.8"/>
+                    <TextBlock Text="Help &amp; Command Reference  —  v1.1.0"
+                               Foreground="White" FontSize="15"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ── WebBrowser ─────────────────────────────────────────────── -->
+        <WebBrowser x:Name="HelpBrowser"
+                    Grid.Row="1"/>
+
+        <!-- ── Footer ─────────────────────────────────────────────────── -->
+        <Border Grid.Row="2" Background="#1e2a38" Padding="16,10">
+            <Grid>
+                <TextBlock Text="© 2026 Juan Felipe Cadavid. All rights reserved."
+                           Foreground="#505a68" FontSize="11"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Left"/>
+                <Button Content="Close"
+                        HorizontalAlignment="Right"
+                        Width="80" Height="28"
+                        Background="#0078D4"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="BtnClose_Click">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#0078D4"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="4" Padding="8,4">
+                                            <ContentPresenter HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#106EBE"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

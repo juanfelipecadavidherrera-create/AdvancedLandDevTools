@@ -153,6 +153,32 @@ namespace AdvancedLandDevTools.Ribbon
             };
             pvSource.Items.Add(btnMarkLines);
 
+            pvSource.Items.Add(new RibbonSeparator());
+
+            // ── Profile Off button ────────────────────────────────────────────
+            var btnProfOff = new RibbonButton
+            {
+                Id               = "ALDT_BTN_PROFOFF",
+                Name             = "Profile Off",
+                Text             = "Profile\nOff",
+                Description      = "Remove pipes and structures from a Civil 3D profile view. " +
+                                   "Pick the profile view, then click each part to hide.",
+                ToolTip          = BuildToolTip(
+                    "Profile Off",
+                    "Step 1: click the profile view border. " +
+                    "Step 2: click each pipe or structure crossing to hide it. " +
+                    "Works with gravity pipes, structures, and pressure parts.\n\nCommand: PROFOFF"),
+                CommandHandler   = new RibbonCommandHandler("PROFOFF "),
+                CommandParameter = "PROFOFF ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildProfOffIcon(32),
+                Image            = BuildProfOffIcon(16)
+            };
+            pvSource.Items.Add(btnProfOff);
+
             tab.Panels.Add(new RibbonPanel { Source = pvSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -734,6 +760,31 @@ namespace AdvancedLandDevTools.Ribbon
                 Image            = BuildTrenchManagerIcon(16)
             };
             qaSource.Items.Add(btnTrenchManager);
+
+            qaSource.Items.Add(new RibbonSeparator());
+
+            // ── Help button ────────────────────────────────────────────────
+            var btnHelp = new RibbonButton
+            {
+                Id               = "ALDT_BTN_ALDTHELP",
+                Name             = "ALDT Help",
+                Text             = "Help",
+                Description      = "Open the Advanced Land Development Tools help window " +
+                                   "with full command reference and usage guides.",
+                ToolTip          = BuildToolTip(
+                    "ALDT Help",
+                    "Opens the built-in help window with descriptions and step-by-step " +
+                    "usage guides for every ALDT command.\n\nCommand: ALDTHELP"),
+                CommandHandler   = new RibbonCommandHandler("ALDTHELP "),
+                CommandParameter = "ALDTHELP ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildAldtHelpIcon(32),
+                Image            = BuildAldtHelpIcon(16)
+            };
+            qaSource.Items.Add(btnHelp);
 
             tab.Panels.Add(new RibbonPanel { Source = qaSource });
 
@@ -2858,6 +2909,118 @@ namespace AdvancedLandDevTools.Ribbon
             };
             Canvas.SetLeft(xl, s * 14.5); Canvas.SetTop(xl, s * 5.2);
             Add(xl);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  ALDT Help icon — open book with a question mark
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildAldtHelpIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1520"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Book left page ─────────────────────────────────────────────
+            Add(new Rectangle { Width = s*12, Height = s*20,
+                Fill = C("#1565C0"), RadiusX = s*1, RadiusY = s*1 });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*3);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*6);
+
+            // ── Book right page ────────────────────────────────────────────
+            Add(new Rectangle { Width = s*12, Height = s*20,
+                Fill = C("#1976D2"), RadiusX = s*1, RadiusY = s*1 });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*17);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*6);
+
+            // ── Book spine ────────────────────────────────────────────────
+            Add(new Rectangle { Width = s*2, Height = s*20,
+                Fill = C("#0D47A1") });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*15);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*6);
+
+            // ── Lines on left page ─────────────────────────────────────────
+            foreach (double ly in new[] { 11.0, 14.0, 17.0, 20.0 })
+            {
+                Add(new Line { X1 = s*5, Y1 = s*ly, X2 = s*13, Y2 = s*ly,
+                    Stroke = C("#60CDFF"), StrokeThickness = s*0.8, Opacity = 0.5 });
+            }
+
+            // ── "?" on right page ──────────────────────────────────────────
+            var q = new System.Windows.Controls.TextBlock
+            {
+                Text = "?",
+                Foreground = C("#FFD54F"),
+                FontSize = s * 13,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(q, s * 19.5);
+            Canvas.SetTop(q,  s * 8);
+            Add(q);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Profile Off icon — profile view grid with a pipe being removed (X)
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildProfOffIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1520"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Profile view grid (light grey lines) ──────────────────────────
+            // Horizontal grid lines (3)
+            foreach (double y in new[] { 8.0, 16.0, 24.0 })
+                Add(new Line { X1 = s*3, Y1 = s*y, X2 = s*29, Y2 = s*y,
+                    Stroke = C("#2A3A4A"), StrokeThickness = s * 0.7 });
+            // Vertical grid lines (4)
+            foreach (double x in new[] { 3.0, 10.3, 17.6, 24.9 })
+                Add(new Line { X1 = s*x, Y1 = s*4, X2 = s*x, Y2 = s*28,
+                    Stroke = C("#2A3A4A"), StrokeThickness = s * 0.7 });
+
+            // ── Profile view border ────────────────────────────────────────────
+            Add(new Rectangle { Width = s*26, Height = s*24,
+                Stroke = C("#546E8A"), StrokeThickness = s * 1.0,
+                Fill = C("Transparent"), RadiusX = s*1, RadiusY = s*1 });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*3);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*4);
+
+            // ── Pipe crossing line (cyan) ──────────────────────────────────────
+            Add(new Line { X1 = s*3, Y1 = s*19, X2 = s*29, Y2 = s*13,
+                Stroke = C("#29B6F6"), StrokeThickness = s * 2.5,
+                Opacity = 0.5 });
+
+            // ── Red X over the pipe (marking it as removed) ───────────────────
+            double cx = 16, cy = 16, r = 6;
+            // X shadow
+            Add(new Line { X1 = s*(cx-r), Y1 = s*(cy-r), X2 = s*(cx+r), Y2 = s*(cy+r),
+                Stroke = C("#7F0000"), StrokeThickness = s * 3.5,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+            Add(new Line { X1 = s*(cx+r), Y1 = s*(cy-r), X2 = s*(cx-r), Y2 = s*(cy+r),
+                Stroke = C("#7F0000"), StrokeThickness = s * 3.5,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+            // X bright
+            Add(new Line { X1 = s*(cx-r), Y1 = s*(cy-r), X2 = s*(cx+r), Y2 = s*(cy+r),
+                Stroke = C("#EF5350"), StrokeThickness = s * 2.2,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+            Add(new Line { X1 = s*(cx+r), Y1 = s*(cy-r), X2 = s*(cx-r), Y2 = s*(cy+r),
+                Stroke = C("#EF5350"), StrokeThickness = s * 2.2,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
 
             return RenderToBitmap(canvas, size, size);
         }

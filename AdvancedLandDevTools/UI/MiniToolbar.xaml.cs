@@ -64,6 +64,9 @@ namespace AdvancedLandDevTools.UI
             ("VTPANEL ",         "VT Panel",              "VEHICLE",   "\xE80F", "#4FC3F7", "Panel"),
             ("VTSWEEP ",         "Swept Path",            "VEHICLE",   "\xE81E", "#FFB74D", "Sweep"),
             ("VTPARK ",          "Parking Layout",        "VEHICLE",   "\xE81E", "#BA68C8", "Park"),
+
+            // HELP
+            ("ALDTHELP ",        "ALDT Help",             "HELP",      "\xE897", "#60CDFF", "Help"),
         };
 
         private const int COLUMNS = 4;

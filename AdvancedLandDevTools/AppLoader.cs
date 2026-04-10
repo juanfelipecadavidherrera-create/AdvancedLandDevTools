@@ -38,6 +38,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(TrenchManagerCommand))]
 [assembly: CommandClass(typeof(EeeBendCommand))]
 [assembly: CommandClass(typeof(ProfOffCommand))]
+[assembly: CommandClass(typeof(AldtHelpCommand))]
 
 namespace AdvancedLandDevTools
 {
