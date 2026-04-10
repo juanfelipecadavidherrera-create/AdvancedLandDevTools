@@ -9,7 +9,7 @@ namespace AdvancedLandDevTools.Engine
 {
     /// <summary>
     /// Manages licensing via the Autodesk App Store Entitlement API
-    /// with a local 14-day free trial fallback.
+    /// with a local 30-day free trial fallback.
     ///
     /// Flow:
     ///   1. Check Autodesk entitlement API (online purchase verification)
@@ -26,7 +26,7 @@ namespace AdvancedLandDevTools.Engine
         private const string ENTITLEMENT_URL =
             "https://apps.autodesk.com/webservices/checkentitlement";
 
-        private const int TRIAL_DAYS = 14;
+        private const int TRIAL_DAYS = 30;
         private const int OFFLINE_GRACE_DAYS = 3;
 
         // XOR key for simple obfuscation of the trial file
@@ -69,7 +69,7 @@ namespace AdvancedLandDevTools.Engine
                     int daysLeft = GetTrialDaysLeft();
                     var doc = AcadApp.DocumentManager.MdiActiveDocument;
                     doc?.Editor.WriteMessage(
-                        $"\n[ALDT] Trial mode — {daysLeft} day{(daysLeft == 1 ? "" : "s")} remaining. " +
+                        $"\n[ALDT] Trial mode — {daysLeft} day{(daysLeft == 1 ? "" : "s")} of 30 remaining. " +
                         "Purchase at apps.autodesk.com to unlock permanently.\n");
                     return true;
 
@@ -80,7 +80,7 @@ namespace AdvancedLandDevTools.Engine
                         "\n╔══════════════════════════════════════════════════════════╗" +
                         "\n║  ADVANCED LAND DEVELOPMENT TOOLS — Trial Expired        ║" +
                         "\n╠══════════════════════════════════════════════════════════╣" +
-                        "\n║  Your 14-day free trial has ended.                      ║" +
+                        "\n║  Your 30-day free trial has ended.                      ║" +
                         "\n║  Purchase from the Autodesk App Store to continue:      ║" +
                         "\n║  https://apps.autodesk.com                              ║" +
                         "\n╚══════════════════════════════════════════════════════════╝\n");
