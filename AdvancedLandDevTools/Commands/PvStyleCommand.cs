@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -161,8 +162,8 @@ namespace AdvancedLandDevTools.Commands
                             if (net == null) continue;
 
                             IEnumerable<ObjectId> ids = isPipe
-                                ? (IEnumerable<ObjectId>)net.GetPipeIds()
-                                : net.GetStructureIds();
+                                ? net.GetPipeIds().Cast<ObjectId>()
+                                : net.GetStructureIds().Cast<ObjectId>();
 
                             foreach (ObjectId pid in ids)
                             {
