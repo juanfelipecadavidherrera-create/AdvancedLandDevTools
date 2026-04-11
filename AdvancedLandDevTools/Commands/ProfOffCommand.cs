@@ -53,45 +53,10 @@ namespace AdvancedLandDevTools.Commands
 
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
                 ed.WriteMessage("\n  Advanced Land Development Tools  |  Profile Off");
-                ed.WriteMessage("\n  Step 1: click the profile view border or background.");
-                ed.WriteMessage("\n  Step 2: click each pipe / structure to hide.");
-                ed.WriteMessage("\n          Enter or Escape to finish.");
+                ed.WriteMessage("\n  Click each pipe / structure to hide from its profile view.");
+                ed.WriteMessage("\n  Enter or Escape to finish.");
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
 
-                // ── Step 1: pick the profile view ────────────────────────────
-                ObjectId pvId = ObjectId.Null;
-
-                using (var tx = db.TransactionManager.StartTransaction())
-                {
-                    var pvOpt = new PromptEntityOptions(
-                        "\n  Select profile view (click border or background): ");
-                    pvOpt.SetRejectMessage(
-                        "\n  That is not a profile view — click on the view border or grid.");
-                    pvOpt.AddAllowedClass(typeof(CivilDB.ProfileView), exactMatch: true);
-
-                    var pvRes = ed.GetEntity(pvOpt);
-                    if (pvRes.Status != PromptStatus.OK)
-                    {
-                        ed.WriteMessage("\n  Cancelled.\n");
-                        tx.Abort();
-                        return;
-                    }
-
-                    var pv = tx.GetObject(pvRes.ObjectId, OpenMode.ForRead)
-                             as CivilDB.ProfileView;
-                    if (pv == null)
-                    {
-                        ed.WriteMessage("\n  Could not open profile view.\n");
-                        tx.Abort();
-                        return;
-                    }
-
-                    pvId = pv.ObjectId;
-                    ed.WriteMessage("\n  Profile view locked. Now click on parts to hide.\n");
-                    tx.Commit();
-                }
-
-                // ── Step 2: pick parts ────────────────────────────────────────
                 int removed = 0;
 
                 while (true)
@@ -112,23 +77,21 @@ namespace AdvancedLandDevTools.Commands
 
                     using (var tx = db.TransactionManager.StartTransaction())
                     {
-                        // ── Direct Civil part (fallback if Civil 3D returns the real entity)
-                        if (TryRemoveDirect(per.ObjectId, pvId, tx, ed))
-                        {
-                            removed++;
-                            tx.Commit();
-                            continue;
-                        }
-
-                        // ── Graph proxy entity — resolve to the underlying part
+                        // ── Graph proxy entity — resolve to the underlying part + its PV ──
                         if (dxf == DXF_NETWORK_PART || dxf == DXF_PRESSURE_PART)
                         {
-                            var proxy = tx.GetObject(per.ObjectId, OpenMode.ForRead);
+                            var proxy  = tx.GetObject(per.ObjectId, OpenMode.ForRead);
                             ObjectId partId = ResolvePartId(proxy, ed);
+                            ObjectId pvId   = FindProfileView(proxy, per, db, tx, ed);
 
                             if (partId.IsNull)
                             {
-                                // ResolvePartId already printed diagnostic output
+                                tx.Abort();
+                                continue;
+                            }
+                            if (pvId.IsNull)
+                            {
+                                ed.WriteMessage("\n  Could not determine which profile view this part belongs to.");
                                 tx.Abort();
                                 continue;
                             }
@@ -147,6 +110,16 @@ namespace AdvancedLandDevTools.Commands
                             continue;
                         }
 
+                        // ── Direct Civil part (fallback if Civil 3D returns the real entity)
+                        // In this path we still need a PV — find it from the pick point only.
+                        ObjectId pvIdDirect = FindProfileViewFromPoint(per, db, tx, ed);
+                        if (!pvIdDirect.IsNull && TryRemoveDirect(per.ObjectId, pvIdDirect, tx, ed))
+                        {
+                            removed++;
+                            tx.Commit();
+                            continue;
+                        }
+
                         // ── Unrecognised entity type
                         ed.WriteMessage(
                             $"\n  Unrecognised entity type: {dxf} — " +
@@ -162,6 +135,54 @@ namespace AdvancedLandDevTools.Commands
             {
                 ed.WriteMessage($"\n[PROFOFF ERROR] {ex.Message}\n");
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Resolve profile view for a graph proxy:
+        //  1. Try proxy.OwnerId (sometimes the PV owns the proxy directly).
+        //  2. Fall back to scanning all PVs in model space by pick-point extents.
+        // ─────────────────────────────────────────────────────────────────────
+        private static ObjectId FindProfileView(
+            DBObject proxy, PromptEntityResult per,
+            Database db, Transaction tx, Editor ed)
+        {
+            // Tier 1 — owner chain
+            try
+            {
+                var owner = tx.GetObject(proxy.OwnerId, OpenMode.ForRead) as CivilDB.ProfileView;
+                if (owner != null) return owner.ObjectId;
+            }
+            catch { }
+
+            // Tier 2 — pick point inside PV extents
+            return FindProfileViewFromPoint(per, db, tx, ed);
+        }
+
+        private static ObjectId FindProfileViewFromPoint(
+            PromptEntityResult per, Database db, Transaction tx, Editor ed)
+        {
+            try
+            {
+                var pt  = per.PickedPoint;
+                var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForRead) as BlockTableRecord;
+                if (btr == null) return ObjectId.Null;
+
+                foreach (ObjectId id in btr)
+                {
+                    CivilDB.ProfileView pv;
+                    try { pv = tx.GetObject(id, OpenMode.ForRead) as CivilDB.ProfileView; }
+                    catch { continue; }
+                    if (pv == null) continue;
+
+                    var ext = pv.GeometricExtents;
+                    if (pt.X >= ext.MinPoint.X && pt.X <= ext.MaxPoint.X &&
+                        pt.Y >= ext.MinPoint.Y && pt.Y <= ext.MaxPoint.Y)
+                        return pv.ObjectId;
+                }
+            }
+            catch { }
+
+            return ObjectId.Null;
         }
 
         // ─────────────────────────────────────────────────────────────────────
