@@ -40,6 +40,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(ProfOffCommand))]
 [assembly: CommandClass(typeof(AldtHelpCommand))]
 [assembly: CommandClass(typeof(PvStyleCommand))]
+[assembly: CommandClass(typeof(RrNetworkCheckCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -149,6 +150,7 @@ namespace AdvancedLandDevTools
                 "\n║    EEEBEND         – Pressure Pipe Duck (Bypass)        ║" +
                 "\n║    PROFOFF         – Remove Part from Profile View      ║" +
                 "\n║    PVSTYLE         – Profile View Style Override        ║" +
+                "\n║    RRNETWORKCHECK  – Pressure Network Clearance Check   ║" +
                 "\n║  Cross Sections:                                        ║" +
                 "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
