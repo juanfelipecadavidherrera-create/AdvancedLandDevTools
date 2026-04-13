@@ -8,6 +8,7 @@ using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using AcApp   = Autodesk.AutoCAD.ApplicationServices.Application;
 using CivilDB = Autodesk.Civil.DatabaseServices;
+using AdvancedLandDevTools.Helpers;
 
 namespace AdvancedLandDevTools.Commands
 {
@@ -164,7 +165,7 @@ namespace AdvancedLandDevTools.Commands
 
                 // ── Find crossing pipes from every other network ───────────────
                 var crossings = new List<CrossingInfo>();
-                CollectCrossings(db, tx, align, pressNetId, stMin, stMax, crossings);
+                CollectCrossings(db, tx, align, pressNetId, stMin, stMax, pv, crossings);
                 ed.WriteMessage($"\n  Crossings found: {crossings.Count}");
 
                 // ── Draw circles, report clearances ───────────────────────────
@@ -356,15 +357,29 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Scan all gravity pipes + other pressure pipes for crossings
-        //  with the alignment within [stMin, stMax].
+        //  Scan gravity pipes + other-network pressure pipes for crossings
+        //  with the alignment.
+        //
+        //  Only crossings that fall inside BOTH the profile view station window
+        //  [pv.StationStart, pv.StationEnd] AND the path station range
+        //  [stMin, stMax] are kept — this ensures we only report pipes that are
+        //  actually visible in the drawn profile view and relevant to the path.
+        //
+        //  Geometric intersection is performed via PipeAlignmentIntersector
+        //  (Entity.IntersectWith first, endpoint heuristic as fallback).
+        //  The crossings returned carry PipeCenterlineZ at the exact crossing
+        //  point; outer invert is derived as  centerZ − outerRadius.
         // ─────────────────────────────────────────────────────────────────────
         private static void CollectCrossings(
             Database db, Transaction tx,
             CivilDB.Alignment align, ObjectId pressNetId,
             double stMin, double stMax,
+            CivilDB.ProfileView pv,
             List<CrossingInfo> crossings)
         {
+            double pvStart = pv.StationStart;
+            double pvEnd   = pv.StationEnd;
+
             var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForRead) as BlockTableRecord;
             if (btr == null) return;
 
@@ -376,89 +391,47 @@ namespace AdvancedLandDevTools.Commands
 
                     if (obj is CivilDB.Pipe gp)
                     {
-                        // StartPoint.Z / EndPoint.Z = pipe centerline elevation (confirmed by InvertPullUpEngine)
-                        double outerD   = gp.OuterDiameterOrWidth;
-                        double outerR   = outerD / 2.0;
-                        double startInv = gp.StartPoint.Z - outerR;   // outer invert at start
-                        double endInv   = gp.EndPoint.Z   - outerR;   // outer invert at end
-                        var ci = FindCrossing(
-                            gp.StartPoint, gp.EndPoint,
-                            startInv, endInv, outerD,
-                            align, stMin, stMax);
-                        if (ci != null) { ci.PipeName = gp.Name; crossings.Add(ci); }
+                        double outerD = gp.OuterDiameterOrWidth;
+                        double outerR = outerD / 2.0;
+
+                        foreach (var c in PipeAlignmentIntersector.FindCrossings(id, align, tx))
+                        {
+                            // Must be within the profile view's drawn station window
+                            if (c.Station < pvStart - 0.5 || c.Station > pvEnd + 0.5) continue;
+                            // Must be within the selected pressure path range
+                            if (c.Station < stMin - 1.0   || c.Station > stMax + 1.0)  continue;
+
+                            crossings.Add(new CrossingInfo
+                            {
+                                PipeName      = gp.Name,
+                                Station       = c.Station,
+                                OuterInvert   = c.PipeCenterlineZ - outerR,
+                                OuterDiameter = outerD
+                            });
+                        }
                     }
                     else if (obj is CivilDB.PressurePipe pp && pp.NetworkId != pressNetId)
                     {
-                        double outerD   = pp.OuterDiameter;
-                        double outerR   = outerD / 2.0;
-                        double startInv = pp.StartPoint.Z - outerR;
-                        double endInv   = pp.EndPoint.Z   - outerR;
-                        var ci = FindCrossing(
-                            pp.StartPoint, pp.EndPoint,
-                            startInv, endInv, outerD,
-                            align, stMin, stMax);
-                        if (ci != null) { ci.PipeName = pp.Name; crossings.Add(ci); }
+                        double outerD = pp.OuterDiameter;
+                        double outerR = outerD / 2.0;
+
+                        foreach (var c in PipeAlignmentIntersector.FindCrossings(id, align, tx))
+                        {
+                            if (c.Station < pvStart - 0.5 || c.Station > pvEnd + 0.5) continue;
+                            if (c.Station < stMin - 1.0   || c.Station > stMax + 1.0)  continue;
+
+                            crossings.Add(new CrossingInfo
+                            {
+                                PipeName      = pp.Name,
+                                Station       = c.Station,
+                                OuterInvert   = c.PipeCenterlineZ - outerR,
+                                OuterDiameter = outerD
+                            });
+                        }
                     }
                 }
                 catch { }
             }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Find the crossing of a pipe line with the alignment in plan.
-        //
-        //  startOuterInv / endOuterInv : outer invert elevation at each pipe end
-        //    (= pipe centerline Z − outerDiameter/2, per InvertPullUpEngine pattern)
-        //  The outer invert at the crossing is linearly interpolated at parameter t.
-        //
-        //  Crossing condition: offsets MUST be on opposite sides of the alignment
-        //  (off1 * off2 ≤ 0).  The old "Math.Abs(off) < 0.5" fallback was causing
-        //  pipes that run nearly parallel to the alignment to be mis-detected as
-        //  crossings, and their t parameter to clamp to 0 — giving the start-point
-        //  elevation rather than the interpolated crossing elevation.
-        // ─────────────────────────────────────────────────────────────────────
-        private static CrossingInfo? FindCrossing(
-            Point3d startPt, Point3d endPt,
-            double startOuterInv, double endOuterInv,
-            double outerDiameter,
-            CivilDB.Alignment align, double stMin, double stMax)
-        {
-            try
-            {
-                double sta1 = 0, off1 = 0, sta2 = 0, off2 = 0;
-                align.StationOffset(startPt.X, startPt.Y, ref sta1, ref off1);
-                align.StationOffset(endPt.X,   endPt.Y,   ref sta2, ref off2);
-
-                // Require endpoints on opposite sides (or one on the alignment).
-                // off1 * off2 > 0 means same side → not a crossing.
-                if (off1 * off2 > 0) return null;
-
-                // Parameter t where perpendicular offset = 0 along the pipe
-                double dOff = off1 - off2;
-                double t    = Math.Abs(dOff) < 1e-9 ? 0.5 : off1 / dOff;
-                t = Math.Max(0.0, Math.Min(1.0, t));
-
-                // Plan coordinates of the crossing point
-                double crossX = startPt.X + t * (endPt.X - startPt.X);
-                double crossY = startPt.Y + t * (endPt.Y - startPt.Y);
-
-                // Outer invert at the crossing: linear interpolation of the
-                // already-computed invert values (matches InvertPullUpEngine pattern)
-                double crossOuterInv = startOuterInv + t * (endOuterInv - startOuterInv);
-
-                // Confirm the crossing falls inside the path station range
-                double crossSta = 0, crossOff = 0;
-                align.StationOffset(crossX, crossY, ref crossSta, ref crossOff);
-                if (crossSta < stMin - 1.0 || crossSta > stMax + 1.0) return null;
-
-                return new CrossingInfo
-                {
-                    Station      = crossSta,
-                    OuterInvert  = crossOuterInv,
-                    OuterDiameter = outerDiameter
-                };
-            }
-            catch { return null; }
         }
 
         // ─────────────────────────────────────────────────────────────────────
