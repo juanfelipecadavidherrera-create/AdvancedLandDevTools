@@ -29,11 +29,13 @@ namespace AdvancedLandDevTools.Commands
     {
         private const string DXF_NETWORK_PART  = "AECC_GRAPH_PROFILE_NETWORK_PART";
         private const string DXF_PRESSURE_PART = "AECC_GRAPH_PROFILE_PRESSURE_PART";
-        private const double CLEARANCE_ABOVE   = 1.0;
-        private const double CLEARANCE_BELOW   = 0.5;
-        private const double CIRCLE_RADIUS     = 1.0;   // profile-view drawing units
-        private const int    COLOR_GREEN       = 3;
-        private const int    COLOR_RED         = 1;
+        private const double CLEARANCE_ABOVE         = 1.0;   // minimum — below this is a violation
+        private const double CLEARANCE_ABOVE_DESIRED = 3.5;   // desired — below this is a warning
+        private const double CLEARANCE_BELOW         = 0.5;
+        private const double CIRCLE_RADIUS           = 1.0;   // profile-view drawing units
+        private const int    COLOR_GREEN             = 3;
+        private const int    COLOR_YELLOW            = 2;
+        private const int    COLOR_RED               = 1;
 
         private static readonly string[] _partIdProps = {
             "ModelPartId", "PartId", "NetworkPartId", "BasePipeId",
@@ -173,7 +175,9 @@ namespace AdvancedLandDevTools.Commands
                 // ── Draw circles, report clearances ───────────────────────────
                 var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForWrite)
                           as BlockTableRecord;
-                int okCount = 0, badCount = 0;
+                int okCount = 0, badCount = 0, warnCount = 0;
+                // Pipes that cross above and fail the 3.5 ft desired clearance
+                var coverageWarnings = new List<string>();
 
                 foreach (var ci in crossings)
                 {
@@ -193,14 +197,21 @@ namespace AdvancedLandDevTools.Commands
                     double clr      = above ? crossInvert - pressCrown   // invert of crossing − crown of pressure
                                             : pressInvert - crossCrown;  // invert of pressure − crown of crossing
                     double required = above ? CLEARANCE_ABOVE : CLEARANCE_BELOW;
-                    bool   isOk     = clr >= required;
+                    bool   isViolation = clr < required;
+                    // Desired 3.5 ft coverage check — only applies to pipes above
+                    bool   isCoverageWarning = above && clr < CLEARANCE_ABOVE_DESIRED;
 
-                    if (isOk) okCount++; else badCount++;
+                    // Circle colour:
+                    //   Red    = hard violation (< 1.0 ft above or < 0.5 ft below)
+                    //   Yellow = passes minimum but below desired 3.5 ft coverage (above only)
+                    //   Green  = fully OK
+                    int circleColor;
+                    if (isViolation)              { circleColor = COLOR_RED;    badCount++; }
+                    else if (isCoverageWarning)   { circleColor = COLOR_YELLOW; warnCount++; }
+                    else                          { circleColor = COLOR_GREEN;  okCount++; }
 
                     // Place circle at the profile-view ellipse of the crossing pipe:
-                    // bottom of ellipse (MinPoint.Y) when crossing is above pressure pipe,
-                    // top of ellipse (MaxPoint.Y) when crossing is below.
-                    // Falls back to FindXYAtStationAndElevation if entity not found.
+                    // bottom of ellipse when crossing is above, top when below.
                     double cx = 0, cy = 0;
                     var partPt = FindPartProfilePoint(
                         ci.PipeId, pv, ci.Station, atBottom: above, db, tx);
@@ -217,23 +228,39 @@ namespace AdvancedLandDevTools.Commands
                     }
 
                     var circle = new Circle(new Point3d(cx, cy, 0), Vector3d.ZAxis, CIRCLE_RADIUS);
-                    circle.ColorIndex = isOk ? COLOR_GREEN : COLOR_RED;
+                    circle.ColorIndex = circleColor;
                     circle.Layer      = "0";
                     btr!.AppendEntity(circle);
                     tx.AddNewlyCreatedDBObject(circle, true);
 
-                    string tag = isOk ? "OK" : "VIOLATION";
+                    string tag = isViolation ? "VIOLATION" : isCoverageWarning ? "WARN" : "OK";
                     string dir = above ? "above" : "below";
                     ed.WriteMessage(
                         $"\n  [{tag}] '{ci.PipeName}' ({dir})  " +
                         $"sta {ci.Station:F2}  " +
                         $"cross.inv={crossInvert:F3}  press.crown={pressCrown:F3}  " +
                         $"clr {clr:F2} ft (req {required:F2})");
+
+                    if (isCoverageWarning)
+                        coverageWarnings.Add(
+                            $"    '{ci.PipeName}'  sta {ci.Station:F2}  clr {clr:F2} ft " +
+                            $"(need {CLEARANCE_ABOVE_DESIRED:F1} ft from pressure crown)");
                 }
 
                 tx.Commit();
                 ed.WriteMessage($"\n\n  ═══ RRNETWORKCHECK COMPLETE ═══");
-                ed.WriteMessage($"\n  OK: {okCount}   Violations: {badCount}\n");
+                ed.WriteMessage($"\n  OK: {okCount}   Warnings: {warnCount}   Violations: {badCount}");
+
+                if (coverageWarnings.Count > 0)
+                {
+                    ed.WriteMessage(
+                        $"\n\n  ⚠  COVERAGE WARNING — {coverageWarnings.Count} pipe(s) above the pressure " +
+                        $"path have less than {CLEARANCE_ABOVE_DESIRED:F1} ft clearance from pressure crown:");
+                    foreach (var w in coverageWarnings)
+                        ed.WriteMessage($"\n{w}");
+                }
+
+                ed.WriteMessage("\n");
             }
             catch (System.Exception ex)
             {
