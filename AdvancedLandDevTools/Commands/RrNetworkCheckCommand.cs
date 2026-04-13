@@ -979,45 +979,67 @@ namespace AdvancedLandDevTools.Commands
             string   bestDesc    = "";
             bool     bestIsEG    = false;
 
-            try
+            var profIds = align.GetProfileIds();
+            ed.WriteMessage($"\n  [DIAG] Alignment '{align.Name}' has {profIds.Count} profile(s).");
+
+            foreach (ObjectId profId in profIds)
             {
-                foreach (ObjectId profId in align.GetProfileIds())
+                try
                 {
-                    try
+                    var prof = tx.GetObject(profId, OpenMode.ForRead) as CivilDB.Profile;
+                    if (prof == null) continue;
+
+                    string typeName = prof.GetType().Name;
+                    ed.WriteMessage($"\n  [DIAG] Profile '{prof.Name}'  type={typeName}");
+
+                    // Dump all properties whose name contains "Surface" or "Id" (excluding ObjectId base props)
+                    foreach (var prop in prof.GetType().GetProperties(flags))
                     {
-                        var prof = tx.GetObject(profId, OpenMode.ForRead) as CivilDB.Profile;
-                        if (prof == null) continue;
-
-                        // ProfileSurface subtype exposes a SurfaceId property
-                        var surfProp = prof.GetType().GetProperty("SurfaceId", flags);
-                        if (surfProp?.PropertyType != typeof(ObjectId)) continue;
-
-                        var surfId = (ObjectId)surfProp.GetValue(prof)!;
-                        if (surfId.IsNull) continue;
-
-                        // Must resolve to an actual TIN surface
-                        var surf = tx.GetObject(surfId, OpenMode.ForRead) as CivilDB.TinSurface;
-                        if (surf == null) continue;
-
-                        string profName = prof.Name;
-                        bool isEG = profName.IndexOf("EG",       StringComparison.OrdinalIgnoreCase) >= 0
-                                 || profName.IndexOf("Existing",  StringComparison.OrdinalIgnoreCase) >= 0
-                                 || profName.IndexOf("Ground",    StringComparison.OrdinalIgnoreCase) >= 0
-                                 || profName.IndexOf("Natural",   StringComparison.OrdinalIgnoreCase) >= 0;
-
-                        // Take this candidate if it's the first, or if it's EG and current best isn't
-                        if (bestSurfId.IsNull || (isEG && !bestIsEG))
-                        {
-                            bestSurfId = surfId;
-                            bestDesc   = $"'{surf.Name}' (via profile '{profName}')";
-                            bestIsEG   = isEG;
-                            if (isEG) break; // EG found — no need to keep searching
-                        }
+                        string pn = prop.Name;
+                        if (!pn.Contains("Surface", StringComparison.OrdinalIgnoreCase) &&
+                            !pn.Contains("SurfId",  StringComparison.OrdinalIgnoreCase)) continue;
+                        string val = "?";
+                        try { val = prop.GetValue(prof)?.ToString() ?? "null"; } catch { val = "threw"; }
+                        ed.WriteMessage($"\n  [DIAG]   .{pn} [{prop.PropertyType.Name}] = {val}");
                     }
-                    catch { }
+
+                    // Probe known property names that could reference the sampled surface
+                    ObjectId surfId = ObjectId.Null;
+                    foreach (string candidate in new[] {
+                        "SurfaceId", "SampleSurfaceId", "SampleSourceId",
+                        "SourceSurfaceId", "BaseSurfaceId", "TerrainSurfaceId" })
+                    {
+                        var prop = prof.GetType().GetProperty(candidate, flags);
+                        if (prop?.PropertyType != typeof(ObjectId)) continue;
+                        try
+                        {
+                            var id = (ObjectId)prop.GetValue(prof)!;
+                            if (!id.IsNull) { surfId = id; break; }
+                        }
+                        catch { }
+                    }
+
+                    if (surfId.IsNull) continue;
+
+                    var surf = tx.GetObject(surfId, OpenMode.ForRead) as CivilDB.TinSurface;
+                    if (surf == null) continue;
+
+                    string profName = prof.Name;
+                    bool isEG = profName.IndexOf("EG",      StringComparison.OrdinalIgnoreCase) >= 0
+                             || profName.IndexOf("Existing", StringComparison.OrdinalIgnoreCase) >= 0
+                             || profName.IndexOf("Ground",   StringComparison.OrdinalIgnoreCase) >= 0
+                             || profName.IndexOf("Natural",  StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (bestSurfId.IsNull || (isEG && !bestIsEG))
+                    {
+                        bestSurfId = surfId;
+                        bestDesc   = $"'{surf.Name}' (via profile '{profName}')";
+                        bestIsEG   = isEG;
+                        if (isEG) break;
+                    }
                 }
+                catch { }
             }
-            catch { }
 
             if (!bestSurfId.IsNull)
                 ed.WriteMessage($"\n  Surface auto-detected: {bestDesc}");
