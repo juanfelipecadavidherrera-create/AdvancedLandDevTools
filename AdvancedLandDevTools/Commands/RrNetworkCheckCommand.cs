@@ -370,28 +370,64 @@ namespace AdvancedLandDevTools.Commands
                     // ── Pick direction ────────────────────────────────────────
                     bool   goUp;
                     double elevInner, elevOuter;
+                    string bendLabel;
 
                     if (coverOkUp && upConflict == null)
                     {
                         goUp = true; elevInner = elevInnerUp; elevOuter = elevOuterUp;
+                        bendLabel = "UP";
                     }
                     else if (downConflict == null)
                     {
                         goUp = false; elevInner = elevInnerDown; elevOuter = elevOuterDown;
+                        bendLabel = "DOWN";
                     }
                     else
                     {
-                        // Both directions fail — report and skip
-                        string upReason = !coverOkUp
-                            ? (double.IsNaN(surfZ)
-                               ? "no surface"
-                               : $"cover {surfZ - pressCrownUp:F2} ft < {BEND_MIN_COVER} ft")
-                            : $"conflicts with {upConflict}";
-                        ed.WriteMessage(
-                            $"\n  [SKIP] '{vi.PipeName}' sta {vi.Station:F2}" +
-                            $"  UP→ {upReason}" +
-                            $"  |  DOWN→ conflicts with {downConflict}");
-                        continue;
+                        // Normal DOWN conflicts with another pipe in the bend range.
+                        // Find the lowest invert among ALL crossings in [staUL, staUR]
+                        // and build a deeper DOWN bend that clears all of them.
+                        double lowestInvert = crossInvert;  // start from current violation pipe
+                        string lowestPipeName = vi.PipeName;
+                        foreach (var ci2 in allCrossings)
+                        {
+                            if (ci2.Station < staUL - 1.0 || ci2.Station > staUR + 1.0) continue;
+                            if (ci2.Invert < lowestInvert)
+                            {
+                                lowestInvert    = ci2.Invert;
+                                lowestPipeName  = ci2.PipeName;
+                            }
+                        }
+
+                        double elevInnerDeep  = lowestInvert - 1.0;
+                        double elevOuterDeep  = elevInnerDeep + BendLegDeltaV;
+                        string? deepConflict  = CheckBendClearance(
+                            vi.Station, staUL, staLL, staLR, staUR,
+                            elevOuterDeep, elevInnerDeep, pressOuterR,
+                            allCrossings, segments);
+
+                        if (deepConflict == null)
+                        {
+                            goUp      = false;
+                            elevInner = elevInnerDeep;
+                            elevOuter = elevOuterDeep;
+                            bendLabel = $"DOWN(deep, ref '{lowestPipeName}' inv {lowestInvert:F3})";
+                        }
+                        else
+                        {
+                            // All options exhausted — report and skip
+                            string upReason = !coverOkUp
+                                ? (double.IsNaN(surfZ)
+                                   ? "no surface"
+                                   : $"cover {surfZ - pressCrownUp:F2} ft < {BEND_MIN_COVER} ft")
+                                : $"conflicts with {upConflict}";
+                            ed.WriteMessage(
+                                $"\n  [SKIP] '{vi.PipeName}' sta {vi.Station:F2}" +
+                                $"  UP→ {upReason}" +
+                                $"  |  DOWN→ {downConflict}" +
+                                $"  |  DOWN(deep)→ {deepConflict}");
+                            continue;
+                        }
                     }
 
                     // ── Insert PVIs ───────────────────────────────────────────
