@@ -51,10 +51,12 @@ namespace AdvancedLandDevTools.Commands
 
         private sealed class CrossingInfo
         {
-            public string PipeName    = "";
-            public double Station;
-            public double Invert;         // invert elevation of crossing pipe at the crossing station
-            public double OuterDiameter;  // full outer diameter (crown = Invert + OuterDiameter)
+            public string   PipeName      = "";
+            public ObjectId PipeId;
+            public double   Station;
+            public double   CenterZ;       // centerline Z at the crossing point (above/below check)
+            public double   Invert;        // inner invert at the crossing station
+            public double   OuterDiameter; // full outer diameter (crown = Invert + OuterDiameter)
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -185,10 +187,9 @@ namespace AdvancedLandDevTools.Commands
 
                     double crossInvert = ci.Invert;
                     double crossCrown  = ci.Invert + ci.OuterDiameter;
-                    double crossCenter = crossInvert + ci.OuterDiameter / 2.0;
 
-                    // Above = crossing pipe centerline is higher than pressure pipe centerline
-                    bool   above    = crossCenter > pressElev;
+                    // Above/below: compare actual centerline Z values
+                    bool   above    = ci.CenterZ > pressElev;
                     double clr      = above ? crossInvert - pressCrown   // invert of crossing − crown of pressure
                                             : pressInvert - crossCrown;  // invert of pressure − crown of crossing
                     double required = above ? CLEARANCE_ABOVE : CLEARANCE_BELOW;
@@ -196,12 +197,24 @@ namespace AdvancedLandDevTools.Commands
 
                     if (isOk) okCount++; else badCount++;
 
-                    // Circle at invert of crossing pipe when below, at crown when above
-                    // (marks the critical clearance point closest to the pressure pipe)
-                    double circleElev = above ? crossCrown : crossInvert;
+                    // Place circle at the profile-view ellipse of the crossing pipe:
+                    // bottom of ellipse (MinPoint.Y) when crossing is above pressure pipe,
+                    // top of ellipse (MaxPoint.Y) when crossing is below.
+                    // Falls back to FindXYAtStationAndElevation if entity not found.
                     double cx = 0, cy = 0;
-                    if (!pv.FindXYAtStationAndElevation(ci.Station, circleElev, ref cx, ref cy))
-                        continue;
+                    var partPt = FindPartProfilePoint(
+                        ci.PipeId, pv, ci.Station, atBottom: above, db, tx);
+                    if (partPt.HasValue)
+                    {
+                        cx = partPt.Value.X;
+                        cy = partPt.Value.Y;
+                    }
+                    else
+                    {
+                        double circleElev = above ? crossInvert : crossCrown;
+                        if (!pv.FindXYAtStationAndElevation(ci.Station, circleElev, ref cx, ref cy))
+                            continue;
+                    }
 
                     var circle = new Circle(new Point3d(cx, cy, 0), Vector3d.ZAxis, CIRCLE_RADIUS);
                     circle.ColorIndex = isOk ? COLOR_GREEN : COLOR_RED;
@@ -406,13 +419,16 @@ namespace AdvancedLandDevTools.Commands
                             if (c.Station < pvStart - 0.5 || c.Station > pvEnd + 0.5) continue;
                             if (c.Station < stMin - 1.0   || c.Station > stMax + 1.0)  continue;
 
-                            double t      = ComputeT(c.IntersectionPointWCS, startPt, endPt);
-                            double invert = startInv + t * (endInv - startInv);
+                            double t       = ComputeT(c.IntersectionPointWCS, startPt, endPt);
+                            double centerZ = startPt.Z + t * (endPt.Z - startPt.Z);
+                            double invert  = startInv  + t * (endInv  - startInv);
 
                             crossings.Add(new CrossingInfo
                             {
                                 PipeName      = gp.Name,
+                                PipeId        = id,
                                 Station       = c.Station,
+                                CenterZ       = centerZ,
                                 Invert        = invert,
                                 OuterDiameter = outerD
                             });
@@ -424,7 +440,6 @@ namespace AdvancedLandDevTools.Commands
                         double outerR   = outerD / 2.0;
                         Point3d startPt = pp.StartPoint;
                         Point3d endPt   = pp.EndPoint;
-                        // Pressure pipes: invert = centerline Z − outer radius
                         double startInv = startPt.Z - outerR;
                         double endInv   = endPt.Z   - outerR;
 
@@ -433,13 +448,16 @@ namespace AdvancedLandDevTools.Commands
                             if (c.Station < pvStart - 0.5 || c.Station > pvEnd + 0.5) continue;
                             if (c.Station < stMin - 1.0   || c.Station > stMax + 1.0)  continue;
 
-                            double t      = ComputeT(c.IntersectionPointWCS, startPt, endPt);
-                            double invert = startInv + t * (endInv - startInv);
+                            double t       = ComputeT(c.IntersectionPointWCS, startPt, endPt);
+                            double centerZ = startPt.Z + t * (endPt.Z - startPt.Z);
+                            double invert  = startInv  + t * (endInv  - startInv);
 
                             crossings.Add(new CrossingInfo
                             {
                                 PipeName      = pp.Name,
+                                PipeId        = id,
                                 Station       = c.Station,
+                                CenterZ       = centerZ,
                                 Invert        = invert,
                                 OuterDiameter = outerD
                             });
@@ -448,6 +466,82 @@ namespace AdvancedLandDevTools.Commands
                 }
                 catch { }
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Find the profile-view proxy entity (AECC_GRAPH_PROFILE_NETWORK_PART /
+        //  AECC_GRAPH_PROFILE_PRESSURE_PART) for crossingPipeId inside pv, then
+        //  return the bottom (atBottom=true) or top of its bounding box.
+        //
+        //  atBottom=true  → MinPoint.Y (bottom of ellipse) used when crossing
+        //                   pipe is ABOVE pressure pipe (closest to pressure crown)
+        //  atBottom=false → MaxPoint.Y (top of ellipse) used when crossing pipe
+        //                   is BELOW pressure pipe (closest to pressure invert)
+        // ─────────────────────────────────────────────────────────────────────
+        private static (double X, double Y)? FindPartProfilePoint(
+            ObjectId            crossingPipeId,
+            CivilDB.ProfileView pv,
+            double              crossingStation,
+            bool                atBottom,
+            Database            db,
+            Transaction         tx)
+        {
+            try
+            {
+                // Profile view extents — used to confirm the entity lives in this view
+                Extents3d pvExt = ((Entity)pv).GeometricExtents;
+
+                // X coordinate of the crossing station inside the profile view
+                double stX = 0, stY = 0;
+                if (!pv.FindXYAtStationAndElevation(
+                        crossingStation, pv.ElevationMin, ref stX, ref stY))
+                    return null;
+
+                var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForRead) as BlockTableRecord;
+                if (btr == null) return null;
+
+                (double X, double Y)? best = null;
+                double bestDist = double.MaxValue;
+
+                foreach (ObjectId id in btr)
+                {
+                    try
+                    {
+                        string dxf = id.ObjectClass.DxfName;
+                        if (dxf != DXF_NETWORK_PART && dxf != DXF_PRESSURE_PART) continue;
+
+                        var proxy = tx.GetObject(id, OpenMode.ForRead) as DBObject;
+                        if (proxy == null) continue;
+
+                        // Must resolve to our target pipe
+                        if (ResolvePartId(proxy) != crossingPipeId) continue;
+
+                        var ent = proxy as Entity;
+                        if (ent == null) continue;
+
+                        Extents3d ext = ent.GeometricExtents;
+
+                        // Center of ellipse must be inside the profile view bounds
+                        double cx = (ext.MinPoint.X + ext.MaxPoint.X) / 2.0;
+                        double cy = (ext.MinPoint.Y + ext.MaxPoint.Y) / 2.0;
+                        if (cx < pvExt.MinPoint.X || cx > pvExt.MaxPoint.X) continue;
+                        if (cy < pvExt.MinPoint.Y || cy > pvExt.MaxPoint.Y) continue;
+
+                        // Pick the entity whose center X is closest to the expected station X
+                        double dist = Math.Abs(cx - stX);
+                        if (dist < bestDist)
+                        {
+                            bestDist = dist;
+                            double pointY = atBottom ? ext.MinPoint.Y : ext.MaxPoint.Y;
+                            best = (cx, pointY);
+                        }
+                    }
+                    catch { }
+                }
+
+                return best;
+            }
+            catch { return null; }
         }
 
         // ─────────────────────────────────────────────────────────────────────
