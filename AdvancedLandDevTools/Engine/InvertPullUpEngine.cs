@@ -5,6 +5,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using CivilApp = Autodesk.Civil.ApplicationServices;
 using CivilDB  = Autodesk.Civil.DatabaseServices;
+using AdvancedLandDevTools.Helpers;
 
 namespace AdvancedLandDevTools.Engine
 {
@@ -142,6 +143,61 @@ namespace AdvancedLandDevTools.Engine
                 r.InvertAtPoint     = invert;
                 r.PipeStartWCS      = pipeStart;
                 r.PipeEndWCS        = pipeEnd;
+            }
+            catch (Exception ex) { r.ErrorMessage = ex.Message; }
+            return r;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Calculate invert at the exact point where a pipe crosses an alignment.
+        //  Uses geometric intersection instead of click-point projection.
+        // ─────────────────────────────────────────────────────────────────────
+        public static InvertPullUpResult CalculateAtAlignmentCrossing(
+            ObjectId          pipeId,
+            CivilDB.Alignment alignment,
+            Transaction       tx,
+            ObjectId?         surfaceId = null)
+        {
+            var r = new InvertPullUpResult();
+            try
+            {
+                var crossings = PipeAlignmentIntersector.FindCrossings(
+                    pipeId, alignment, tx, surfaceId);
+
+                if (crossings.Count == 0)
+                {
+                    r.ErrorMessage = "Pipe does not cross the selected alignment.";
+                    return r;
+                }
+
+                // Use the first crossing (nearest to alignment start)
+                var c = crossings[0];
+                r.Success           = true;
+                r.PipeName          = c.PipeName;
+                r.PipeKind          = c.PipeKind;
+                r.InvertAtPoint     = c.InvertElevation;
+                r.DistanceAlongPipe = 0; // not applicable in alignment mode
+
+                // Fill pipe endpoints for downstream deferred-label logic
+                var obj = tx.GetObject(pipeId, OpenMode.ForRead);
+                if (obj is CivilDB.Pipe gp)
+                {
+                    r.PipeStartWCS = gp.StartPoint;
+                    r.PipeEndWCS   = gp.EndPoint;
+                    r.StartInvert  = gp.StartPoint.Z - gp.InnerDiameterOrWidth / 2.0;
+                    r.EndInvert    = gp.EndPoint.Z   - gp.InnerDiameterOrWidth / 2.0;
+                    r.PipeLength2D = new Point2d(gp.StartPoint.X, gp.StartPoint.Y)
+                                         .GetDistanceTo(new Point2d(gp.EndPoint.X, gp.EndPoint.Y));
+                }
+                else if (obj is CivilDB.PressurePipe pp)
+                {
+                    r.PipeStartWCS = pp.StartPoint;
+                    r.PipeEndWCS   = pp.EndPoint;
+                    r.StartInvert  = pp.StartPoint.Z - pp.InnerDiameter / 2.0;
+                    r.EndInvert    = pp.EndPoint.Z   - pp.InnerDiameter / 2.0;
+                    r.PipeLength2D = new Point2d(pp.StartPoint.X, pp.StartPoint.Y)
+                                         .GetDistanceTo(new Point2d(pp.EndPoint.X, pp.EndPoint.Y));
+                }
             }
             catch (Exception ex) { r.ErrorMessage = ex.Message; }
             return r;

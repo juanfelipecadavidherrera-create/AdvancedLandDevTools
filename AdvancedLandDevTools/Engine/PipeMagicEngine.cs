@@ -5,6 +5,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using CivilApp = Autodesk.Civil.ApplicationServices;
 using CivilDB  = Autodesk.Civil.DatabaseServices;
+using AdvancedLandDevTools.Helpers;
 
 namespace AdvancedLandDevTools.Engine
 {
@@ -192,7 +193,7 @@ namespace AdvancedLandDevTools.Engine
                             {
                                 var pipe = tx.GetObject(pid, OpenMode.ForRead) as CivilDB.Pipe;
                                 if (pipe != null &&
-                                    PipeCrossesAlignment(pipe.StartPoint, pipe.EndPoint, al))
+                                    PipeAlignmentIntersector.PipeCrossesAlignment(pid, al, tx))
                                 {
                                     crossingGravityPipeIds.Add(pid);
                                     result.AddSuccess(
@@ -236,7 +237,7 @@ namespace AdvancedLandDevTools.Engine
                     {
                         var pipe = tx.GetObject(pid, OpenMode.ForRead) as CivilDB.PressurePipe;
                         if (pipe != null &&
-                            PipeCrossesAlignment(pipe.StartPoint, pipe.EndPoint, al))
+                            PipeAlignmentIntersector.PipeCrossesAlignment(pid, al, tx))
                         {
                             crossingPressurePipeIds.Add(pid);
                             result.AddSuccess(
@@ -403,25 +404,5 @@ namespace AdvancedLandDevTools.Engine
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        private static bool PipeCrossesAlignment(
-            Point3d startPt, Point3d endPt, CivilDB.Alignment al)
-        {
-            try
-            {
-                double sta1 = 0, off1 = 0, sta2 = 0, off2 = 0;
-                al.StationOffset(startPt.X, startPt.Y, ref sta1, ref off1);
-                al.StationOffset(endPt.X,   endPt.Y,   ref sta2, ref off2);
-
-                bool inRange =
-                    (sta1 >= al.StartingStation - 1.0 && sta1 <= al.EndingStation + 1.0) ||
-                    (sta2 >= al.StartingStation - 1.0 && sta2 <= al.EndingStation + 1.0);
-                if (!inRange) return false;
-
-                if (Math.Abs(off1) < 0.01 || Math.Abs(off2) < 0.01) return true;
-                return (off1 * off2) < 0;
-            }
-            catch { return false; }
-        }
     }
 }
