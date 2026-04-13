@@ -37,6 +37,17 @@ namespace AdvancedLandDevTools.Commands
         private const int    COLOR_GREEN       = 3;
         private const int    COLOR_RED         = 1;
 
+        // ── Auto-bend geometry (mirrors EeeBendCommand constants) ─────────────
+        private const double BEND_HORIZ_OFFSET = 10.0;   // ft from crossing centre to inner bends
+        private const double BEND_DIAG_LEG     = 11.6;   // diagonal leg in profile-view units
+        private const double BEND_SLOPE_H      =  1.0;   // horizontal slope component
+        private const double BEND_SLOPE_V      = 10.0;   // vertical slope component (profile-view)
+        private const double BEND_VEXAG        = 10.0;   // vertical exaggeration
+        private const double BEND_MIN_COVER    =  2.5;   // min surface cover (ft) to allow UP duck
+        private static readonly double BendSlopeMag  = Math.Sqrt(BEND_SLOPE_H * BEND_SLOPE_H + BEND_SLOPE_V * BEND_SLOPE_V);
+        private static readonly double BendLegDeltaH = BEND_DIAG_LEG * BEND_SLOPE_H / BendSlopeMag;
+        private static readonly double BendLegDeltaV = BEND_DIAG_LEG * BEND_SLOPE_V / BendSlopeMag / BEND_VEXAG;
+
         private static readonly string[] _partIdProps = {
             "ModelPartId", "PartId", "NetworkPartId", "BasePipeId",
             "SourceObjectId", "EntityId", "ComponentObjectId",
@@ -90,8 +101,9 @@ namespace AdvancedLandDevTools.Commands
                     "\n  Select pipe connected to first fitting (sets path direction): ");
                 if (perDir == null) { ed.WriteMessage("\n  Cancelled.\n"); return; }
 
-                // ── Optional surface for cover-depth check ────────────────────
+                // ── Optional surface for cover-depth check + auto-bend ────────
                 ObjectId surfaceId = ObjectId.Null;
+                bool     drawBends = false;
                 {
                     var surfOpt = new PromptEntityOptions(
                         "\n  Select surface for cover check (Enter to skip): ");
@@ -100,8 +112,19 @@ namespace AdvancedLandDevTools.Commands
                     surfOpt.AddAllowedClass(typeof(CivilDB.TinSurface), false);
                     var surfRes = ed.GetEntity(surfOpt);
                     if (surfRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
-                    if (surfRes.Status == PromptStatus.OK) surfaceId = surfRes.ObjectId;
-                    else ed.WriteMessage("\n  No surface selected — cover check skipped.");
+                    if (surfRes.Status == PromptStatus.OK)
+                    {
+                        surfaceId = surfRes.ObjectId;
+                        var kwdOpts = new PromptKeywordOptions(
+                            "\n  Draw automatic bends for violations? [Yes/No] <No>: ");
+                        kwdOpts.Keywords.Add("Yes");
+                        kwdOpts.Keywords.Add("No");
+                        kwdOpts.AllowNone = true;
+                        var kwdRes = ed.GetKeywords(kwdOpts);
+                        if (kwdRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
+                        drawBends = kwdRes.Status == PromptStatus.OK && kwdRes.StringResult == "Yes";
+                    }
+                    else ed.WriteMessage("\n  No surface selected — cover check and auto-bend skipped.");
                 }
 
                 using var tx = db.TransactionManager.StartTransaction();
@@ -138,7 +161,8 @@ namespace AdvancedLandDevTools.Commands
 
                 ObjectId pressNetId = fitting1.NetworkId;
 
-                var align = tx.GetObject(pv.AlignmentId, OpenMode.ForRead) as CivilDB.Alignment;
+                ObjectId alignId = pv.AlignmentId;
+                var align = tx.GetObject(alignId, OpenMode.ForRead) as CivilDB.Alignment;
                 if (align == null)
                 { ed.WriteMessage("\n  Could not read alignment from profile view."); tx.Abort(); return; }
 
@@ -194,6 +218,7 @@ namespace AdvancedLandDevTools.Commands
                 var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForWrite)
                           as BlockTableRecord;
                 int okCount = 0, badCount = 0;
+                var violations = new List<CrossingInfo>();
 
                 foreach (var ci in crossings)
                 {
@@ -213,7 +238,7 @@ namespace AdvancedLandDevTools.Commands
                     double required = above ? CLEARANCE_ABOVE : CLEARANCE_BELOW;
                     bool   isOk     = clr >= required;
 
-                    if (isOk) okCount++; else badCount++;
+                    if (isOk) okCount++; else { badCount++; violations.Add(ci); }
 
                     double cx = 0, cy = 0;
                     var partPt = FindPartProfilePoint(
@@ -243,11 +268,138 @@ namespace AdvancedLandDevTools.Commands
 
                 tx.Commit();
                 ed.WriteMessage($"\n\n  ═══ RRNETWORKCHECK COMPLETE ═══");
-                ed.WriteMessage($"\n  Crossings — OK: {okCount}   Violations: {badCount}\n");
+                ed.WriteMessage($"\n  Crossings — OK: {okCount}   Violations: {badCount}");
+
+                if (drawBends && violations.Count > 0)
+                    ApplyAutoBends(violations, segments, pathPipeIds,
+                                   pressNetId, alignId, surfaceId, db, ed);
+                ed.WriteMessage("\n");
             }
             catch (System.Exception ex)
             {
                 ed.WriteMessage($"\n[RRNETWORKCHECK ERROR] {ex.Message}\n");
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Automatically insert EEEBEND-style vertical bends for each violation.
+        //
+        //  Direction priority:
+        //    UP   = pressure pipe arcs OVER the crossing.
+        //           elevInner = crossCrown + 1.0 + pressOuterR
+        //           Allowed only when surfaceZ − (elevInner + pressOuterR) ≥ BEND_MIN_COVER
+        //    DOWN = pressure pipe ducks UNDER the crossing (fallback).
+        //           elevInner = crossInvert − 1.0
+        //
+        //  4 PVIs per crossing: staUL, staLL (inner), staLR (inner), staUR
+        //    staLL/LR = crossing sta ± BEND_HORIZ_OFFSET
+        //    staUL/UR = staLL/LR ∓ BendLegDeltaH  (outside the inner span)
+        // ─────────────────────────────────────────────────────────────────────
+        private static void ApplyAutoBends(
+            List<CrossingInfo> violations,
+            List<PathSegment>  segments,
+            List<ObjectId>     pathPipeIds,
+            ObjectId           pressNetId,
+            ObjectId           alignId,
+            ObjectId           surfaceId,
+            Database           db,
+            Editor             ed)
+        {
+            ed.WriteMessage("\n\n  ── Auto-bend application ──");
+            try
+            {
+                using var tx = db.TransactionManager.StartTransaction();
+
+                var surface = tx.GetObject(surfaceId, OpenMode.ForRead) as CivilDB.TinSurface;
+                var align   = tx.GetObject(alignId,   OpenMode.ForRead) as CivilDB.Alignment;
+                var network = tx.GetObject(pressNetId, OpenMode.ForWrite) as CivilDB.PressurePipeNetwork;
+
+                if (surface == null || align == null || network == null)
+                { ed.WriteMessage("\n  Cannot open network/surface — bends skipped."); tx.Abort(); return; }
+
+                // Find the pipe run that owns the path pipes
+                CivilDB.PressurePipeRun? run = null;
+                foreach (CivilDB.PressurePipeRun r in network.PipeRuns)
+                {
+                    try
+                    {
+                        if (r.GetPartIds().Contains(pathPipeIds[0])) { run = r; break; }
+                    }
+                    catch { }
+                }
+                if (run == null)
+                { ed.WriteMessage("\n  Could not find pressure pipe run — bends skipped."); tx.Abort(); return; }
+
+                int applied = 0;
+                foreach (var vi in violations)
+                {
+                    double pressOuterR = InterpolateRadius(vi.Station, segments);
+                    double crossCrown  = vi.Invert + vi.OuterDiameter;
+                    double crossInvert = vi.Invert;
+
+                    // XY at crossing station (on alignment centre)
+                    double px = 0, py = 0;
+                    align.PointLocation(vi.Station, 0, ref px, ref py);
+
+                    // Sample surface
+                    double surfZ = double.NaN;
+                    try { surfZ = surface.FindElevationAtXY(px, py); }
+                    catch { }
+
+                    // Try UP: pressure goes OVER the crossing
+                    double elevInnerUp  = crossCrown + 1.0 + pressOuterR;
+                    double pressCrownUp = elevInnerUp + pressOuterR;
+                    bool   canGoUp      = !double.IsNaN(surfZ)
+                                         && (surfZ - pressCrownUp) >= BEND_MIN_COVER;
+
+                    double elevInner, elevOuter;
+                    bool   goUp;
+                    if (canGoUp)
+                    {
+                        goUp      = true;
+                        elevInner = elevInnerUp;
+                        elevOuter = elevInner - BendLegDeltaV;   // transitions DOWN from inner
+                    }
+                    else
+                    {
+                        goUp      = false;
+                        elevInner = crossInvert - 1.0;
+                        elevOuter = elevInner + BendLegDeltaV;   // transitions UP to inner
+                    }
+
+                    double staLL = vi.Station - BEND_HORIZ_OFFSET;
+                    double staLR = vi.Station + BEND_HORIZ_OFFSET;
+                    double staUL = staLL - BendLegDeltaH;
+                    double staUR = staLR + BendLegDeltaH;
+
+                    try
+                    {
+                        run.AddVerticalBendByPVI(staUL, elevOuter);
+                        run.AddVerticalBendByPVI(staLL, elevInner);
+                        run.AddVerticalBendByPVI(staLR, elevInner);
+                        run.AddVerticalBendByPVI(staUR, elevOuter);
+                        applied++;
+
+                        string dir = goUp ? "UP" : "DOWN";
+                        string coverNote = goUp
+                            ? $"cover {surfZ - pressCrownUp:F2} ft"
+                            : double.IsNaN(surfZ) ? "no surface data" : $"UP cover {surfZ - pressCrownUp:F2} ft < {BEND_MIN_COVER} ft";
+                        ed.WriteMessage(
+                            $"\n  [BEND {dir}] '{vi.PipeName}'  sta {vi.Station:F2}" +
+                            $"  inner C/L {elevInner:F3}  ({coverNote})");
+                    }
+                    catch (System.Exception ex)
+                    {
+                        ed.WriteMessage($"\n  Bend failed at sta {vi.Station:F2}: {ex.Message}");
+                    }
+                }
+
+                tx.Commit();
+                ed.WriteMessage($"\n  {applied}/{violations.Count} bend(s) applied.");
+            }
+            catch (System.Exception ex)
+            {
+                ed.WriteMessage($"\n  Auto-bend error: {ex.Message}");
             }
         }
 
