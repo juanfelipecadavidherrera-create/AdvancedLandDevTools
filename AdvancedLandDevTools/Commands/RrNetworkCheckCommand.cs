@@ -29,13 +29,13 @@ namespace AdvancedLandDevTools.Commands
     {
         private const string DXF_NETWORK_PART  = "AECC_GRAPH_PROFILE_NETWORK_PART";
         private const string DXF_PRESSURE_PART = "AECC_GRAPH_PROFILE_PRESSURE_PART";
-        private const double CLEARANCE_ABOVE         = 3.0;   // minimum — below this is a violation
-        private const double CLEARANCE_ABOVE_DESIRED = 4.0;   // desired — below this is a warning
-        private const double CLEARANCE_BELOW         = 0.5;
-        private const double CIRCLE_RADIUS           = 1.0;   // profile-view drawing units
-        private const int    COLOR_GREEN             = 3;
-        private const int    COLOR_YELLOW            = 2;
-        private const int    COLOR_RED               = 1;
+        private const double CLEARANCE_ABOVE   = 1.0;   // crossing pipe above pressure — min clearance
+        private const double CLEARANCE_BELOW   = 0.5;   // crossing pipe below pressure — min clearance
+        private const double COVER_WARNING     = 4.0;   // path pipe surface cover — desired minimum
+        private const double COVER_VIOLATION   = 3.0;   // path pipe surface cover — hard minimum
+        private const double CIRCLE_RADIUS     = 1.0;   // profile-view drawing units
+        private const int    COLOR_GREEN       = 3;
+        private const int    COLOR_RED         = 1;
 
         private static readonly string[] _partIdProps = {
             "ModelPartId", "PartId", "NetworkPartId", "BasePipeId",
@@ -89,6 +89,20 @@ namespace AdvancedLandDevTools.Commands
                 var perDir = PickPart(ed,
                     "\n  Select pipe connected to first fitting (sets path direction): ");
                 if (perDir == null) { ed.WriteMessage("\n  Cancelled.\n"); return; }
+
+                // ── Optional surface for cover-depth check ────────────────────
+                ObjectId surfaceId = ObjectId.Null;
+                {
+                    var surfOpt = new PromptEntityOptions(
+                        "\n  Select surface for cover check (Enter to skip): ");
+                    surfOpt.AllowNone = true;
+                    surfOpt.SetRejectMessage("\n  Must be a TIN surface.");
+                    surfOpt.AddAllowedClass(typeof(CivilDB.TinSurface), false);
+                    var surfRes = ed.GetEntity(surfOpt);
+                    if (surfRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
+                    if (surfRes.Status == PromptStatus.OK) surfaceId = surfRes.ObjectId;
+                    else ed.WriteMessage("\n  No surface selected — cover check skipped.");
+                }
 
                 using var tx = db.TransactionManager.StartTransaction();
 
@@ -167,22 +181,23 @@ namespace AdvancedLandDevTools.Commands
 
                 ed.WriteMessage($"\n  Station range: {stMin:F2} – {stMax:F2}");
 
+                // ── Surface cover check for path pipes ────────────────────────
+                if (!surfaceId.IsNull)
+                    CheckPathCover(pathPipeIds, surfaceId, align, tx, ed);
+
                 // ── Find crossing pipes from every other network ───────────────
                 var crossings = new List<CrossingInfo>();
                 CollectCrossings(db, tx, align, pressNetId, stMin, stMax, pv, crossings);
                 ed.WriteMessage($"\n  Crossings found: {crossings.Count}");
 
-                // ── Draw circles, report clearances ───────────────────────────
+                // ── Draw circles, report crossing clearances ──────────────────
                 var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForWrite)
                           as BlockTableRecord;
-                int okCount = 0, badCount = 0, warnCount = 0;
-                // Pipes that cross above and fail the 3.5 ft desired clearance
-                var coverageWarnings = new List<string>();
+                int okCount = 0, badCount = 0;
 
                 foreach (var ci in crossings)
                 {
-                    // Pressure pipe at crossing station
-                    double pressElev  = InterpolateElev(ci.Station, segments);
+                    double pressElev   = InterpolateElev(ci.Station, segments);
                     if (double.IsNaN(pressElev)) continue;
 
                     double pressOuterR = InterpolateRadius(ci.Station, segments);
@@ -192,34 +207,18 @@ namespace AdvancedLandDevTools.Commands
                     double crossInvert = ci.Invert;
                     double crossCrown  = ci.Invert + ci.OuterDiameter;
 
-                    // Above/below: compare actual centerline Z values
                     bool   above    = ci.CenterZ > pressElev;
-                    double clr      = above ? crossInvert - pressCrown   // invert of crossing − crown of pressure
-                                            : pressInvert - crossCrown;  // invert of pressure − crown of crossing
+                    double clr      = above ? crossInvert - pressCrown
+                                            : pressInvert - crossCrown;
                     double required = above ? CLEARANCE_ABOVE : CLEARANCE_BELOW;
-                    bool   isViolation = clr < required;
-                    // Desired 3.5 ft coverage check — only applies to pipes above
-                    bool   isCoverageWarning = above && clr < CLEARANCE_ABOVE_DESIRED;
+                    bool   isOk     = clr >= required;
 
-                    // Circle colour:
-                    //   Red    = hard violation (< 1.0 ft above or < 0.5 ft below)
-                    //   Yellow = passes minimum but below desired 3.5 ft coverage (above only)
-                    //   Green  = fully OK
-                    int circleColor;
-                    if (isViolation)              { circleColor = COLOR_RED;    badCount++; }
-                    else if (isCoverageWarning)   { circleColor = COLOR_YELLOW; warnCount++; }
-                    else                          { circleColor = COLOR_GREEN;  okCount++; }
+                    if (isOk) okCount++; else badCount++;
 
-                    // Place circle at the profile-view ellipse of the crossing pipe:
-                    // bottom of ellipse when crossing is above, top when below.
                     double cx = 0, cy = 0;
                     var partPt = FindPartProfilePoint(
                         ci.PipeId, pv, ci.Station, atBottom: above, db, tx);
-                    if (partPt.HasValue)
-                    {
-                        cx = partPt.Value.X;
-                        cy = partPt.Value.Y;
-                    }
+                    if (partPt.HasValue) { cx = partPt.Value.X; cy = partPt.Value.Y; }
                     else
                     {
                         double circleElev = above ? crossInvert : crossCrown;
@@ -228,39 +227,23 @@ namespace AdvancedLandDevTools.Commands
                     }
 
                     var circle = new Circle(new Point3d(cx, cy, 0), Vector3d.ZAxis, CIRCLE_RADIUS);
-                    circle.ColorIndex = circleColor;
+                    circle.ColorIndex = isOk ? COLOR_GREEN : COLOR_RED;
                     circle.Layer      = "0";
                     btr!.AppendEntity(circle);
                     tx.AddNewlyCreatedDBObject(circle, true);
 
-                    string tag = isViolation ? "VIOLATION" : isCoverageWarning ? "WARN" : "OK";
+                    string tag = isOk ? "OK" : "VIOLATION";
                     string dir = above ? "above" : "below";
                     ed.WriteMessage(
                         $"\n  [{tag}] '{ci.PipeName}' ({dir})  " +
                         $"sta {ci.Station:F2}  " +
                         $"cross.inv={crossInvert:F3}  press.crown={pressCrown:F3}  " +
                         $"clr {clr:F2} ft (req {required:F2})");
-
-                    if (isCoverageWarning)
-                        coverageWarnings.Add(
-                            $"    '{ci.PipeName}'  sta {ci.Station:F2}  clr {clr:F2} ft " +
-                            $"(need {CLEARANCE_ABOVE_DESIRED:F1} ft from pressure crown)");
                 }
 
                 tx.Commit();
                 ed.WriteMessage($"\n\n  ═══ RRNETWORKCHECK COMPLETE ═══");
-                ed.WriteMessage($"\n  OK: {okCount}   Warnings: {warnCount}   Violations: {badCount}");
-
-                if (coverageWarnings.Count > 0)
-                {
-                    ed.WriteMessage(
-                        $"\n\n  ⚠  COVERAGE WARNING — {coverageWarnings.Count} pipe(s) above the pressure " +
-                        $"path have less than {CLEARANCE_ABOVE_DESIRED:F1} ft clearance from pressure crown:");
-                    foreach (var w in coverageWarnings)
-                        ed.WriteMessage($"\n{w}");
-                }
-
-                ed.WriteMessage("\n");
+                ed.WriteMessage($"\n  Crossings — OK: {okCount}   Violations: {badCount}\n");
             }
             catch (System.Exception ex)
             {
@@ -395,6 +378,83 @@ namespace AdvancedLandDevTools.Commands
             }
 
             return path;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Check surface cover for every pipe in the selected pressure path.
+        //  Samples the TIN surface at each pipe's start and end XY.
+        //  Cover = surface_Z − pipe_crown_Z  (crown = centerline Z + outerRadius).
+        //  Thresholds:
+        //    < COVER_VIOLATION (3 ft) → VIOLATION
+        //    < COVER_WARNING   (4 ft) → WARNING
+        //    ≥ COVER_WARNING         → OK
+        // ─────────────────────────────────────────────────────────────────────
+        private static void CheckPathCover(
+            List<ObjectId>    pathPipeIds,
+            ObjectId          surfaceId,
+            CivilDB.Alignment align,
+            Transaction       tx,
+            Editor            ed)
+        {
+            CivilDB.TinSurface? surface = null;
+            try { surface = tx.GetObject(surfaceId, OpenMode.ForRead) as CivilDB.TinSurface; }
+            catch { }
+            if (surface == null)
+            { ed.WriteMessage("\n  Could not open surface — cover check skipped."); return; }
+
+            ed.WriteMessage("\n\n  ── Surface cover check (path pipes) ──");
+
+            int ok = 0, warn = 0, viol = 0;
+
+            foreach (ObjectId pid in pathPipeIds)
+            {
+                CivilDB.PressurePipe? pp = null;
+                try { pp = tx.GetObject(pid, OpenMode.ForRead) as CivilDB.PressurePipe; }
+                catch { }
+                if (pp == null) continue;
+
+                double outerR = pp.OuterDiameter / 2.0;
+                double sta1 = 0, off1 = 0, sta2 = 0, off2 = 0;
+                align.StationOffset(pp.StartPoint.X, pp.StartPoint.Y, ref sta1, ref off1);
+                align.StationOffset(pp.EndPoint.X,   pp.EndPoint.Y,   ref sta2, ref off2);
+
+                // Sample at start, mid, and end
+                var checkPoints = new (Point3d pt, double sta, double pipeZ)[]
+                {
+                    (pp.StartPoint, sta1, pp.StartPoint.Z),
+                    (new Point3d(
+                        (pp.StartPoint.X + pp.EndPoint.X) / 2.0,
+                        (pp.StartPoint.Y + pp.EndPoint.Y) / 2.0,
+                        (pp.StartPoint.Z + pp.EndPoint.Z) / 2.0),
+                     (sta1 + sta2) / 2.0,
+                     (pp.StartPoint.Z + pp.EndPoint.Z) / 2.0),
+                    (pp.EndPoint, sta2, pp.EndPoint.Z)
+                };
+
+                foreach (var (pt, sta, pipeZ) in checkPoints)
+                {
+                    double surfZ;
+                    try { surfZ = surface.FindElevationAtXY(pt.X, pt.Y); }
+                    catch { continue; }   // outside surface boundary — skip
+
+                    double crown = pipeZ + outerR;
+                    double cover = surfZ - crown;
+
+                    string status;
+                    if (cover < COVER_VIOLATION)      { status = "VIOLATION"; viol++; }
+                    else if (cover < COVER_WARNING)   { status = "WARNING";   warn++; }
+                    else                              { status = "OK";        ok++;   }
+
+                    if (status != "OK")
+                        ed.WriteMessage(
+                            $"\n  [{status}] '{pp.Name}'  sta {sta:F2}" +
+                            $"  crown {crown:F3}  surf {surfZ:F3}  cover {cover:F2} ft" +
+                            $"  (min {COVER_VIOLATION:F0} ft / desired {COVER_WARNING:F0} ft)");
+                }
+            }
+
+            ed.WriteMessage(
+                $"\n  Cover check — OK: {ok}   Warnings: {warn}   Violations: {viol}");
         }
 
         // ─────────────────────────────────────────────────────────────────────
