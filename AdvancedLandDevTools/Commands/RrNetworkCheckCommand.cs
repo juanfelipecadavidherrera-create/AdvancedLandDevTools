@@ -271,7 +271,7 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage($"\n  Crossings — OK: {okCount}   Violations: {badCount}");
 
                 if (drawBends && violations.Count > 0)
-                    ApplyAutoBends(violations, segments, pathPipeIds,
+                    ApplyAutoBends(violations, crossings, segments, pathPipeIds,
                                    pressNetId, alignId, surfaceId, db, ed);
                 ed.WriteMessage("\n");
             }
@@ -297,6 +297,7 @@ namespace AdvancedLandDevTools.Commands
         // ─────────────────────────────────────────────────────────────────────
         private static void ApplyAutoBends(
             List<CrossingInfo> violations,
+            List<CrossingInfo> allCrossings,  // all crossings (OK + violations) for re-check
             List<PathSegment>  segments,
             List<ObjectId>     pathPipeIds,
             ObjectId           pressNetId,
@@ -317,14 +318,10 @@ namespace AdvancedLandDevTools.Commands
                 if (surface == null || align == null || network == null)
                 { ed.WriteMessage("\n  Cannot open network/surface — bends skipped."); tx.Abort(); return; }
 
-                // Find the pipe run that owns the path pipes
                 CivilDB.PressurePipeRun? run = null;
                 foreach (CivilDB.PressurePipeRun r in network.PipeRuns)
                 {
-                    try
-                    {
-                        if (r.GetPartIds().Contains(pathPipeIds[0])) { run = r; break; }
-                    }
+                    try { if (r.GetPartIds().Contains(pathPipeIds[0])) { run = r; break; } }
                     catch { }
                 }
                 if (run == null)
@@ -337,41 +334,67 @@ namespace AdvancedLandDevTools.Commands
                     double crossCrown  = vi.Invert + vi.OuterDiameter;
                     double crossInvert = vi.Invert;
 
-                    // XY at crossing station (on alignment centre)
                     double px = 0, py = 0;
                     align.PointLocation(vi.Station, 0, ref px, ref py);
 
-                    // Sample surface
                     double surfZ = double.NaN;
                     try { surfZ = surface.FindElevationAtXY(px, py); }
                     catch { }
-
-                    // Try UP: pressure goes OVER the crossing
-                    double elevInnerUp  = crossCrown + 1.0 + pressOuterR;
-                    double pressCrownUp = elevInnerUp + pressOuterR;
-                    bool   canGoUp      = !double.IsNaN(surfZ)
-                                         && (surfZ - pressCrownUp) >= BEND_MIN_COVER;
-
-                    double elevInner, elevOuter;
-                    bool   goUp;
-                    if (canGoUp)
-                    {
-                        goUp      = true;
-                        elevInner = elevInnerUp;
-                        elevOuter = elevInner - BendLegDeltaV;   // transitions DOWN from inner
-                    }
-                    else
-                    {
-                        goUp      = false;
-                        elevInner = crossInvert - 1.0;
-                        elevOuter = elevInner + BendLegDeltaV;   // transitions UP to inner
-                    }
 
                     double staLL = vi.Station - BEND_HORIZ_OFFSET;
                     double staLR = vi.Station + BEND_HORIZ_OFFSET;
                     double staUL = staLL - BendLegDeltaH;
                     double staUR = staLR + BendLegDeltaH;
 
+                    // ── Try UP ────────────────────────────────────────────────
+                    double elevInnerUp  = crossCrown  + 1.0 + pressOuterR;
+                    double pressCrownUp = elevInnerUp + pressOuterR;
+                    double elevOuterUp  = elevInnerUp - BendLegDeltaV;
+                    bool   coverOkUp    = !double.IsNaN(surfZ)
+                                         && (surfZ - pressCrownUp) >= BEND_MIN_COVER;
+                    string? upConflict  = null;
+                    if (coverOkUp)
+                        upConflict = CheckBendClearance(
+                            vi.Station, staUL, staLL, staLR, staUR,
+                            elevOuterUp, elevInnerUp, pressOuterR,
+                            allCrossings, segments);
+
+                    // ── Try DOWN ──────────────────────────────────────────────
+                    double elevInnerDown = crossInvert - 1.0;
+                    double elevOuterDown = elevInnerDown + BendLegDeltaV;
+                    string? downConflict = CheckBendClearance(
+                        vi.Station, staUL, staLL, staLR, staUR,
+                        elevOuterDown, elevInnerDown, pressOuterR,
+                        allCrossings, segments);
+
+                    // ── Pick direction ────────────────────────────────────────
+                    bool   goUp;
+                    double elevInner, elevOuter;
+
+                    if (coverOkUp && upConflict == null)
+                    {
+                        goUp = true; elevInner = elevInnerUp; elevOuter = elevOuterUp;
+                    }
+                    else if (downConflict == null)
+                    {
+                        goUp = false; elevInner = elevInnerDown; elevOuter = elevOuterDown;
+                    }
+                    else
+                    {
+                        // Both directions fail — report and skip
+                        string upReason = !coverOkUp
+                            ? (double.IsNaN(surfZ)
+                               ? "no surface"
+                               : $"cover {surfZ - pressCrownUp:F2} ft < {BEND_MIN_COVER} ft")
+                            : $"conflicts with {upConflict}";
+                        ed.WriteMessage(
+                            $"\n  [SKIP] '{vi.PipeName}' sta {vi.Station:F2}" +
+                            $"  UP→ {upReason}" +
+                            $"  |  DOWN→ conflicts with {downConflict}");
+                        continue;
+                    }
+
+                    // ── Insert PVIs ───────────────────────────────────────────
                     try
                     {
                         run.AddVerticalBendByPVI(staUL, elevOuter);
@@ -381,12 +404,14 @@ namespace AdvancedLandDevTools.Commands
                         applied++;
 
                         string dir = goUp ? "UP" : "DOWN";
-                        string coverNote = goUp
+                        string note = goUp
                             ? $"cover {surfZ - pressCrownUp:F2} ft"
-                            : double.IsNaN(surfZ) ? "no surface data" : $"UP cover {surfZ - pressCrownUp:F2} ft < {BEND_MIN_COVER} ft";
+                            : !coverOkUp && !double.IsNaN(surfZ)
+                                ? $"UP cover {surfZ - pressCrownUp:F2} ft insufficient"
+                                : "";
                         ed.WriteMessage(
                             $"\n  [BEND {dir}] '{vi.PipeName}'  sta {vi.Station:F2}" +
-                            $"  inner C/L {elevInner:F3}  ({coverNote})");
+                            $"  inner C/L {elevInner:F3}  {note}");
                     }
                     catch (System.Exception ex)
                     {
@@ -401,6 +426,61 @@ namespace AdvancedLandDevTools.Commands
             {
                 ed.WriteMessage($"\n  Auto-bend error: {ex.Message}");
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Analytically validate a proposed bend against all other crossings
+        //  in the affected station range [staUL, staUR].
+        //
+        //  Builds three PathSegments representing the bent profile:
+        //    staUL→staLL : transition (elevOuter → elevInner)
+        //    staLL→staLR : inner flat at elevInner
+        //    staLR→staUR : transition (elevInner → elevOuter)
+        //
+        //  Returns null if all nearby crossings still clear.
+        //  Returns a description of the first pipe that would violate clearance.
+        // ─────────────────────────────────────────────────────────────────────
+        private static string? CheckBendClearance(
+            double             fixedStation,
+            double staUL, double staLL, double staLR, double staUR,
+            double elevOuter,  double elevInner,
+            double pressOuterR,
+            List<CrossingInfo> allCrossings,
+            List<PathSegment>  originalSegments)
+        {
+            var bendSegs = new List<PathSegment>
+            {
+                new PathSegment { StationStart=staUL, StationEnd=staLL,
+                                  ElevStart=elevOuter, ElevEnd=elevInner, OuterRadius=pressOuterR },
+                new PathSegment { StationStart=staLL, StationEnd=staLR,
+                                  ElevStart=elevInner, ElevEnd=elevInner, OuterRadius=pressOuterR },
+                new PathSegment { StationStart=staLR, StationEnd=staUR,
+                                  ElevStart=elevInner, ElevEnd=elevOuter, OuterRadius=pressOuterR }
+            };
+
+            foreach (var ci in allCrossings)
+            {
+                if (Math.Abs(ci.Station - fixedStation) < 0.5) continue; // skip the pipe being fixed
+                if (ci.Station < staUL - 1.0 || ci.Station > staUR + 1.0) continue;
+
+                double pressElev = InterpolateElev(ci.Station, bendSegs);
+                if (double.IsNaN(pressElev))
+                    pressElev = InterpolateElev(ci.Station, originalSegments);
+                if (double.IsNaN(pressElev)) continue;
+
+                double pressCrown  = pressElev + pressOuterR;
+                double pressInvert = pressElev - pressOuterR;
+                double crossInvert = ci.Invert;
+                double crossCrown  = ci.Invert + ci.OuterDiameter;
+                bool   above       = ci.CenterZ > pressElev;
+                double clr         = above ? crossInvert - pressCrown
+                                           : pressInvert - crossCrown;
+                double required    = above ? CLEARANCE_ABOVE : CLEARANCE_BELOW;
+
+                if (clr < required)
+                    return $"'{ci.PipeName}' sta {ci.Station:F2} clr {clr:F2} ft";
+            }
+            return null;
         }
 
         // ─────────────────────────────────────────────────────────────────────
