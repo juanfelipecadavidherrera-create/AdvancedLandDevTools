@@ -29,8 +29,8 @@ namespace AdvancedLandDevTools.Commands
     {
         private const string DXF_NETWORK_PART  = "AECC_GRAPH_PROFILE_NETWORK_PART";
         private const string DXF_PRESSURE_PART = "AECC_GRAPH_PROFILE_PRESSURE_PART";
-        private const double CLEARANCE_ABOVE         = 1.0;   // minimum — below this is a violation
-        private const double CLEARANCE_ABOVE_DESIRED = 3.5;   // desired — below this is a warning
+        private const double CLEARANCE_ABOVE         = 3.0;   // minimum — below this is a violation
+        private const double CLEARANCE_ABOVE_DESIRED = 4.0;   // desired — below this is a warning
         private const double CLEARANCE_BELOW         = 0.5;
         private const double CIRCLE_RADIUS           = 1.0;   // profile-view drawing units
         private const int    COLOR_GREEN             = 3;
