@@ -992,15 +992,13 @@ namespace AdvancedLandDevTools.Commands
                     string typeName = prof.GetType().Name;
                     ed.WriteMessage($"\n  [DIAG] Profile '{prof.Name}'  type={typeName}");
 
-                    // Dump all properties whose name contains "Surface" or "Id" (excluding ObjectId base props)
-                    foreach (var prop in prof.GetType().GetProperties(flags))
+                    // Dump every ObjectId-typed property — one of these will be the surface reference
+                    foreach (var prop in prof.GetType().GetProperties(flags).OrderBy(p => p.Name))
                     {
-                        string pn = prop.Name;
-                        if (!pn.Contains("Surface", StringComparison.OrdinalIgnoreCase) &&
-                            !pn.Contains("SurfId",  StringComparison.OrdinalIgnoreCase)) continue;
+                        if (prop.PropertyType != typeof(ObjectId)) continue;
                         string val = "?";
                         try { val = prop.GetValue(prof)?.ToString() ?? "null"; } catch { val = "threw"; }
-                        ed.WriteMessage($"\n  [DIAG]   .{pn} [{prop.PropertyType.Name}] = {val}");
+                        ed.WriteMessage($"\n  [DIAG]   .{prop.Name} = {val}");
                     }
 
                     // Probe known property names that could reference the sampled surface
