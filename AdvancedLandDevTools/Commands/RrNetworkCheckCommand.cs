@@ -89,6 +89,7 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage("\n  RR Network Check  |  Pressure Network Clearance");
                 ed.WriteMessage("\n  Select two fittings to define path start and end,");
                 ed.WriteMessage("\n  then a pipe from the first fitting to set direction.");
+                ed.WriteMessage("\n  Surface is auto-detected from the profile view alignment.");
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
 
                 var per1   = PickPart(ed, "\n  Select FIRST fitting (path start): ");
@@ -101,30 +102,18 @@ namespace AdvancedLandDevTools.Commands
                     "\n  Select pipe connected to first fitting (sets path direction): ");
                 if (perDir == null) { ed.WriteMessage("\n  Cancelled.\n"); return; }
 
-                // ── Optional surface for cover-depth check + auto-bend ────────
-                ObjectId surfaceId = ObjectId.Null;
-                bool     drawBends = false;
+                // ── Ask about bends — surface will be auto-detected inside the transaction ──
+                ObjectId surfaceId = ObjectId.Null;   // resolved inside transaction
+                bool drawBends = false;
                 {
-                    var surfOpt = new PromptEntityOptions(
-                        "\n  Select surface for cover check (Enter to skip): ");
-                    surfOpt.AllowNone = true;
-                    surfOpt.SetRejectMessage("\n  Must be a TIN surface.");
-                    surfOpt.AddAllowedClass(typeof(CivilDB.TinSurface), false);
-                    var surfRes = ed.GetEntity(surfOpt);
-                    if (surfRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
-                    if (surfRes.Status == PromptStatus.OK)
-                    {
-                        surfaceId = surfRes.ObjectId;
-                        var kwdOpts = new PromptKeywordOptions(
-                            "\n  Draw automatic bends for violations? [Yes/No] <No>: ");
-                        kwdOpts.Keywords.Add("Yes");
-                        kwdOpts.Keywords.Add("No");
-                        kwdOpts.AllowNone = true;
-                        var kwdRes = ed.GetKeywords(kwdOpts);
-                        if (kwdRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
-                        drawBends = kwdRes.Status == PromptStatus.OK && kwdRes.StringResult == "Yes";
-                    }
-                    else ed.WriteMessage("\n  No surface selected — cover check and auto-bend skipped.");
+                    var kwdOpts = new PromptKeywordOptions(
+                        "\n  Draw automatic bends for violations? [Yes/No] <No>: ");
+                    kwdOpts.Keywords.Add("Yes");
+                    kwdOpts.Keywords.Add("No");
+                    kwdOpts.AllowNone = true;
+                    var kwdRes = ed.GetKeywords(kwdOpts);
+                    if (kwdRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
+                    drawBends = kwdRes.Status == PromptStatus.OK && kwdRes.StringResult == "Yes";
                 }
 
                 using var tx = db.TransactionManager.StartTransaction();
@@ -165,6 +154,11 @@ namespace AdvancedLandDevTools.Commands
                 var align = tx.GetObject(alignId, OpenMode.ForRead) as CivilDB.Alignment;
                 if (align == null)
                 { ed.WriteMessage("\n  Could not read alignment from profile view."); tx.Abort(); return; }
+
+                // ── Auto-detect TIN surface from the alignment's surface profiles ──
+                surfaceId = AutoDetectSurface(align, tx, ed);
+                if (drawBends && surfaceId.IsNull)
+                    ed.WriteMessage("\n  No surface found — auto-bend skipped (cover check unavailable).");
 
                 // ── Build path ────────────────────────────────────────────────
                 var pathPipeIds = BuildPath(
@@ -270,7 +264,7 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage($"\n\n  ═══ RRNETWORKCHECK COMPLETE ═══");
                 ed.WriteMessage($"\n  Crossings — OK: {okCount}   Violations: {badCount}");
 
-                if (drawBends && violations.Count > 0)
+                if (drawBends && !surfaceId.IsNull && violations.Count > 0)
                     ApplyAutoBends(violations, crossings, segments, pathPipeIds,
                                    pressNetId, alignId, surfaceId, db, ed);
                 ed.WriteMessage("\n");
@@ -970,6 +964,67 @@ namespace AdvancedLandDevTools.Commands
                 catch { }
             }
             return proxy.ObjectId;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Auto-detect TIN surface from the alignment's surface profiles.
+        //  Iterates all profiles on the alignment; returns the SurfaceId of the
+        //  first surface-sampled profile found, preferring EG/Existing-named ones.
+        // ─────────────────────────────────────────────────────────────────────
+        private static ObjectId AutoDetectSurface(
+            CivilDB.Alignment align, Transaction tx, Editor ed)
+        {
+            var flags  = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            ObjectId bestSurfId  = ObjectId.Null;
+            string   bestDesc    = "";
+            bool     bestIsEG    = false;
+
+            try
+            {
+                foreach (ObjectId profId in align.GetProfileIds())
+                {
+                    try
+                    {
+                        var prof = tx.GetObject(profId, OpenMode.ForRead) as CivilDB.Profile;
+                        if (prof == null) continue;
+
+                        // ProfileSurface subtype exposes a SurfaceId property
+                        var surfProp = prof.GetType().GetProperty("SurfaceId", flags);
+                        if (surfProp?.PropertyType != typeof(ObjectId)) continue;
+
+                        var surfId = (ObjectId)surfProp.GetValue(prof)!;
+                        if (surfId.IsNull) continue;
+
+                        // Must resolve to an actual TIN surface
+                        var surf = tx.GetObject(surfId, OpenMode.ForRead) as CivilDB.TinSurface;
+                        if (surf == null) continue;
+
+                        string profName = prof.Name;
+                        bool isEG = profName.IndexOf("EG",       StringComparison.OrdinalIgnoreCase) >= 0
+                                 || profName.IndexOf("Existing",  StringComparison.OrdinalIgnoreCase) >= 0
+                                 || profName.IndexOf("Ground",    StringComparison.OrdinalIgnoreCase) >= 0
+                                 || profName.IndexOf("Natural",   StringComparison.OrdinalIgnoreCase) >= 0;
+
+                        // Take this candidate if it's the first, or if it's EG and current best isn't
+                        if (bestSurfId.IsNull || (isEG && !bestIsEG))
+                        {
+                            bestSurfId = surfId;
+                            bestDesc   = $"'{surf.Name}' (via profile '{profName}')";
+                            bestIsEG   = isEG;
+                            if (isEG) break; // EG found — no need to keep searching
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            if (!bestSurfId.IsNull)
+                ed.WriteMessage($"\n  Surface auto-detected: {bestDesc}");
+            else
+                ed.WriteMessage("\n  No surface profile found on alignment — cover check skipped.");
+
+            return bestSurfId;
         }
 
         private static ObjectId FindProfileViewFromPoint(
