@@ -53,8 +53,8 @@ namespace AdvancedLandDevTools.Commands
         {
             public string PipeName    = "";
             public double Station;
-            public double OuterInvert;    // outer invert of crossing pipe at the crossing station
-            public double OuterDiameter;  // full outer diameter (crown = OuterInvert + OuterDiameter)
+            public double Invert;         // invert elevation of crossing pipe at the crossing station
+            public double OuterDiameter;  // full outer diameter (crown = Invert + OuterDiameter)
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -183,23 +183,24 @@ namespace AdvancedLandDevTools.Commands
                     double pressCrown  = pressElev + pressOuterR;
                     double pressInvert = pressElev - pressOuterR;
 
-                    // Crossing pipe outer surfaces (OuterInvert already interpolated at t)
-                    double crossInvert = ci.OuterInvert;
-                    double crossCrown  = ci.OuterInvert + ci.OuterDiameter;
-                    double crossCenter = ci.OuterInvert + ci.OuterDiameter / 2.0;
+                    double crossInvert = ci.Invert;
+                    double crossCrown  = ci.Invert + ci.OuterDiameter;
+                    double crossCenter = crossInvert + ci.OuterDiameter / 2.0;
 
                     // Above = crossing pipe centerline is higher than pressure pipe centerline
                     bool   above    = crossCenter > pressElev;
-                    double clr      = above ? crossInvert - pressCrown   // bottom of crossing − top of pressure
-                                            : pressInvert - crossCrown;  // bottom of pressure − top of crossing
+                    double clr      = above ? crossInvert - pressCrown   // invert of crossing − crown of pressure
+                                            : pressInvert - crossCrown;  // invert of pressure − crown of crossing
                     double required = above ? CLEARANCE_ABOVE : CLEARANCE_BELOW;
                     bool   isOk     = clr >= required;
 
                     if (isOk) okCount++; else badCount++;
 
-                    // Circle center at crossing pipe outer INVERT in the profile view
+                    // Circle at invert of crossing pipe when below, at crown when above
+                    // (marks the critical clearance point closest to the pressure pipe)
+                    double circleElev = above ? crossCrown : crossInvert;
                     double cx = 0, cy = 0;
-                    if (!pv.FindXYAtStationAndElevation(ci.Station, crossInvert, ref cx, ref cy))
+                    if (!pv.FindXYAtStationAndElevation(ci.Station, circleElev, ref cx, ref cy))
                         continue;
 
                     var circle = new Circle(new Point3d(cx, cy, 0), Vector3d.ZAxis, CIRCLE_RADIUS);
@@ -391,40 +392,55 @@ namespace AdvancedLandDevTools.Commands
 
                     if (obj is CivilDB.Pipe gp)
                     {
-                        double outerD = gp.OuterDiameterOrWidth;
-                        double outerR = outerD / 2.0;
+                        double outerD    = gp.OuterDiameterOrWidth;
+                        double innerR    = gp.InnerDiameterOrWidth / 2.0;
+                        Point3d startPt  = gp.StartPoint;
+                        Point3d endPt    = gp.EndPoint;
+                        // Inner invert at each end: centerline Z minus inner radius
+                        // (same pattern as InvertPullUpEngine)
+                        double startInv  = startPt.Z - innerR;
+                        double endInv    = endPt.Z   - innerR;
 
                         foreach (var c in PipeAlignmentIntersector.FindCrossings(id, align, tx))
                         {
-                            // Must be within the profile view's drawn station window
                             if (c.Station < pvStart - 0.5 || c.Station > pvEnd + 0.5) continue;
-                            // Must be within the selected pressure path range
                             if (c.Station < stMin - 1.0   || c.Station > stMax + 1.0)  continue;
+
+                            double t      = ComputeT(c.IntersectionPointWCS, startPt, endPt);
+                            double invert = startInv + t * (endInv - startInv);
 
                             crossings.Add(new CrossingInfo
                             {
                                 PipeName      = gp.Name,
                                 Station       = c.Station,
-                                OuterInvert   = c.PipeCenterlineZ - outerR,
+                                Invert        = invert,
                                 OuterDiameter = outerD
                             });
                         }
                     }
                     else if (obj is CivilDB.PressurePipe pp && pp.NetworkId != pressNetId)
                     {
-                        double outerD = pp.OuterDiameter;
-                        double outerR = outerD / 2.0;
+                        double outerD   = pp.OuterDiameter;
+                        double outerR   = outerD / 2.0;
+                        Point3d startPt = pp.StartPoint;
+                        Point3d endPt   = pp.EndPoint;
+                        // Pressure pipes: invert = centerline Z − outer radius
+                        double startInv = startPt.Z - outerR;
+                        double endInv   = endPt.Z   - outerR;
 
                         foreach (var c in PipeAlignmentIntersector.FindCrossings(id, align, tx))
                         {
                             if (c.Station < pvStart - 0.5 || c.Station > pvEnd + 0.5) continue;
                             if (c.Station < stMin - 1.0   || c.Station > stMax + 1.0)  continue;
 
+                            double t      = ComputeT(c.IntersectionPointWCS, startPt, endPt);
+                            double invert = startInv + t * (endInv - startInv);
+
                             crossings.Add(new CrossingInfo
                             {
                                 PipeName      = pp.Name,
                                 Station       = c.Station,
-                                OuterInvert   = c.PipeCenterlineZ - outerR,
+                                Invert        = invert,
                                 OuterDiameter = outerD
                             });
                         }
@@ -432,6 +448,20 @@ namespace AdvancedLandDevTools.Commands
                 }
                 catch { }
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Parameter t (0–1) of crossPt projected onto the pipe axis in plan.
+        // ─────────────────────────────────────────────────────────────────────
+        private static double ComputeT(Point3d crossPt, Point3d pipeStart, Point3d pipeEnd)
+        {
+            double dx   = pipeEnd.X - pipeStart.X;
+            double dy   = pipeEnd.Y - pipeStart.Y;
+            double len2 = dx * dx + dy * dy;
+            if (len2 < 1e-9) return 0.0;
+            double t = ((crossPt.X - pipeStart.X) * dx +
+                        (crossPt.Y - pipeStart.Y) * dy) / len2;
+            return Math.Max(0.0, Math.Min(1.0, t));
         }
 
         // ─────────────────────────────────────────────────────────────────────
