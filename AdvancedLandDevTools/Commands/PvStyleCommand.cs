@@ -15,9 +15,9 @@ namespace AdvancedLandDevTools.Commands
 {
     /// <summary>
     /// PVSTYLE — Change the per-profile-view style override of a pipe or structure.
-    /// Step 1: click the profile view border.
-    /// Step 2: click the pipe/structure symbol inside the profile view.
-    /// Step 3: pick a style from the numbered list.
+    /// Step 1: click the pipe/structure symbol inside the profile view.
+    /// Step 2: pick a style from the numbered list.
+    /// Works for gravity pipes, gravity structures, and pressure pipes/fittings/appurtenances.
     /// </summary>
     public class PvStyleCommand
     {
@@ -84,22 +84,28 @@ namespace AdvancedLandDevTools.Commands
                                 tx.Abort(); continue;
                             }
 
-                            var part = tx.GetObject(partId, OpenMode.ForRead) as CivilDB.Part;
-                            if (part == null)
+                            // Resolve the actual Civil 3D part object (gravity OR pressure)
+                            var actualObj = tx.GetObject(partId, OpenMode.ForRead);
+                            string? partName = GetPartName(actualObj);
+                            if (partName == null)
                             {
-                                ed.WriteMessage("\n  Resolved ID is not a Civil 3D part.");
+                                ed.WriteMessage(
+                                    $"\n  Resolved ID is not a recognised Civil 3D part " +
+                                    $"(type: {actualObj.GetType().Name}).");
                                 tx.Abort(); continue;
                             }
 
-                            bool isPipeP = part is CivilDB.Pipe || part is CivilDB.PressurePipe;
-                            if (HandleStyleChange(part, ent, pvId, isPipeP, tx, ed, db))
+                            bool isPipe     = IsPipePart(actualObj);
+                            bool isPressure = IsPressurePart(actualObj);
+
+                            if (HandleStyleChange(actualObj, partName, isPipe, isPressure, pvId, tx, ed, db))
                                 changed++;
                             else
                                 tx.Abort();
                             continue;
                         }
 
-                        // ── Direct Civil part (unusual but handle it)
+                        // ── Direct Civil part (unusual but handle it) ────────────────
                         if (ent is CivilDB.Pipe || ent is CivilDB.Structure ||
                             ent is CivilDB.PressurePipe || ent is CivilDB.PressureFitting ||
                             ent is CivilDB.PressureAppurtenance)
@@ -110,8 +116,14 @@ namespace AdvancedLandDevTools.Commands
                                 ed.WriteMessage("\n  Could not determine which profile view this part belongs to.");
                                 tx.Abort(); continue;
                             }
-                            bool isPipeD = ent is CivilDB.Pipe || ent is CivilDB.PressurePipe;
-                            if (HandleStyleChange(ent as CivilDB.Part, null, pvId, isPipeD, tx, ed, db))
+
+                            string? partName = GetPartName(ent);
+                            if (partName == null) { tx.Abort(); continue; }
+
+                            bool isPipe     = IsPipePart(ent);
+                            bool isPressure = IsPressurePart(ent);
+
+                            if (HandleStyleChange(ent, partName, isPipe, isPressure, pvId, tx, ed, db))
                                 changed++;
                             else
                                 tx.Abort();
@@ -133,6 +145,30 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage($"\n[PVSTYLE ERROR] {ex.Message}\n");
             }
         }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Part-type helpers — work for both gravity and pressure hierarchies
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Returns the part name regardless of gravity/pressure hierarchy.</summary>
+        private static string? GetPartName(DBObject obj)
+        {
+            if (obj is CivilDB.Part p)                    return p.Name;
+            if (obj is CivilDB.PressurePipe pp)           return pp.Name;
+            if (obj is CivilDB.PressureFitting pf)        return pf.Name;
+            if (obj is CivilDB.PressureAppurtenance pa)   return pa.Name;
+            return null;
+        }
+
+        /// <summary>True for gravity pipes and pressure pipes (not structures/fittings).</summary>
+        private static bool IsPipePart(DBObject obj) =>
+            obj is CivilDB.Pipe || obj is CivilDB.PressurePipe;
+
+        /// <summary>True for pressure-network parts (PressurePipe, PressureFitting, PressureAppurtenance).</summary>
+        private static bool IsPressurePart(DBObject obj) =>
+            obj is CivilDB.PressurePipe ||
+            obj is CivilDB.PressureFitting ||
+            obj is CivilDB.PressureAppurtenance;
 
         // ─────────────────────────────────────────────────────────────────────
         //  Resolve profile view for a graph proxy:
@@ -182,23 +218,27 @@ namespace AdvancedLandDevTools.Commands
 
         // ─────────────────────────────────────────────────────────────────────
         //  Core: collect styles, prompt user, apply override
+        //  Works for gravity pipes, gravity structures, and pressure parts.
         // ─────────────────────────────────────────────────────────────────────
         private static bool HandleStyleChange(
-            CivilDB.Part? part, DBObject? proxy,
-            ObjectId pvId, bool isPipe,
+            DBObject part, string partName,
+            bool isPipe, bool isPressure,
+            ObjectId pvId,
             Transaction tx, Editor ed, Database db)
         {
-            if (part == null) return false;
-
-            string partName  = part.Name;
-            string typeLabel = isPipe ? "Pipe" : "Structure";
+            string typeLabel = isPressure
+                ? (isPipe ? "Pressure Pipe" : "Pressure Fitting/Appurtenance")
+                : (isPipe ? "Pipe" : "Structure");
 
             ed.WriteMessage($"\n  Part: {typeLabel} '{partName}'");
 
-            // ── Collect available styles ──────────────────────────────────
+            // ── Get current global StyleId via typed access or reflection ────
             var styles = new List<(ObjectId Id, string Label)>();
-            TryAddStyle(part.StyleId, "[current global]", styles, tx);
-            CollectStylesFromManager(isPipe, styles, tx, db);
+            ObjectId currentStyleId = GetStyleIdReflection(part);
+            if (!currentStyleId.IsNull)
+                TryAddStyle(currentStyleId, "[current global]", styles, tx);
+
+            CollectStylesFromManager(isPipe, isPressure, styles, tx, db);
 
             if (styles.Count == 0)
             {
@@ -219,17 +259,10 @@ namespace AdvancedLandDevTools.Commands
             { ed.WriteMessage("\n  Skipped."); return false; }
 
             var (selectedStyleId, selectedLabel) = styles[pir.Value - 1];
-            bool applied = false;
 
-            // ── Tier 1: PipeOverrides / StructureOverrides on the ProfileView ─
-            //   This is the authoritative per-PV style override (the "Style Override"
-            //   column in Profile View Properties → Pipe Networks tab).
-            applied = TrySetViaOverridesCollection(pvId, part.ObjectId, isPipe, partName, selectedStyleId, tx, ed);
+            bool applied = TrySetViaOverridesCollection(
+                pvId, part.ObjectId, isPipe, isPressure, partName, selectedStyleId, tx, ed);
 
-            // (Tier 2 removed — ProfileViewPart proxy does not have OverrideStyleId.
-            //  The per-PV override lives in PipeOverride inside PipeOverrideCollection.)
-
-            // ── Nothing worked: diagnostic dump ──────────────────────────────
             if (!applied)
             {
                 ed.WriteMessage(
@@ -246,18 +279,36 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  PRIMARY: PipeOverrides / StructureOverrides collection on ProfileView
-        //
-        //  From diagnostic:
-        //    pv.PipeOverrides → PipeOverrideCollection (Count = 14)
-        //    PipeOverride properties:
-        //      .PipeId          [ObjectId] rw=False  ← pipe to match
-        //      .OverrideStyleId [ObjectId] rw=True   ← set this
-        //      .UseOverrideStyle[Boolean]  rw=True   ← set to true
-        //    Collection methods: GetObjectEnumerator() → IEnumerator
+        //  PRIMARY: PipeOverrides / StructureOverrides / PressurePipeOverrides
+        //  collection on ProfileView — tries multiple collection names in order.
         // ─────────────────────────────────────────────────────────────────────
         private static bool TrySetViaOverridesCollection(
-            ObjectId pvId, ObjectId partId, bool isPipe, string partName,
+            ObjectId pvId, ObjectId partId, bool isPipe, bool isPressure, string partName,
+            ObjectId styleId, Transaction tx, Editor ed)
+        {
+            // Try collection names in priority order
+            string[] collNames = isPressure
+                ? new[] { "PressurePipeOverrides", "PipeOverrides" }
+                : new[] { isPipe ? "PipeOverrides" : "StructureOverrides" };
+
+            foreach (string collName in collNames)
+            {
+                if (TryOverrideOneCollection(pvId, partId, partName, collName, styleId, tx, ed))
+                    return true;
+            }
+
+            ed.WriteMessage(
+                $"\n  [DIAG] No override collection entry found for '{partName}' " +
+                $"(handle {partId.Handle}) across [{string.Join(", ", collNames)}].");
+            return false;
+        }
+
+        /// <summary>
+        /// Attempts to find and update one named override collection on the ProfileView.
+        /// Returns true if the override was applied.
+        /// </summary>
+        private static bool TryOverrideOneCollection(
+            ObjectId pvId, ObjectId partId, string partName, string collPropName,
             ObjectId styleId, Transaction tx, Editor ed)
         {
             try
@@ -266,37 +317,19 @@ namespace AdvancedLandDevTools.Commands
                 var pvType = pv.GetType();
                 var flags  = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-                string collPropName = isPipe ? "PipeOverrides" : "StructureOverrides";
                 var coll = pvType.GetProperty(collPropName, flags)?.GetValue(pv);
-                if (coll == null)
-                {
-                    ed.WriteMessage($"\n  [DIAG] {collPropName} not found on ProfileView.");
-                    return false;
-                }
+                if (coll == null) return false;
 
                 var collType = coll.GetType();
 
-                // ── Find the PipeOverride entry for our part ──────────────
-                //
-                // Use GetObjectEnumerator() directly (the IEnumerable cast path
-                // previously failed to match entries).
+                // ID property names to try for matching
+                var idProps   = new[] { "PipeId", "PartId", "EntityId", "StructureId" };
+                // Name property names for fallback match
+                var nameProps = new[] { "PipeName", "Name", "StructureName" };
+
                 object? entry = null;
 
-                // Enumerate via GetObjectEnumerator() (most reliable for Civil 3D collections).
-                // Match strategy:
-                //   1. PipeId == partId (direct ObjectId match — works when IDs are consistent)
-                //   2. PipeName == partName (name match — fallback when proxy ID ≠ real pipe ID)
-                // The name-based fallback is needed because ModelPartId on the proxy returns
-                // the proxy's own ObjectId, not the model-space pipe's ObjectId stored in
-                // PipeOverride.PipeId.
-                var nameProps = isPipe
-                    ? new[] { "PipeName", "Name" }
-                    : new[] { "StructureName", "Name" };
-                var idProps = isPipe
-                    ? new[] { "PipeId", "PartId", "EntityId" }
-                    : new[] { "StructureId", "PartId", "EntityId" };
-
-                var getEnum = collType.GetMethod("GetObjectEnumerator", flags, null, Type.EmptyTypes, null);
+                var getEnum    = collType.GetMethod("GetObjectEnumerator", flags, null, Type.EmptyTypes, null);
                 var enumerator = getEnum?.Invoke(coll, null) as IEnumerator;
 
                 while (enumerator != null && enumerator.MoveNext())
@@ -305,7 +338,7 @@ namespace AdvancedLandDevTools.Commands
                     if (item == null) continue;
                     var itemType = item.GetType();
 
-                    // Try ObjectId match first
+                    // Tier 1: ObjectId match
                     foreach (string idp in idProps)
                     {
                         var prop = itemType.GetProperty(idp, flags);
@@ -319,7 +352,7 @@ namespace AdvancedLandDevTools.Commands
                     }
                     if (entry != null) break;
 
-                    // Name match fallback
+                    // Tier 2: name match (handles proxy-ID mismatch)
                     foreach (string np in nameProps)
                     {
                         var prop = itemType.GetProperty(np, flags);
@@ -334,18 +367,11 @@ namespace AdvancedLandDevTools.Commands
                     if (entry != null) break;
                 }
 
-                if (entry == null)
-                {
-                    ed.WriteMessage(
-                        $"\n  [DIAG] No {collPropName} entry found for '{partName}' " +
-                        $"(handle {partId.Handle}).");
-                    return false;
-                }
+                if (entry == null) return false;
 
-                // ── Apply the override ────────────────────────────────────
-                var entryType  = entry.GetType();
-                var oidProp    = entryType.GetProperty("OverrideStyleId",  flags);
-                var useProp    = entryType.GetProperty("UseOverrideStyle", flags);
+                var entryType = entry.GetType();
+                var oidProp   = entryType.GetProperty("OverrideStyleId",  flags);
+                var useProp   = entryType.GetProperty("UseOverrideStyle", flags);
 
                 if (oidProp?.CanWrite != true)
                 {
@@ -357,62 +383,24 @@ namespace AdvancedLandDevTools.Commands
                 if (useProp?.CanWrite == true)
                     useProp.SetValue(entry, true);
 
-                ed.WriteMessage($"\n  Applied via PV.{collPropName}[PipeId].OverrideStyleId");
+                ed.WriteMessage($"\n  Applied via PV.{collPropName}[..].OverrideStyleId");
                 return true;
             }
             catch (System.Exception ex)
             {
                 var inner = ex.InnerException ?? ex;
                 ed.WriteMessage(
-                    $"\n  [DIAG] TrySetViaOverridesCollection: {inner.GetType().Name}: {inner.Message}");
+                    $"\n  [DIAG] {collPropName}: {inner.GetType().Name}: {inner.Message}");
                 return false;
             }
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  FALLBACK: set override properties directly on the visual proxy entity.
-        //
-        //  From diagnostic, ProfileViewPart (proxy) has:
-        //    .OverrideStyleId  [ObjectId] rw=True   ← per-PV style override
-        //    .UseOverrideStyle [Boolean]  rw=True   ← the "Style Override" checkbox
-        //
-        //  These mirror PipeOverride in the PipeOverrides collection — the proxy
-        //  IS the override object.
-        // ─────────────────────────────────────────────────────────────────────
-        private static bool TrySetProxyOverrideStyle(DBObject proxy, ObjectId styleId, Editor ed)
-        {
-            var flags    = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var type     = proxy.GetType();
-            var oidProp  = type.GetProperty("OverrideStyleId", flags);
-            var useProp  = type.GetProperty("UseOverrideStyle", flags);
-
-            if (oidProp?.CanWrite != true) return false;
-
-            try
-            {
-                proxy.UpgradeOpen();
-                oidProp.SetValue(proxy, styleId);
-                if (useProp?.CanWrite == true)
-                    useProp.SetValue(proxy, true);
-                ed.WriteMessage("\n  Applied via proxy.OverrideStyleId + UseOverrideStyle");
-                return true;
-            }
-            catch (System.Exception ex)
-            {
-                // Unwrap TargetInvocationException to get the real Civil 3D error
-                var inner = ex.InnerException ?? ex;
-                ed.WriteMessage(
-                    $"\n  [DIAG] proxy.OverrideStyleId threw: " +
-                    $"{inner.GetType().Name}: {inner.Message}");
-                return false;
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Style enumeration — style manager (all styles) with network fallback
+        //  Style enumeration — works for gravity and pressure networks
         // ─────────────────────────────────────────────────────────────────────
         private static void CollectStylesFromManager(
-            bool isPipe, List<(ObjectId, string)> styles, Transaction tx, Database db)
+            bool isPipe, bool isPressure,
+            List<(ObjectId, string)> styles, Transaction tx, Database db)
         {
             var civDoc = CivilApp.CivilDocument.GetCivilDocument(db);
             bool gotFromManager = false;
@@ -423,22 +411,68 @@ namespace AdvancedLandDevTools.Commands
                 var stylesRoot = civDoc.GetType().GetProperty("Styles", flags)?.GetValue(civDoc);
                 if (stylesRoot != null)
                 {
-                    string collName = isPipe ? "PipeStyles" : "StructureStyles";
-                    var coll = stylesRoot.GetType().GetProperty(collName, flags)?.GetValue(stylesRoot);
-                    if (coll is IEnumerable enumerable)
+                    // Pressure pipes use a separate style category from gravity pipes
+                    string[] collNames = isPressure
+                        ? new[] { "PressurePipeStyles", "PressurePartStyles" }
+                        : isPipe
+                            ? new[] { "PipeStyles" }
+                            : new[] { "StructureStyles" };
+
+                    foreach (string collName in collNames)
                     {
-                        foreach (var item in enumerable)
-                            if (item is ObjectId oid)
-                                TryAddStyle(oid, null, styles, tx);
-                        gotFromManager = styles.Count > 1;
+                        var coll = stylesRoot.GetType().GetProperty(collName, flags)?.GetValue(stylesRoot);
+                        if (coll is IEnumerable enumerable)
+                        {
+                            foreach (var item in enumerable)
+                                if (item is ObjectId oid)
+                                    TryAddStyle(oid, null, styles, tx);
+                            if (styles.Count > 1) { gotFromManager = true; break; }
+                        }
                     }
                 }
             }
             catch { }
 
-            // Fallback: scan all networks for styles currently in use
-            if (!gotFromManager)
+            if (gotFromManager) return;
+
+            // Fallback: scan networks for styles currently in use
+            if (isPressure)
             {
+                // Pressure networks — use reflection because GetPressureNetworkIds may vary
+                try
+                {
+                    var flags   = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                    var civType = civDoc.GetType();
+                    var getNets = civType.GetMethod("GetPressureNetworkIds", flags, null, Type.EmptyTypes, null);
+                    var nids    = getNets?.Invoke(civDoc, null) as IEnumerable;
+                    if (nids != null)
+                    {
+                        foreach (var item in nids)
+                        {
+                            if (item is not ObjectId nid) continue;
+                            try
+                            {
+                                var net     = tx.GetObject(nid, OpenMode.ForRead);
+                                var netType = net.GetType();
+                                foreach (string mName in new[] {
+                                    "GetPressurePipeIds", "GetFittingIds", "GetAppurtenanceIds" })
+                                {
+                                    var getIds = netType.GetMethod(mName, flags, null, Type.EmptyTypes, null);
+                                    if (getIds?.Invoke(net, null) is IEnumerable ids)
+                                        foreach (var pidItem in ids)
+                                            if (pidItem is ObjectId pid)
+                                                TryAddStyleReflection(pid, styles, tx);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                // Gravity networks
                 foreach (ObjectId nid in civDoc.GetPipeNetworkIds())
                 {
                     try
@@ -460,53 +494,6 @@ namespace AdvancedLandDevTools.Commands
                     }
                     catch { }
                 }
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Diagnostic helpers
-        // ─────────────────────────────────────────────────────────────────────
-        private static void DumpCollectionDiag(
-            string collName, object coll, Type collType, BindingFlags flags, Editor ed)
-        {
-            ed.WriteMessage($"\n  [DIAG] {collName} ({collType.Name}) — no entry found for part.");
-
-            var countProp = collType.GetProperty("Count", flags);
-            if (countProp != null)
-            {
-                try { ed.WriteMessage($"\n  [DIAG] Count = {countProp.GetValue(coll)}"); } catch { }
-            }
-
-            ed.WriteMessage($"\n  [DIAG] Methods:");
-            foreach (var m in collType.GetMethods(flags)
-                .Where(m => !m.Name.StartsWith("get_") && !m.Name.StartsWith("set_"))
-                .OrderBy(m => m.Name))
-            {
-                var ps = string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name));
-                ed.WriteMessage($"\n    {m.Name}({ps}) -> {m.ReturnType.Name}");
-            }
-
-            // Dump first existing entry if any
-            if (coll is IEnumerable en)
-            {
-                var first = en.Cast<object>().FirstOrDefault();
-                if (first != null)
-                {
-                    ed.WriteMessage($"\n  [DIAG] First entry type: {first.GetType().Name}");
-                    DumpEntryDiag(collName, first, first.GetType(), flags, ed);
-                }
-            }
-        }
-
-        private static void DumpEntryDiag(
-            string collName, object entry, Type entryType, BindingFlags flags, Editor ed)
-        {
-            ed.WriteMessage($"\n  [DIAG] {collName} entry ({entryType.Name}) properties:");
-            foreach (var p in entryType.GetProperties(flags).OrderBy(p => p.Name))
-            {
-                string val = "?";
-                try { val = p.GetValue(entry)?.ToString() ?? "null"; } catch { val = "threw"; }
-                ed.WriteMessage($"\n    .{p.Name} [{p.PropertyType.Name}] rw={p.CanWrite} = {val}");
             }
         }
 
@@ -551,8 +538,40 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Add a style to the list, deduplicating by ObjectId
+        //  Helpers
         // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Gets StyleId via reflection — works for both CivilDB.Part and PressurePipe hierarchies.</summary>
+        private static ObjectId GetStyleIdReflection(DBObject obj)
+        {
+            // Fast path for gravity parts
+            if (obj is CivilDB.Part p) return p.StyleId;
+
+            // Reflection path for pressure parts
+            var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var prop  = obj.GetType().GetProperty("StyleId", flags);
+            if (prop?.PropertyType == typeof(ObjectId))
+            {
+                try { return (ObjectId)prop.GetValue(obj)!; }
+                catch { }
+            }
+            return ObjectId.Null;
+        }
+
+        /// <summary>Gets StyleId via reflection from a part loaded by ObjectId.</summary>
+        private static void TryAddStyleReflection(
+            ObjectId partId, List<(ObjectId, string)> styles, Transaction tx)
+        {
+            try
+            {
+                var obj = tx.GetObject(partId, OpenMode.ForRead);
+                var sid = GetStyleIdReflection(obj);
+                TryAddStyle(sid, null, styles, tx);
+            }
+            catch { }
+        }
+
+        /// <summary>Add a style to the list, deduplicating by ObjectId.</summary>
         private static void TryAddStyle(
             ObjectId styleId, string? suffix,
             List<(ObjectId, string)> styles, Transaction tx)
