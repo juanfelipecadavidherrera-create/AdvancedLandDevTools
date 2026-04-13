@@ -114,6 +114,8 @@ namespace AdvancedLandDevTools.Commands
                 // ── Step 2: Click the crossing pipe in the profile ───────────────
                 // Both the STATION and the ELEVATION of the crossing are read from
                 // this single click — no numeric input needed.
+                // For DOWN: click the invert (bottom of ellipse) of the crossing pipe.
+                // For UP  : click the crown (top of ellipse) of the crossing pipe.
                 ed.WriteMessage("\n  Click on the crossing pipe in the profile to set its location and elevation:");
                 var ppoPt = new PromptPointOptions(
                     "\n  Click crossing pipe: ");
@@ -121,6 +123,16 @@ namespace AdvancedLandDevTools.Commands
                 var ppr = ed.GetPoint(ppoPt);
                 if (ppr.Status != PromptStatus.OK) { ed.WriteMessage("\n  Cancelled.\n"); return; }
                 Point3d crossingPickPt = ppr.Value;
+
+                // ── Step 2b: Down or Up duck? ────────────────────────────────────
+                var kwdOpts = new PromptKeywordOptions(
+                    "\n  Duck direction [Down/Up] <Down>: ");
+                kwdOpts.Keywords.Add("Down");
+                kwdOpts.Keywords.Add("Up");
+                kwdOpts.AllowNone = true;   // Enter = Down
+                var kwdRes = ed.GetKeywords(kwdOpts);
+                if (kwdRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
+                bool goUp = kwdRes.Status == PromptStatus.OK && kwdRes.StringResult == "Up";
 
                 // ── Step 3: Resolve geometry ─────────────────────────────────────
                 double crossingSta     = 0;
@@ -216,47 +228,69 @@ namespace AdvancedLandDevTools.Commands
                     staUL = staLL - LegDeltaH;   // outside (lower station)
                     staUR = staLR + LegDeltaH;   // outside (higher station)
 
-                    // Bottom section: 1 ft real (10 profile-view units) below crossing invert
                     pipeRadius = pipe.OuterDiameter / 2.0;
-                    elevLow    = crossingInvElev - 1.0;
 
-                    // Upper bends computed FROM the bottom bends following the fixed diagonal:
-                    //   ΔV = LegDeltaV (≈ 1.154 ft real = 11.54 profile-view-ft ≈ 11.6)  UP
-                    //   ΔH = LegDeltaH (≈ 1.154 ft real)  OUTWARD (already set in staUL/staUR)
-                    elevUL = elevLow + LegDeltaV;
-                    elevUR = elevLow + LegDeltaV;
+                    if (goUp)
+                    {
+                        // UP duck — pressure pipe arcs OVER the crossing.
+                        // User clicks the crown (top) of the crossing pipe.
+                        //
+                        // PVIs are inserted at the pressure pipe CENTERLINE, but clearance
+                        // is measured from the pressure pipe INVERT (centerline − pipeRadius).
+                        // Required: pressure_invert ≥ crossingCrown + 1.0
+                        //   → centerline ≥ crossingCrown + 1.0 + pipeRadius
+                        elevLow = crossingInvElev + 1.0 + pipeRadius;  // "elevLow" = inner (high) bends
+                        elevUL  = elevLow - LegDeltaV;  // outer-left  transitions DOWN from high
+                        elevUR  = elevLow - LegDeltaV;  // outer-right transitions DOWN from high
+                    }
+                    else
+                    {
+                        // DOWN duck — pressure pipe ducks UNDER the crossing.
+                        // User clicks the invert (bottom) of the crossing pipe.
+                        // Required clearance of 1.0 ft below crossing invert (centerline-based).
+                        elevLow = crossingInvElev - 1.0;
+                        elevUL  = elevLow + LegDeltaV;  // outer-left  transitions UP from low
+                        elevUR  = elevLow + LegDeltaV;  // outer-right transitions UP from low
+                    }
 
                     // Convert to 3D world points for the visual guide
-                    // Order by increasing station: UL → LL → LR → UR
-                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, elevUL);   // outside-left
-                    ptLowerLeft  = StationElevToPoint3d(aln, staLL, elevLow);  // ±10 ft left
-                    ptLowerRight = StationElevToPoint3d(aln, staLR, elevLow);  // ±10 ft right
-                    ptUpperRight = StationElevToPoint3d(aln, staUR, elevUR);   // outside-right
+                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, elevUL);   // outer-left
+                    ptLowerLeft  = StationElevToPoint3d(aln, staLL, elevLow);  // inner-left
+                    ptLowerRight = StationElevToPoint3d(aln, staLR, elevLow);  // inner-right
+                    ptUpperRight = StationElevToPoint3d(aln, staUR, elevUR);   // outer-right
 
                     tx.Abort();
                 }
 
                 // ── Step 4: Report geometry ──────────────────────────────────────
-                double invertClearance = crossingInvElev - elevLow;   // = 1.0 ft by design
+                string duckDir   = goUp ? "UP (over)" : "DOWN (under)";
+                string innerLabel = goUp ? "Top C/L  " : "Bottom C/L";
+                // Clearance measured at the inner span:
+                //   DOWN: crossing_invert − elevLow  = 1.0 ft (centerline to invert of crossing)
+                //   UP  : (elevLow − pipeRadius) − crossingInvElev = 1.0 ft (invert of press − crossing crown)
+                double invertClearance = goUp
+                    ? (elevLow - pipeRadius) - crossingInvElev
+                    : crossingInvElev - elevLow;
+
                 ed.WriteMessage("\n");
                 ed.WriteMessage("\n  ╔══════════════════════════════════════════════════════════╗");
-                ed.WriteMessage("\n  ║              EEE BEND — DUCK GEOMETRY                    ║");
+                ed.WriteMessage($"\n  ║          EEE BEND — DUCK {duckDir,-6} GEOMETRY              ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
                 ed.WriteMessage($"\n  ║  Pipe C/L at crossing  : {pipeElevAtCross,8:F3} ft                  ║");
-                ed.WriteMessage($"\n  ║  Crossing invert click : {crossingInvElev,8:F3} ft                  ║");
-                ed.WriteMessage($"\n  ║  Bottom C/L (−1.0 ft)  : {elevLow,8:F3} ft (clr {invertClearance:F2} ft)  ║");
+                ed.WriteMessage($"\n  ║  Crossing click elev   : {crossingInvElev,8:F3} ft                  ║");
+                ed.WriteMessage($"\n  ║  {innerLabel} (±1.0 ft)  : {elevLow,8:F3} ft (clr {invertClearance:F2} ft)  ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Upper-Left  Sta {staUL,10:F2} | orig grade {elevUL,7:F3} ft     ║");
-                ed.WriteMessage($"\n  ║  Lower-Left  Sta {staLL,10:F2} | bottom C/L {elevLow,7:F3} ft     ║");
-                ed.WriteMessage($"\n  ║  Lower-Right Sta {staLR,10:F2} | bottom C/L {elevLow,7:F3} ft     ║");
-                ed.WriteMessage($"\n  ║  Upper-Right Sta {staUR,10:F2} | orig grade {elevUR,7:F3} ft     ║");
+                ed.WriteMessage($"\n  ║  Outer-Left  Sta {staUL,10:F2} | C/L {elevUL,7:F3} ft            ║");
+                ed.WriteMessage($"\n  ║  Inner-Left  Sta {staLL,10:F2} | C/L {elevLow,7:F3} ft            ║");
+                ed.WriteMessage($"\n  ║  Inner-Right Sta {staLR,10:F2} | C/L {elevLow,7:F3} ft            ║");
+                ed.WriteMessage($"\n  ║  Outer-Right Sta {staUR,10:F2} | C/L {elevUR,7:F3} ft            ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Bottom span ±{HorizOffset:F0} ft  |  Leg ΔH {LegDeltaH:F3} ft              ║");
+                ed.WriteMessage($"\n  ║  Inner span ±{HorizOffset:F0} ft  |  Leg ΔH {LegDeltaH:F3} ft               ║");
                 ed.WriteMessage("\n  ╚══════════════════════════════════════════════════════════╝");
 
-                if (invertClearance < 0)
+                if (invertClearance < 0.9)
                     ed.WriteMessage(
-                        "\n  WARNING: Bottom C/L is ABOVE the crossing invert — check your click location.");
+                        $"\n  WARNING: Clearance {invertClearance:F3} ft is less than expected — check your click location.");
 
                 // ── Step 5: Modify pressure network ─────────────────────────────
                 bool networkModified = TryApplyDuck(
