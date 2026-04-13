@@ -993,7 +993,7 @@ namespace AdvancedLandDevTools.Commands
                     ed.WriteMessage($"\n  [DIAG] Profile '{prof.Name}'  type={typeName}");
 
                     // Dump every ObjectId-typed property — one of these will be the surface reference
-                    foreach (var prop in prof.GetType().GetProperties(flags).OrderBy(p => p.Name))
+                    foreach (var prop in prof.GetType().GetProperties(flags))
                     {
                         if (prop.PropertyType != typeof(ObjectId)) continue;
                         string val = "?";
