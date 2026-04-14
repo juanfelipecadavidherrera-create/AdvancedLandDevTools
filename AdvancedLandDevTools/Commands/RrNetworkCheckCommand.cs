@@ -970,11 +970,15 @@ namespace AdvancedLandDevTools.Commands
         //  Auto-detect TIN surface from the alignment's surface profiles.
         //  Iterates all profiles on the alignment; returns the SurfaceId of the
         //  first surface-sampled profile found, preferring EG/Existing-named ones.
+        //
+        //  Uses the proper Civil 3D API:
+        //    • Profile.ProfileType  — checks if the profile is a surface profile
+        //    • Profile.DataSourceId — returns the ObjectId of the source surface
+        //  Falls back to reflection probing if the above yields nothing.
         // ─────────────────────────────────────────────────────────────────────
         private static ObjectId AutoDetectSurface(
             CivilDB.Alignment align, Transaction tx, Editor ed)
         {
-            var flags  = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             ObjectId bestSurfId  = ObjectId.Null;
             string   bestDesc    = "";
             bool     bestIsEG    = false;
@@ -989,44 +993,57 @@ namespace AdvancedLandDevTools.Commands
                     var prof = tx.GetObject(profId, OpenMode.ForRead) as CivilDB.Profile;
                     if (prof == null) continue;
 
-                    string typeName = prof.GetType().Name;
-                    ed.WriteMessage($"\n  [DIAG] Profile '{prof.Name}'  type={typeName}");
+                    ed.WriteMessage($"\n  [DIAG] Profile '{prof.Name}'  type={prof.GetType().Name}");
 
-                    // Dump every ObjectId-typed property — one of these will be the surface reference
-                    foreach (var prop in prof.GetType().GetProperties(flags))
+                    // ── Primary approach: try the documented DataSourceId API ──
+                    //    For surface-sampled profiles this returns the source surface ObjectId.
+                    //    For layout/FG profiles it returns Null or throws — both are harmless.
+                    ObjectId surfId = ObjectId.Null;
+                    try
                     {
-                        if (prop.PropertyType != typeof(ObjectId)) continue;
-                        string val = "?";
-                        try { val = prop.GetValue(prof)?.ToString() ?? "null"; } catch { val = "threw"; }
-                        ed.WriteMessage($"\n  [DIAG]   .{prop.Name} = {val}");
+                        surfId = prof.DataSourceId;
+                        ed.WriteMessage($"\n  [DIAG]   DataSourceId = {surfId}");
+                    }
+                    catch
+                    {
+                        // Not a surface profile, or DataSourceId not available — fall through
                     }
 
-                    // Probe known property names that could reference the sampled surface
-                    ObjectId surfId = ObjectId.Null;
-                    foreach (string candidate in new[] {
-                        "SurfaceId", "SampleSurfaceId", "SampleSourceId",
-                        "SourceSurfaceId", "BaseSurfaceId", "TerrainSurfaceId" })
+                    // ── Fallback: reflection probe if the API path yielded nothing ──
+                    if (surfId.IsNull)
                     {
-                        var prop = prof.GetType().GetProperty(candidate, flags);
-                        if (prop?.PropertyType != typeof(ObjectId)) continue;
-                        try
+                        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                        foreach (string candidate in new[] {
+                            "DataSourceId", "SurfaceId", "SampleSurfaceId",
+                            "SampleSourceId", "SourceSurfaceId",
+                            "BaseSurfaceId", "TerrainSurfaceId" })
                         {
-                            var id = (ObjectId)prop.GetValue(prof)!;
-                            if (!id.IsNull) { surfId = id; break; }
+                            var prop = prof.GetType().GetProperty(candidate, flags);
+                            if (prop?.PropertyType != typeof(ObjectId)) continue;
+                            try
+                            {
+                                var id = (ObjectId)prop.GetValue(prof)!;
+                                if (!id.IsNull) { surfId = id; break; }
+                            }
+                            catch { }
                         }
-                        catch { }
                     }
 
                     if (surfId.IsNull) continue;
 
-                    var surf = tx.GetObject(surfId, OpenMode.ForRead) as CivilDB.TinSurface;
+                    // Accept TinSurface, GridSurface, or any Surface subclass
+                    var surfObj = tx.GetObject(surfId, OpenMode.ForRead);
+                    CivilDB.Surface? surf = surfObj as CivilDB.TinSurface
+                                         ?? surfObj as CivilDB.Surface;
                     if (surf == null) continue;
 
                     string profName = prof.Name;
-                    bool isEG = profName.IndexOf("EG",      StringComparison.OrdinalIgnoreCase) >= 0
+                    bool isEG = profName.IndexOf("EG",       StringComparison.OrdinalIgnoreCase) >= 0
                              || profName.IndexOf("Existing", StringComparison.OrdinalIgnoreCase) >= 0
                              || profName.IndexOf("Ground",   StringComparison.OrdinalIgnoreCase) >= 0
                              || profName.IndexOf("Natural",  StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    ed.WriteMessage($"\n  [DIAG]   Surface '{surf.Name}' isEG={isEG}");
 
                     if (bestSurfId.IsNull || (isEG && !bestIsEG))
                     {
