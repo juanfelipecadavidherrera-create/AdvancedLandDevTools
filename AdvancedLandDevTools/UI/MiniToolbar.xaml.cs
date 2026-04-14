@@ -27,6 +27,7 @@ namespace AdvancedLandDevTools.UI
             ("MARKLINES ",       "Mark Lines",            "PROFILES",  "\xED63", "#FFB74D", "Mark"),
             ("PROFOFF ",         "Profile Off",           "PROFILES",  "\xE738", "#EF5350", "PrOff"),
             ("PVSTYLE ",         "PV Style Override",     "PROFILES",  "\xE771", "#CE93D8", "Style"),
+            ("CHOPCHOP ",        "ChopChop",              "PROFILES",  "\xE8C6", "#FF7043", "Chop"),
 
             // ALIGN
             ("ALIGNDEPLOY ",     "Align Deploy",          "ALIGN",     "\xE8AB", "#81C784", "Deploy"),
@@ -36,6 +37,7 @@ namespace AdvancedLandDevTools.UI
             ("CHANGEELEVATION ", "Change Elevation",      "PIPES",     "\xE70E", "#FF8A65", "Elev"),
             ("PIPESIZING ",      "Pipe Sizing Calc",      "PIPES",     "\xE81E", "#29B6F6", "Sizing"),
             ("PRESSCOUNT ",      "Pressure Count",        "PIPES",     "\xE946", "#CE93D8", "PCount"),
+            ("RRNETWORKCHECK ",  "Network Check",         "PIPES",     "\xE73E", "#66BB6A", "RRChk"),
 
             // SURFACES
             ("ELEVSLOPE ",       "Elev Slope",            "SURFACES",  "\xE879", "#66BB6A", "Slope"),

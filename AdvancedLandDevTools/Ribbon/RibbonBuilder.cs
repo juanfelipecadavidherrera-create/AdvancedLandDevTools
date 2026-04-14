@@ -205,6 +205,32 @@ namespace AdvancedLandDevTools.Ribbon
             };
             pvSource.Items.Add(btnPvStyle);
 
+            pvSource.Items.Add(new RibbonSeparator());
+
+            // ── ChopChop button ───────────────────────────────────────────────
+            var btnChopChop = new RibbonButton
+            {
+                Id               = "ALDT_BTN_CHOPCHOP",
+                Name             = "ChopChop",
+                Text             = "Chop\nChop",
+                Description      = "Subdivide a profile view into smaller views along the " +
+                                   "station axis. Equal or custom intervals.",
+                ToolTip          = BuildToolTip(
+                    "ChopChop — Profile View Subdivider",
+                    "Select a profile view, choose Equal or Custom subdivision, and the " +
+                    "tool creates smaller profile views side by side below the original. " +
+                    "Styles and elevation ranges are copied from the source.\n\nCommand:  CHOPCHOP"),
+                CommandHandler   = new RibbonCommandHandler("CHOPCHOP "),
+                CommandParameter = "CHOPCHOP ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildChopChopIcon(32),
+                Image            = BuildChopChopIcon(16)
+            };
+            pvSource.Items.Add(btnChopChop);
+
             tab.Panels.Add(new RibbonPanel { Source = pvSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -379,6 +405,32 @@ namespace AdvancedLandDevTools.Ribbon
                 Image            = BuildPressCountIcon(16)
             };
             piSource.Items.Add(btnPressCount);
+
+            piSource.Items.Add(new RibbonSeparator());
+
+            // ── RR Network Check button ─────────────────────────────────────────
+            var btnRrNet = new RibbonButton
+            {
+                Id               = "ALDT_BTN_RRNETWORKCHECK",
+                Name             = "RR Network Check",
+                Text             = "Network\nCheck",
+                Description      = "Checks clearance and cover between pressure pipe parts " +
+                                   "and a surface in a profile view.",
+                ToolTip          = BuildToolTip(
+                    "Pressure Network Clearance Check",
+                    "Click a pressure pipe part in a profile view. The tool auto-detects " +
+                    "the surface, checks minimum clearance and cover at every point, and " +
+                    "reports pass/fail results.\n\nCommand:  RRNETWORKCHECK"),
+                CommandHandler   = new RibbonCommandHandler("RRNETWORKCHECK "),
+                CommandParameter = "RRNETWORKCHECK ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildRrNetworkCheckIcon(32),
+                Image            = BuildRrNetworkCheckIcon(16)
+            };
+            piSource.Items.Add(btnRrNet);
 
             tab.Panels.Add(new RibbonPanel { Source = piSource });
 
@@ -3192,6 +3244,194 @@ namespace AdvancedLandDevTools.Ribbon
             Canvas.SetLeft(badge, s * 23.2);
             Canvas.SetTop(badge,  s * 23.2);
             Add(badge);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  RR Network Check icon — pipes with clearance arrows
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildRrNetworkCheckIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0a1a0a"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Surface/ground line (wavy terrain at top) ───────────────────
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*2},{s*10} L {s*8},{s*8} L {s*14},{s*11} L {s*20},{s*7} " +
+                    $"L {s*26},{s*9} L {s*30},{s*8}"),
+                Stroke = C("#66BB6A"), StrokeThickness = s * 2,
+                Fill = Brushes.Transparent,
+                StrokeLineJoin = PenLineJoin.Round
+            });
+
+            // ── Horizontal pressure pipe (blue) ─────────────────────────────
+            Add(new Rectangle
+            {
+                Width = s * 26, Height = s * 5,
+                Fill = C("#1565C0"),
+                RadiusX = s * 1.5, RadiusY = s * 1.5
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 3); Canvas.SetTop(canvas.Children[^1], s * 19);
+
+            // pipe highlight
+            Add(new Rectangle
+            {
+                Width = s * 26, Height = s * 1.5,
+                Fill = new SolidColorBrush(Color.FromArgb(80, 0x90, 0xCA, 0xF9)),
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 3); Canvas.SetTop(canvas.Children[^1], s * 19);
+
+            // ── Clearance arrow (vertical, between surface and pipe) ─────────
+            // Arrow shaft
+            Add(new Line
+            {
+                X1 = s * 16, Y1 = s * 12,
+                X2 = s * 16, Y2 = s * 18,
+                Stroke = C("#FFEB3B"), StrokeThickness = s * 1.2
+            });
+            // Top arrowhead
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s * 16, s * 11.5),
+                    new System.Windows.Point(s * 14, s * 14),
+                    new System.Windows.Point(s * 18, s * 14)
+                }),
+                Fill = C("#FFEB3B")
+            });
+            // Bottom arrowhead
+            Add(new Polygon
+            {
+                Points = new System.Windows.Media.PointCollection(new[]
+                {
+                    new System.Windows.Point(s * 16, s * 18.5),
+                    new System.Windows.Point(s * 14, s * 16.5),
+                    new System.Windows.Point(s * 18, s * 16.5)
+                }),
+                Fill = C("#FFEB3B")
+            });
+
+            // ── Checkmark badge (bottom-right) ───────────────────────────────
+            Add(new Ellipse
+            {
+                Width = s * 9, Height = s * 9,
+                Fill = C("#2E7D32")
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 22); Canvas.SetTop(canvas.Children[^1], s * 24);
+
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*24},{s*28.5} L {s*26},{s*30.5} L {s*29.5},{s*26}"),
+                Stroke = Brushes.White, StrokeThickness = s * 1.5,
+                Fill = Brushes.Transparent,
+                StrokeLineJoin = PenLineJoin.Round
+            });
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  ChopChop icon — profile view split into segments with scissors
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildChopChopIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0d1a2d"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Large profile view (source) — top ─────────────────────────────
+            // Grid box
+            Add(new Rectangle
+            {
+                Width = s * 24, Height = s * 10,
+                Fill = C("#1a2d40"),
+                Stroke = C("#4488CC"), StrokeThickness = s * 0.8,
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 4); Canvas.SetTop(canvas.Children[^1], s * 3);
+
+            // Profile line on source view
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*5},{s*11} L {s*9},{s*7} L {s*14},{s*9} L {s*18},{s*5} " +
+                    $"L {s*22},{s*8} L {s*27},{s*6}"),
+                Stroke = C("#00AAFF"), StrokeThickness = s * 1.5,
+                Fill = Brushes.Transparent,
+                StrokeLineJoin = PenLineJoin.Round
+            });
+
+            // ── Dashed cut lines (vertical) ───────────────────────────────────
+            for (int i = 0; i < 2; i++)
+            {
+                double cx = s * (13 + i * 7);
+                Add(new Line
+                {
+                    X1 = cx, Y1 = s * 14, X2 = cx, Y2 = s * 20,
+                    Stroke = C("#FF6B6B"), StrokeThickness = s * 1.2,
+                    StrokeDashArray = new DoubleCollection(new[] { 2.0, 2.0 })
+                });
+            }
+
+            // ── Three sub-views (bottom row) ──────────────────────────────────
+            double[] xs = { 2, 12, 22 };
+            string[] colours = { "#4FC3F7", "#66BB6A", "#FFB74D" };
+            for (int i = 0; i < 3; i++)
+            {
+                double bx = s * xs[i];
+                double by = s * 21;
+
+                // Sub-view box
+                Add(new Rectangle
+                {
+                    Width = s * 8, Height = s * 7,
+                    Fill = C("#1a2d40"),
+                    Stroke = C(colours[i]), StrokeThickness = s * 0.8,
+                    RadiusX = s * 1, RadiusY = s * 1
+                });
+                Canvas.SetLeft(canvas.Children[^1], bx); Canvas.SetTop(canvas.Children[^1], by);
+
+                // Mini profile squiggle
+                double mx = bx + s * 1;
+                Add(new Path
+                {
+                    Data = Geometry.Parse(
+                        $"M {mx},{s*26} L {mx + s*2},{s*23} L {mx + s*4},{s*25} L {mx + s*6},{s*22}"),
+                    Stroke = C(colours[i]), StrokeThickness = s * 1,
+                    Fill = Brushes.Transparent,
+                    StrokeLineJoin = PenLineJoin.Round
+                });
+            }
+
+            // ── Scissors glyph (small, top-right corner) ─────────────────────
+            var scissor = new System.Windows.Controls.TextBlock
+            {
+                Text = "✂",
+                Foreground = C("#FF6B6B"),
+                FontSize = s * 7,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(scissor, s * 24); Canvas.SetTop(scissor, s * 12);
+            Add(scissor);
 
             return RenderToBitmap(canvas, size, size);
         }

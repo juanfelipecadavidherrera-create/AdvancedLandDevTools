@@ -6,12 +6,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Advanced Land Development Tools -- Help</title>
 <style>
-  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px 40px; line-height: 1.6; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 0; line-height: 1.6; display: flex; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────────── */
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 210px;
+    background: #141414; border-right: 1px solid #333;
+    overflow-y: auto; padding: 12px 0; z-index: 100;
+  }
+  #sidebar h3 {
+    color: #60CDFF; font-size: 10px; text-transform: uppercase;
+    padding: 10px 14px 4px; margin: 0; opacity: 0.7; letter-spacing: 0.5px;
+  }
+  #sidebar a {
+    display: block; padding: 5px 14px 5px 20px; color: #b0b8c4;
+    text-decoration: none; font-size: 12px; border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  #sidebar a:hover { background: #252530; color: #60CDFF; border-left-color: #60CDFF; }
+  #sidebar a.active { color: #60CDFF; border-left-color: #0078D4; background: #1e2a38; }
+  .sidebar-badge { display: inline-block; background: #2e7d32; color: white; font-size: 8px;
+                   padding: 0 4px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
+  .sidebar-badge-beta { display: inline-block; background: #E65100; color: white; font-size: 8px;
+                        padding: 0 4px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
+
+  /* ── Main content ────────────────────────────────────────────────────── */
+  #content { margin-left: 210px; padding: 20px 40px; flex: 1; }
   h1 { color: #60CDFF; border-bottom: 2px solid #0078D4; padding-bottom: 10px; }
   h2 { color: #60CDFF; margin-top: 30px; }
   h3 { color: #9E9E9E; margin-top: 20px; }
   code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; color: #FFB74D; }
-  .cmd { background: #2d2d2d; border-left: 3px solid #0078D4; padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+  .cmd { background: #2d2d2d; border-left: 3px solid #0078D4; padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; scroll-margin-top: 20px; }
   .cmd strong { color: #60CDFF; }
   .cmd em { color: #9E9E9E; font-style: normal; font-size: 13px; }
   .cmd .workflow { margin-top: 8px; padding-top: 8px; border-top: 1px solid #3a3a3a; }
@@ -25,14 +51,80 @@
   .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #454545; color: #6d6d6d; font-size: 13px; }
   .badge { display: inline-block; background: #0078D4; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
   .badge-new { display: inline-block; background: #2e7d32; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+  .badge-beta { display: inline-block; background: #E65100; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
   ol { margin: 8px 0 0 0; padding-left: 20px; }
   ol li { margin-bottom: 4px; font-size: 13px; }
+
+  /* Scrollbar */
+  #sidebar::-webkit-scrollbar { width: 4px; }
+  #sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
 </style>
 </head>
 <body>
 
+<!-- ════════════════════════════════════════════════════════════════════════
+     SIDEBAR — command quick-nav buttons
+     ════════════════════════════════════════════════════════════════════════ -->
+<nav id="sidebar">
+  <h3>Profile Views</h3>
+  <a href="#cmd-bulksur">BULKSUR</a>
+  <a href="#cmd-getparent">GETPARENT</a>
+  <a href="#cmd-pipemagic">PIPEMAGIC</a>
+  <a href="#cmd-marklines">MARKLINES</a>
+  <a href="#cmd-profoff">PROFOFF</a>
+  <a href="#cmd-pvstyle">PVSTYLE</a>
+  <a href="#cmd-chopchop">CHOPCHOP <span class="sidebar-badge">NEW</span></a>
+
+  <h3>Alignments</h3>
+  <a href="#cmd-aligndeploy">ALIGNDEPLOY</a>
+
+  <h3>Pipes</h3>
+  <a href="#cmd-invertpullup">INVERTPULLUP</a>
+  <a href="#cmd-changeelevation">CHANGEELEVATION</a>
+  <a href="#cmd-pipesizing">PIPESIZING</a>
+  <a href="#cmd-eeebend">EEEBEND</a>
+  <a href="#cmd-presscount">PRESSCOUNT</a>
+  <a href="#cmd-rrnetworkcheck">RRNETWORKCHECK <span class="sidebar-badge-beta">BETA</span></a>
+
+  <h3>Surfaces</h3>
+  <a href="#cmd-elevslope">ELEVSLOPE</a>
+  <a href="#cmd-blocktosurface">BLOCKTOSURFACE</a>
+  <a href="#cmd-texttosurface">TEXTTOSURFACE</a>
+  <a href="#cmd-lowrim">LOWRIM</a>
+
+  <h3>Property Info</h3>
+  <a href="#cmd-floodzone">FLOODZONE</a>
+  <a href="#cmd-floodcriteria">FLOODCRITERIA</a>
+  <a href="#cmd-sectionlookup">SECTIONLOOKUP</a>
+  <a href="#cmd-gwmay">GWMAY</a>
+  <a href="#cmd-gwoct">GWOCT</a>
+
+  <h3>Areas & Excavation</h3>
+  <a href="#cmd-areamanager">AREAMANAGER</a>
+  <a href="#cmd-exf">EXF</a>
+
+  <h3>Sections</h3>
+  <a href="#cmd-secdraw">SECDRAW</a>
+
+  <h3>Vehicle Tracking</h3>
+  <a href="#cmd-vtpanel">VTPANEL</a>
+  <a href="#cmd-vtsweep">VTSWEEP</a>
+  <a href="#cmd-vtdrive">VTDRIVE</a>
+  <a href="#cmd-vtpark">VTPARK</a>
+
+  <h3>Quick Access</h3>
+  <a href="#cmd-aldttoolbar">ALDTTOOLBAR</a>
+  <a href="#cmd-aldthelp">ALDTHELP</a>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ════════════════════════════════════════════════════════════════════════ -->
+<div id="content">
+
 <h1>Advanced Land Development Tools v1.1.0</h1>
 <p>A productivity suite for Autodesk Civil 3D 2025 / 2026 / 2027 designed for land development professionals. All commands are accessible from the <strong>Advanced Land Dev Tools</strong> ribbon tab or the floating Mini Toolbar.</p>
+<p><em>Use the sidebar on the left to jump directly to any command.</em></p>
 
 <h2>Installation</h2>
 <div class="section">
@@ -52,7 +144,7 @@
 
 <h3>Profile Views</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-bulksur">
 <strong>BULKSUR</strong> -- Bulk Surface Profile Creator<br>
 Creating surface profiles one alignment at a time is one of the most repetitive tasks in land development. BULKSUR eliminates that bottleneck entirely. Select any number of alignments, configure your station range, elevation range, and profile view style, then pick a single insertion point. The tool generates every surface profile and profile view in one batch, automatically spacing them vertically so they do not overlap.
 <div class="workflow"><strong>How to use:</strong>
@@ -65,7 +157,7 @@ Creating surface profiles one alignment at a time is one of the most repetitive 
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-getparent">
 <strong>GETPARENT</strong> -- Get Parent Alignment<br>
 Click any profile view and the tool identifies its parent alignment, highlights it in the drawing, and reports its name and station range in the command line. Useful in large subdivision projects where profile views may have been moved far from their source alignments.
 <div class="workflow"><strong>How to use:</strong>
@@ -77,7 +169,7 @@ Click any profile view and the tool identifies its parent alignment, highlights 
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-pipemagic">
 <strong>PIPEMAGIC</strong> -- Pipe Crossing Projection<br>
 Select one or more profile views and PIPEMAGIC scans all pipe networks in the drawing -- both gravity and pressure -- detects which ones cross each alignment, and projects them into the corresponding profile view automatically.<br><br>
 <strong>Pressure Fitting Detector</strong> -- When enabled, also projects the start and end fittings of each crossing pressure pipe into the profile view. Activate by typing <code>On</code> at the prompt.<br><br>
@@ -94,7 +186,7 @@ Select one or more profile views and PIPEMAGIC scans all pipe networks in the dr
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-marklines">
 <strong>MARKLINES</strong> -- Mark Crossing Lines<br>
 Finds every point where selected lines or polylines cross an alignment and draws a full-height vertical marker line at that station in the profile view. Multiple profile views can be processed in a single run.
 <div class="workflow"><strong>How to use:</strong>
@@ -107,7 +199,7 @@ Finds every point where selected lines or polylines cross an alignment and draws
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-profoff">
 <strong>PROFOFF</strong> -- Profile Off <span class="badge-new">v1.1.0</span><br>
 Remove a specific pipe or structure from a profile view by clicking directly on it. The part is removed from that profile view only -- it remains in the model and is still shown in all other views.
 <div class="workflow"><strong>How to use:</strong>
@@ -121,7 +213,7 @@ Remove a specific pipe or structure from a profile view by clicking directly on 
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-pvstyle">
 <strong>PVSTYLE</strong> -- Profile View Style Override <span class="badge-new">v1.1.0</span><br>
 Changes the per-profile-view style override for a pipe or structure -- the "Style Override" column in Profile View Properties. The global pipe style is never modified; only the display inside the selected profile view changes.
 <div class="workflow"><strong>How to use:</strong>
@@ -137,7 +229,27 @@ Changes the per-profile-view style override for a pipe or structure -- the "Styl
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-chopchop">
+<strong>CHOPCHOP</strong> -- Profile View Subdivider <span class="badge-new">v1.1.0</span><br>
+Subdivide an existing profile view into multiple smaller profile views along the station axis. The original profile view is preserved untouched. Two subdivision modes are available:<br><br>
+<strong>Equal Subdivision</strong> -- enter a segment length (e.g. 500 ft) and the tool divides the station range into equal segments. If the total length is not evenly divisible, the last segment absorbs the remainder.<br><br>
+<strong>Custom Intervals</strong> -- manually define start and end stations for each sub-view. The tool validates for overlaps and out-of-range values.<br><br>
+Sub-views are placed 500 ft below the original (configurable), arranged horizontally left to right in station order with a configurable gap between them. Styles, elevation ranges, and band configurations are copied from the source profile view.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>CHOPCHOP</code> from the ribbon, mini toolbar, or command line.</li>
+<li>Click on a profile view in the drawing to select it as the source.</li>
+<li>In the dialog, choose <strong>Equal Subdivision</strong> or <strong>Custom Intervals</strong>.</li>
+<li>For Equal: enter the segment length in feet (e.g. 500). A live preview shows how many sub-views will be created and their station ranges.</li>
+<li>For Custom: add rows with start/end stations for each interval. Use station format (e.g. <code>5+00</code>) or raw numbers (e.g. <code>500</code>).</li>
+<li>Adjust the Vertical Offset (default 500 ft) and Horizontal Gap (default 100 ft) if needed.</li>
+<li>Click <strong>OK</strong>. Sub-views are created and arranged below the original.</li>
+</ol>
+<em>Tip: The original profile view is never modified or deleted. Sub-views inherit the same profile view style and elevation range from the source.</em>
+</div>
+</div>
+
+<div class="cmd" id="cmd-vpcut">
 <strong>VPCUT</strong> -- Viewport Clip <span class="badge">Layout</span><br>
 Clips a paper space viewport to an arbitrary closed shape drawn in model space -- perfect for lot-shaped viewports, curved road boundaries, or any non-rectangular presentation frame.<br><br>
 Supported boundary types: circles, closed polylines, rectangles, splines, and any other closed curve.
@@ -153,7 +265,7 @@ Supported boundary types: circles, closed polylines, rectangles, splines, and an
 
 <h3>Alignments</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-aligndeploy">
 <strong>ALIGNDEPLOY</strong> -- Alignment Deploy<br>
 Places rotated copies of a cross alignment at regular intervals along a main alignment, properly oriented perpendicular to the road centerline. Ideal for driveways, cul-de-sacs, drainage crossings, or any repeating cross-pattern.
 <div class="workflow"><strong>How to use:</strong>
@@ -169,7 +281,7 @@ Places rotated copies of a cross alignment at regular intervals along a main ali
 
 <h3>Pipes</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-invertpullup">
 <strong>INVERTPULLUP</strong> -- Invert Pull Up<br>
 Click any gravity or pressure pipe, then click a point along it. The tool calculates the exact invert elevation via linear interpolation and places a station-offset label at that location. Eliminates manual slope calculations.
 <div class="workflow"><strong>How to use:</strong>
@@ -182,7 +294,7 @@ Click any gravity or pressure pipe, then click a point along it. The tool calcul
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-changeelevation">
 <strong>CHANGEELEVATION</strong> -- Change Pipe Elevation<br>
 Select a gravity or pressure pipe to display both crown elevations, then choose which one to apply to both ends, making the pipe level. Works by selecting the pipe directly in plan view or by clicking the pipe crossing symbol inside a profile view.
 <div class="workflow"><strong>How to use:</strong>
@@ -196,7 +308,7 @@ Select a gravity or pressure pipe to display both crown elevations, then choose 
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-pipesizing">
 <strong>PIPESIZING</strong> -- Pipe Sizing Calculator<br>
 Opens a calculator window for stormwater pipe sizing. Enter the drainage area, runoff coefficient, and design storm intensity; then check a specific pipe diameter and slope against Manning's Equation capacity and velocity criteria.
 <div class="workflow"><strong>How to use:</strong>
@@ -209,7 +321,7 @@ Opens a calculator window for stormwater pipe sizing. Enter the drainage area, r
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-eeebend">
 <strong>EEEBEND</strong> -- EEE Bend (Pressure Pipe Duck)<br>
 Automates the placement of a pressure pipe bypass ("duck") in a profile view. Select the pressure pipe run, click the crossing location, enter the target invert elevation -- the command places all four bends and five pipe segments automatically.
 <div class="workflow"><strong>How to use:</strong>
@@ -223,7 +335,7 @@ Automates the placement of a pressure pipe bypass ("duck") in a profile view. Se
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-presscount">
 <strong>PRESSCOUNT</strong> -- Pressure Network Count<br>
 Scans the drawing, lets you select a pressure network, calculates total 3D pipe length, assigns sequential numbers to every fitting, and optionally places MText labels at each fitting location in plan view. All labels are grouped into a single named AutoCAD Group.
 <div class="workflow"><strong>How to use:</strong>
@@ -237,9 +349,27 @@ Scans the drawing, lets you select a pressure network, calculates total 3D pipe 
 </div>
 </div>
 
+<div class="cmd" id="cmd-rrnetworkcheck">
+<strong>RRNETWORKCHECK</strong> -- Pressure Network Clearance Check <span class="badge-beta">BETA v1.1.0</span><br>
+Checks vertical clearance and cover between pressure pipe parts and the existing ground surface in a profile view. Click any pressure pipe part shown in a profile view and the tool auto-detects the surface sampled on that view, then measures the distance from the pipe to the surface at every relevant point. Reports pass/fail based on minimum cover requirements. Uses logic to suggest bend placements when clearance is insufficient.<br><br>
+<strong>Surface Auto-Detection</strong> -- The tool reads the profile view's sampled surface profiles and automatically identifies the source surface via the Civil 3D <code>DataSourceId</code> API. No manual surface selection is needed.<br><br>
+<strong>Note:</strong> This command is currently in <strong>beta</strong>. Bend placement suggestions are preliminary and should be reviewed before construction.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>RRNETWORKCHECK</code> from the ribbon, mini toolbar, or command line.</li>
+<li>Click on a pressure pipe part (pipe, fitting, or appurtenance) inside a profile view.</li>
+<li>The tool auto-detects the surface from the profile view's sampled profiles.</li>
+<li>Cover and clearance values are calculated at every significant point along the pipe.</li>
+<li>A pass/fail report is shown in both the command line and a summary dialog.</li>
+<li>If clearance violations are found, the tool suggests bend locations based on the surface profile.</li>
+</ol>
+<em>Tip: Make sure the profile view has at least one surface profile sampled (EG/Existing Ground) so the tool can auto-detect the reference surface. If no surface profile is found, you will be prompted to select one manually.</em>
+</div>
+</div>
+
 <h3>Surfaces</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-elevslope">
 <strong>ELEVSLOPE</strong> -- Elevation Sloper<br>
 Pick a starting point on a TIN surface, enter a slope and distance, then click to place a new surface point at the calculated elevation. Ideal for projecting elevations along a designed grade.
 <div class="workflow"><strong>How to use:</strong>
@@ -252,7 +382,7 @@ Pick a starting point on a TIN surface, enter a slope and distance, then click t
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-blocktosurface">
 <strong>BLOCKTOSURFACE</strong> -- Block to Surface<br>
 Reads a specified elevation attribute from selected blocks and adds their X, Y locations and attribute-derived elevations as breakpoints to a Civil 3D TIN surface. Useful for incorporating survey point data delivered as AutoCAD blocks.
 <div class="workflow"><strong>How to use:</strong>
@@ -265,7 +395,7 @@ Reads a specified elevation attribute from selected blocks and adds their X, Y l
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-texttosurface">
 <strong>TEXTTOSURFACE</strong> -- Text to Surface<br>
 Reads the numeric content of selected Text or MText entities and adds each entity's location to a Civil 3D TIN surface as a point. Useful for converting spot elevation annotations into usable surface data.
 <div class="workflow"><strong>How to use:</strong>
@@ -277,7 +407,7 @@ Reads the numeric content of selected Text or MText entities and adds each entit
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-lowrim">
 <strong>LOWRIM</strong> -- Lowest Rim Elevation<br>
 Scans selected Civil 3D structures and identifies the one with the lowest rim elevation -- typically the controlling structure for a drainage system or the first to overflow.
 <div class="workflow"><strong>How to use:</strong>
@@ -291,7 +421,7 @@ Scans selected Civil 3D structures and identifies the one with the lowest rim el
 
 <h3>Property Information</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-floodzone">
 <strong>FLOODZONE</strong> -- FEMA Flood Zone Lookup<br>
 Queries the FEMA National Flood Hazard Layer (NFHL) in real time and returns the flood zone designation (AE, X, AH, etc.), base flood elevation (BFE), SFHA status, and FIRM panel number for any point you pick. Optionally places results as an MText label.
 <div class="workflow"><strong>How to use:</strong>
@@ -304,7 +434,7 @@ Queries the FEMA National Flood Hazard Layer (NFHL) in real time and returns the
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-floodcriteria">
 <strong>FLOODCRITERIA</strong> -- County Flood Criteria<br>
 Queries the Miami-Dade County Flood Criteria 2022 dataset and reports the minimum finished floor elevation (ft NGVD) for the location you pick. Required for MDC development permits.
 <div class="workflow"><strong>How to use:</strong>
@@ -316,7 +446,7 @@ Queries the Miami-Dade County Flood Criteria 2022 dataset and reports the minimu
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-sectionlookup">
 <strong>SECTIONLOOKUP</strong> -- PLSS Section Lookup<br>
 Queries the SFWMD PLSS service and returns the Section, Township, Range, and SSTTRR code for any point you pick. Required for legal descriptions and permit applications in Florida.
 <div class="workflow"><strong>How to use:</strong>
@@ -328,7 +458,7 @@ Queries the SFWMD PLSS service and returns the Section, Township, Range, and SST
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-gwmay">
 <strong>GWMAY</strong> -- Water Table (Average May)<br>
 Queries the Miami-Dade County groundwater dataset and returns the average May water table elevation at the picked point in both NAVD 88 and NGVD 29. Used for seasonal high water table in stormwater and exfiltration design.
 <div class="workflow"><strong>How to use:</strong>
@@ -340,7 +470,7 @@ Queries the Miami-Dade County groundwater dataset and returns the average May wa
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-gwoct">
 <strong>GWOCT</strong> -- Water Table (October 2040 Projection)<br>
 Returns the projected October 2040 groundwater elevation at the picked point. Used for sea level rise resilience assessments and future-proofing drainage and foundation design in Miami-Dade County.
 <div class="workflow"><strong>How to use:</strong>
@@ -354,7 +484,7 @@ Returns the projected October 2040 groundwater elevation at the picked point. Us
 
 <h3>Areas &amp; Excavation</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-areamanager">
 <strong>AREAMANAGER</strong> -- Area Manager<br>
 A dockable palette for tracking impervious/pervious areas, lakes, and footprints across a project. Add areas by selecting hatches or closed polylines. Organize into categories, redraw deleted hatches, and export to CSV with per-category subtotals.
 <div class="workflow"><strong>How to use:</strong>
@@ -367,7 +497,7 @@ A dockable palette for tracking impervious/pervious areas, lakes, and footprints
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-exf">
 <strong>EXF</strong> -- EXF Trench Manager<br>
 A dockable palette for tracking exfiltration trench lengths across a project. Select polylines or line segments representing trench runs; the tool accumulates total linear footage for permit submittals and contractor pay requests.
 <div class="workflow"><strong>How to use:</strong>
@@ -381,7 +511,7 @@ A dockable palette for tracking exfiltration trench lengths across a project. Se
 
 <h3>Cross Sections</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-secdraw">
 <strong>SECDRAW</strong> -- Section Drawer<br>
 Opens a designer window where you build a cross-section by chaining slope segments (lane, shoulder, swale, cut/fill slope, etc.). Draws the section into model space at 1:1 scale with labeled dimensions.
 <div class="workflow"><strong>How to use:</strong>
@@ -396,7 +526,7 @@ Opens a designer window where you build a cross-section by chaining slope segmen
 
 <h3>Vehicle Tracking</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-vtpanel">
 <strong>VTPANEL</strong> -- Vehicle Tracking Panel<br>
 The central hub for all vehicle tracking operations. Lists available vehicle templates, lets you configure vehicle parameters, and provides access to swept path, drive, and parking tools.
 <div class="workflow"><strong>How to use:</strong>
@@ -408,7 +538,7 @@ The central hub for all vehicle tracking operations. Lists available vehicle tem
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-vtsweep">
 <strong>VTSWEEP</strong> -- Swept Path Analysis<br>
 Traces the selected vehicle along a polyline path and draws the swept envelope -- showing the full vehicle footprint through the maneuver. Essential for checking driveway geometry, intersection turning radii, and fire truck access.
 <div class="workflow"><strong>How to use:</strong>
@@ -420,7 +550,7 @@ Traces the selected vehicle along a polyline path and draws the swept envelope -
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-vtdrive">
 <strong>VTDRIVE</strong> -- Interactive Drive Mode<br>
 Steer a vehicle through a maneuver in real time using the keyboard or mouse. The swept path is recorded and drawn as the vehicle moves. Useful for tight turning situations and fire access routes where the exact path is not predetermined.
 <div class="workflow"><strong>How to use:</strong>
@@ -433,7 +563,7 @@ Steer a vehicle through a maneuver in real time using the keyboard or mouse. The
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-vtpark">
 <strong>VTPARK</strong> -- Parking Layout Generator<br>
 Generates a parking layout -- stall lines and drive aisle -- for a selected vehicle type and configuration. Placed in model space at 1:1 scale. Speeds up preliminary parking design and ADA/zoning compliance checks.
 <div class="workflow"><strong>How to use:</strong>
@@ -447,7 +577,7 @@ Generates a parking layout -- stall lines and drive aisle -- for a selected vehi
 
 <h3>Quick Access</h3>
 
-<div class="cmd">
+<div class="cmd" id="cmd-aldttoolbar">
 <strong>ALDTTOOLBAR</strong> -- Toggle Mini Toolbar<br>
 A compact floating panel with one-click access to every ALDT command. Stays on top of the drawing area and is organized by category with color-coded icons. Drag to reposition. Use the gear icon to show or hide individual commands.
 <div class="workflow"><strong>How to use:</strong>
@@ -459,13 +589,13 @@ A compact floating panel with one-click access to every ALDT command. Stays on t
 </div>
 </div>
 
-<div class="cmd">
+<div class="cmd" id="cmd-aldthelp">
 <strong>ALDTHELP</strong> -- Open Help Window<br>
 Opens this help document in a resizable window directly inside Civil 3D. All commands, workflows, and usage notes are available without leaving the application.
 <div class="workflow"><strong>How to use:</strong>
 <ol>
 <li>Run <code>ALDTHELP</code> from the ribbon or command line.</li>
-<li>The help window opens. Scroll to find any command.</li>
+<li>The help window opens. Use the sidebar to jump to any command.</li>
 <li>Close the window when done.</li>
 </ol>
 </div>
@@ -486,7 +616,7 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added -- opens this help window from within Civil 3D.</td></tr>
+<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. Both new commands added to ribbon and Mini Toolbar.</td></tr>
 <tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>
@@ -501,6 +631,53 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <p>&copy; 2026 Juan Felipe Cadavid. All rights reserved.<br>
 Advanced Land Development Tools v1.1.0 is proprietary software. Unauthorized distribution is prohibited.</p>
 </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     JavaScript — sidebar active state on scroll
+     ════════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var links = document.querySelectorAll('#sidebar a');
+  var cmds  = [];
+  var i;
+  for(i = 0; i < links.length; i++){
+    var id = links[i].getAttribute('href');
+    if(id && id.charAt(0)==='#'){
+      var el = document.getElementById(id.substring(1));
+      if(el) cmds.push({link:links[i], el:el});
+    }
+  }
+
+  // Smooth scroll (IE fallback: just jump)
+  for(i = 0; i < links.length; i++){
+    (function(a){
+      a.onclick = function(e){
+        var id = a.getAttribute('href');
+        if(id && id.charAt(0)==='#'){
+          if(e.preventDefault) e.preventDefault();
+          else e.returnValue = false;
+          var target = document.getElementById(id.substring(1));
+          if(target) target.scrollIntoView(true);
+        }
+      };
+    })(links[i]);
+  }
+
+  // Highlight on scroll
+  window.onscroll = function(){
+    var current = null;
+    for(var j = 0; j < cmds.length; j++){
+      if(cmds[j].el.getBoundingClientRect().top < 100) current = cmds[j];
+    }
+    for(var k = 0; k < links.length; k++){
+      links[k].className = links[k].className.replace(/\bactive\b/g, '').replace(/^\s+|\s+$/g,'');
+    }
+    if(current) current.link.className += ' active';
+  };
+})();
+</script>
 
 </body>
 </html>
