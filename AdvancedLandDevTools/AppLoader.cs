@@ -42,6 +42,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(PvStyleCommand))]
 [assembly: CommandClass(typeof(RrNetworkCheckCommand))]
 [assembly: CommandClass(typeof(ChopChopCommand))]
+[assembly: CommandClass(typeof(LLabelGenCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -153,6 +154,7 @@ namespace AdvancedLandDevTools
                 "\n║    PVSTYLE         – Profile View Style Override        ║" +
                 "\n║    RRNETWORKCHECK  – Pressure Network Clearance Check   ║" +
                 "\n║    CHOPCHOP        – Profile View Subdivider            ║" +
+                "\n║    LLABELGEN       – PV Elevation Label Generator        ║" +
                 "\n║  Cross Sections:                                        ║" +
                 "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
