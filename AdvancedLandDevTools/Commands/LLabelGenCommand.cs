@@ -17,6 +17,20 @@ namespace AdvancedLandDevTools.Commands
 {
     public class LLabelGenCommand
     {
+        // ─────────────────────────────────────────────────────────────────────
+        //  Resolved profile view info — works for both native and XREF PVs.
+        // ─────────────────────────────────────────────────────────────────────
+        private sealed class PvContext
+        {
+            public string   Name                  = "";
+            public ObjectId NativeId;                              // Null when XREF
+            public Extents3d ExtentsHostWCS;                       // always valid, in host WCS
+            public bool     IsXref;
+            public Database? XrefDatabase;                         // non-null when XREF
+            public Matrix3d XrefToHost             = Matrix3d.Identity;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
         [CommandMethod("LLABELGEN", CommandFlags.Modal)]
         public void Execute()
         {
@@ -30,51 +44,40 @@ namespace AdvancedLandDevTools.Commands
                 Editor   ed = doc.Editor;
                 Database db = doc.Database;
 
-                ed.WriteMessage("\n");
-                ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
-                ed.WriteMessage("  Advanced Land Development Tools  |  Label Generator       \n");
-                ed.WriteMessage("  Places station-elevation labels at crossing pipe inverts.  \n");
-                ed.WriteMessage("═══════════════════════════════════════════════════════════\n");
+                ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
+                ed.WriteMessage("\n  Advanced Land Development Tools  |  Label Generator");
+                ed.WriteMessage("\n  Places station-elevation labels at crossing pipe inverts.");
+                ed.WriteMessage("\n  Works with native and XREF profile views.");
+                ed.WriteMessage("\n═══════════════════════════════════════════════════════════");
 
-                // ── Step 1: Select a profile view ─────────────────────────────
+                // ── Step 1: Select the profile view (native or XREF) ──────────
                 var peo = new PromptEntityOptions(
-                    "\n  Select a profile view: ");
-                peo.AllowNone = false;
+                    "\n  Click anywhere inside a profile view: ");
+                peo.AllowNone              = false;
                 peo.AllowObjectOnLockedLayer = true;
 
                 var per = ed.GetEntity(peo);
                 if (per.Status != PromptStatus.OK)
+                { ed.WriteMessage("\n  Cancelled.\n"); return; }
+
+                var ctx = DetectProfileView(per, db, ed);
+                if (ctx == null)
                 {
-                    ed.WriteMessage("\n  Cancelled.\n");
+                    ed.WriteMessage(
+                        "\n  ❌ No profile view found at that point." +
+                        "\n  Click directly on the profile view grid or border.\n");
                     return;
                 }
-
-                ObjectId pvId = ObjectId.Null;
-                string pvName = "";
-
-                using (Transaction tx = db.TransactionManager.StartTransaction())
-                {
-                    // Try direct cast, then point-based search
-                    var ent = tx.GetObject(per.ObjectId, OpenMode.ForRead);
-                    var pv  = ent as CivilDB.ProfileView
-                              ?? FindProfileViewAtPoint(per.PickedPoint, tx, db);
-
-                    if (pv == null)
-                    {
-                        ed.WriteMessage("\n  ❌ Selected object is not a profile view.\n");
-                        tx.Abort();
-                        return;
-                    }
-
-                    pvId   = pv.ObjectId;
-                    pvName = pv.Name;
-                    tx.Abort();
-                }
-
-                ed.WriteMessage($"\n  Profile View: '{pvName}'");
+                ed.WriteMessage($"\n  Profile View: '{ctx.Name}'{(ctx.IsXref ? " [XREF]" : "")}");
 
                 // ── Step 2: Find crossing pipe proxies ────────────────────────
-                var crossings = LLabelGenEngine.FindCrossingPoints(pvId, db);
+                List<CrossingLabelPoint> crossings;
+                if (!ctx.IsXref)
+                    crossings = LLabelGenEngine.FindCrossingPoints(ctx.NativeId, db);
+                else
+                    crossings = LLabelGenEngine.FindCrossingPointsInXref(
+                        ctx.XrefDatabase!, ctx.XrefToHost, ctx.ExtentsHostWCS);
+
                 ed.WriteMessage($"\n  Crossing pipe proxies found: {crossings.Count}");
 
                 if (crossings.Count == 0)
@@ -86,28 +89,21 @@ namespace AdvancedLandDevTools.Commands
                     return;
                 }
 
-                // Report each crossing
                 foreach (var cp in crossings)
-                {
                     ed.WriteMessage(
                         $"\n    Sta {cp.Station:F2}  Elev {cp.Elevation:F3}" +
-                        $"  at ({cp.DrawingX:F2}, {cp.DrawingY:F2})");
-                }
+                        $"  WCS ({cp.DrawingX:F2}, {cp.DrawingY:F2})");
 
                 // ── Step 3: Collect label styles ──────────────────────────────
                 var labelStyles  = new List<StyleItem>();
                 var markerStyles = new List<StyleItem>();
 
-                using (Transaction tx = db.TransactionManager.StartTransaction())
+                using (var tx = db.TransactionManager.StartTransaction())
                 {
                     try
                     {
-                        CivilApp.CivilDocument civDoc =
-                            CivilApp.CivilDocument.GetCivilDocument(db);
+                        var civDoc = CivilApp.CivilDocument.GetCivilDocument(db);
 
-                        // Station Elevation Label Styles for Profile Views
-                        // Path: Styles > LabelStyles > ProfileViewLabelStyles >
-                        //       StationElevationLabelStyles
                         try
                         {
                             var seStyles = civDoc.Styles.LabelStyles
@@ -121,7 +117,6 @@ namespace AdvancedLandDevTools.Commands
                                 $"\n  ⚠ Could not read StationElevationLabelStyles: {ex.Message}");
                         }
 
-                        // Marker Styles
                         foreach (ObjectId id in civDoc.Styles.MarkerStyles)
                         {
                             try
@@ -141,39 +136,32 @@ namespace AdvancedLandDevTools.Commands
                     tx.Abort();
                 }
 
-                ed.WriteMessage($"\n  Found: {labelStyles.Count} label style(s), " +
-                                $"{markerStyles.Count} marker style(s)");
+                ed.WriteMessage(
+                    $"\n  Found: {labelStyles.Count} label style(s), " +
+                    $"{markerStyles.Count} marker style(s)");
 
                 if (labelStyles.Count == 0)
                 {
                     ed.WriteMessage(
                         "\n  ❌ No Station Elevation Label Styles found in the drawing." +
-                        "\n  Please ensure label styles exist under:" +
-                        "\n    Settings > Profile View > Label Styles > Station Elevation\n");
+                        "\n  Settings > Profile View > Label Styles > Station Elevation\n");
                     return;
                 }
 
-                // Add "(None)" option for marker
                 markerStyles.Insert(0, new StyleItem { Name = "(None)", Id = ObjectId.Null });
 
                 // ── Step 4: Show dialog ───────────────────────────────────────
                 var dlg = new LLabelGenDialog(labelStyles, markerStyles);
-                bool? dlgResult = AcApp.ShowModalWindow(dlg);
-                if (dlgResult != true)
-                {
-                    ed.WriteMessage("\n  Cancelled.\n");
-                    return;
-                }
-
-                ObjectId chosenLabelStyleId  = dlg.SelectedLabelStyleId;
-                ObjectId chosenMarkerStyleId = dlg.SelectedMarkerStyleId;
-
-                ed.WriteMessage($"\n  Label style selected. Queuing {crossings.Count} label(s)...");
+                if (AcApp.ShowModalWindow(dlg) != true)
+                { ed.WriteMessage("\n  Cancelled.\n"); return; }
 
                 // ── Step 5: Queue label placements ────────────────────────────
+                ed.WriteMessage(
+                    $"\n  Label style selected. Queuing {crossings.Count} label(s)...");
+
                 int queued = LLabelGenEngine.QueueLabelJobs(
-                    pvId, crossings,
-                    chosenLabelStyleId, chosenMarkerStyleId,
+                    ctx.ExtentsHostWCS, crossings,
+                    dlg.SelectedLabelStyleId, dlg.SelectedMarkerStyleId,
                     db, doc);
 
                 ed.WriteMessage(
@@ -183,23 +171,168 @@ namespace AdvancedLandDevTools.Commands
             }
             catch (System.Exception ex)
             {
-                var d = AcApp.DocumentManager.MdiActiveDocument;
-                d?.Editor.WriteMessage($"\n[ALDT ERROR] LLABELGEN: {ex.Message}\n");
+                AcApp.DocumentManager.MdiActiveDocument
+                    ?.Editor.WriteMessage($"\n[ALDT ERROR] LLABELGEN: {ex.Message}\n");
             }
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Find a ProfileView by testing if a WCS point falls inside any PV
-        //  bounding box.  Same approach as MarkLinesCommand / RrNetworkCheckCommand.
+        //  Find the profile view the user clicked — works for native drawings
+        //  AND for drawings where the profile view is inside an XREF.
+        //
+        //  Strategy:
+        //   1. Direct cast (user clicked the PV border entity itself).
+        //   2. Scan current DB model space by pick point (RrNetworkCheck pattern).
+        //   3. Iterate block references; for each XREF, open its DB, transform
+        //      pick point to local space, search that DB for a ProfileView that
+        //      contains the point.
+        // ─────────────────────────────────────────────────────────────────────
+        private static PvContext? DetectProfileView(
+            PromptEntityResult per, Database db, Editor ed)
+        {
+            Point3d pickPt = per.PickedPoint;
+
+            // ── Try 1 & 2: native DB ────────────────────────────────────────
+            using (var tx = db.TransactionManager.StartTransaction())
+            {
+                var ent = tx.GetObject(per.ObjectId, OpenMode.ForRead);
+                var pv  = ent as CivilDB.ProfileView
+                          ?? FindProfileViewAtPoint(pickPt, tx, db);
+
+                if (pv != null)
+                {
+                    var ctx = new PvContext
+                    {
+                        Name   = pv.Name,
+                        NativeId = pv.ObjectId,
+                        ExtentsHostWCS = GetExtents(pv),
+                        IsXref = false
+                    };
+                    tx.Abort();
+                    return ctx;
+                }
+                tx.Abort();
+            }
+
+            // ── Try 3: search XREF databases ────────────────────────────────
+            return FindProfileViewInXrefs(pickPt, db, ed);
+        }
+
+        private static PvContext? FindProfileViewInXrefs(
+            Point3d pickPt, Database db, Editor ed)
+        {
+            try
+            {
+                using (var tx = db.TransactionManager.StartTransaction())
+                {
+                    var ms = tx.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+                             as BlockTableRecord;
+                    if (ms == null) { tx.Abort(); return null; }
+
+                    foreach (ObjectId brId in ms)
+                    {
+                        BlockReference br;
+                        try { br = tx.GetObject(brId, OpenMode.ForRead) as BlockReference; }
+                        catch { continue; }
+                        if (br == null) continue;
+
+                        BlockTableRecord btrDef;
+                        try
+                        {
+                            btrDef = tx.GetObject(
+                                br.BlockTableRecord, OpenMode.ForRead) as BlockTableRecord;
+                        }
+                        catch { continue; }
+                        if (btrDef == null || !btrDef.IsFromExternalReference) continue;
+
+                        Database xDb;
+                        try { xDb = btrDef.GetXrefDatabase(false); }
+                        catch { continue; }
+                        if (xDb == null) continue;
+
+                        Matrix3d xform    = br.BlockTransform;
+                        Matrix3d invXform = xform.Inverse();
+                        Point3d  localPt  = pickPt.TransformBy(invXform);
+
+                        var found = SearchDatabaseForProfileView(xDb, localPt);
+                        if (found != null)
+                        {
+                            tx.Abort();
+                            // Transform PV extents to host WCS
+                            var hostExt = TransformExtents(found.Value.localExt, xform);
+                            return new PvContext
+                            {
+                                Name               = found.Value.name,
+                                NativeId           = ObjectId.Null,
+                                ExtentsHostWCS     = hostExt,
+                                IsXref             = true,
+                                XrefDatabase       = xDb,
+                                XrefToHost         = xform
+                            };
+                        }
+                    }
+                    tx.Abort();
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Opens a separate transaction on xDb, searches model space for a
+        /// ProfileView whose grid contains localPt.
+        /// Returns (name, localExtents) if found, or null.
+        /// </summary>
+        private static (string name, Extents3d localExt)? SearchDatabaseForProfileView(
+            Database xDb, Point3d localPt)
+        {
+            try
+            {
+                using (var xTx = xDb.TransactionManager.StartTransaction())
+                {
+                    var xMs = xTx.GetObject(xDb.CurrentSpaceId, OpenMode.ForRead)
+                              as BlockTableRecord;
+                    if (xMs == null) { xTx.Abort(); return null; }
+
+                    foreach (ObjectId xId in xMs)
+                    {
+                        CivilDB.ProfileView xPv;
+                        try { xPv = xTx.GetObject(xId, OpenMode.ForRead) as CivilDB.ProfileView; }
+                        catch { continue; }
+                        if (xPv == null) continue;
+
+                        double sta = 0, elev = 0;
+                        try
+                        {
+                            if (xPv.FindStationAndElevationAtXY(
+                                    localPt.X, localPt.Y, ref sta, ref elev))
+                            {
+                                string    name = xPv.Name;
+                                Extents3d ext  = GetExtents(xPv);
+                                xTx.Abort();
+                                return (name, ext);
+                            }
+                        }
+                        catch { }
+                    }
+                    xTx.Abort();
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Scan current DB model space for a PV containing the pick point.
         // ─────────────────────────────────────────────────────────────────────
         private static CivilDB.ProfileView? FindProfileViewAtPoint(
-            Point3d pickPoint, Transaction tx, Database db)
+            Point3d pickPt, Transaction tx, Database db)
         {
-            RXClass pvClass = RXObject.GetClass(typeof(CivilDB.ProfileView));
-
-            var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-            var ms = tx.GetObject(
-                     bt![BlockTableRecord.ModelSpace], OpenMode.ForRead) as BlockTableRecord;
+            var pvClass = RXObject.GetClass(typeof(CivilDB.ProfileView));
+            var bt      = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+            var ms      = tx.GetObject(
+                bt![BlockTableRecord.ModelSpace], OpenMode.ForRead) as BlockTableRecord;
 
             foreach (ObjectId id in ms!)
             {
@@ -208,10 +341,8 @@ namespace AdvancedLandDevTools.Commands
                 {
                     var pv = tx.GetObject(id, OpenMode.ForRead) as CivilDB.ProfileView;
                     if (pv == null) continue;
-
                     double sta = 0, elev = 0;
-                    if (pv.FindStationAndElevationAtXY(
-                            pickPoint.X, pickPoint.Y, ref sta, ref elev))
+                    if (pv.FindStationAndElevationAtXY(pickPt.X, pickPt.Y, ref sta, ref elev))
                         return pv;
                 }
                 catch { }
@@ -220,8 +351,30 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Collect all label styles from a Civil 3D label style collection
+        //  Helpers
         // ─────────────────────────────────────────────────────────────────────
+        private static Extents3d GetExtents(CivilDB.ProfileView pv)
+        {
+            try { return ((Entity)pv).GeometricExtents; }
+            catch { return new Extents3d(); }
+        }
+
+        /// <summary>
+        /// Transforms a bounding box through a Matrix3d, building the correct
+        /// axis-aligned result by transforming all four corners.
+        /// </summary>
+        private static Extents3d TransformExtents(Extents3d local, Matrix3d xform)
+        {
+            var ext = new Extents3d();
+            ext.AddPoint(local.MinPoint.TransformBy(xform));
+            ext.AddPoint(local.MaxPoint.TransformBy(xform));
+            ext.AddPoint(
+                new Point3d(local.MinPoint.X, local.MaxPoint.Y, 0).TransformBy(xform));
+            ext.AddPoint(
+                new Point3d(local.MaxPoint.X, local.MinPoint.Y, 0).TransformBy(xform));
+            return ext;
+        }
+
         private static void CollectLabelStyles(
             CivilDB.Styles.LabelStyleCollection collection,
             List<StyleItem> list,
