@@ -43,6 +43,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(RrNetworkCheckCommand))]
 [assembly: CommandClass(typeof(ChopChopCommand))]
 [assembly: CommandClass(typeof(LLabelGenCommand))]
+[assembly: CommandClass(typeof(MarkFittingsCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -138,6 +139,7 @@ namespace AdvancedLandDevTools
                 "\n║    GETPARENT       – Get Parent Alignment               ║" +
                 "\n║    PIPEMAGIC       – Pipe Magic                         ║" +
                 "\n║    MARKLINES       – Mark Crossing Lines in PV          ║" +
+                "\n║    MARKFITTINGS    – Mark Profile View Pressure Fittings║" +
                 "\n║  Alignments:                                            ║" +
                 "\n║    ALIGNDEPLOY     – Align Deploy                       ║" +
                 "\n║  Surfaces:                                              ║" +

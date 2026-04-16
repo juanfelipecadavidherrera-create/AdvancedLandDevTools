@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using CivilDB = Autodesk.Civil.DatabaseServices;
+using AdvancedLandDevTools.Helpers;
 
 namespace AdvancedLandDevTools.Engine
 {
@@ -12,47 +14,27 @@ namespace AdvancedLandDevTools.Engine
     // ─────────────────────────────────────────────────────────────────────────
     public class CrossingLabelPoint
     {
-        public double Station   { get; set; }
-        public double Elevation { get; set; }
-        /// <summary>Label insertion X in HOST drawing WCS.</summary>
-        public double DrawingX  { get; set; }
-        /// <summary>Label insertion Y in HOST drawing WCS (invert elevation of the crossing pipe).</summary>
-        public double DrawingY  { get; set; }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    //  One label-placement job to execute after the owning command exits.
-    // ─────────────────────────────────────────────────────────────────────────
-    internal class LabelGenJob
-    {
-        public string        Command    { get; set; } = "";
-        public Database      Db         { get; set; } = null!;
-        public HashSet<long> PreHandles { get; set; } = new();
-        public double        DragDx     { get; set; }
-        public double        DragDy     { get; set; }
+        public double   Station      { get; set; }
+        public double   Elevation    { get; set; }   // true invert from 3D model
+        public double   DrawingX     { get; set; }   // label insertion X in HOST WCS
+        public double   DrawingY     { get; set; }   // label insertion Y in HOST WCS
+        public ObjectId NetworkId    { get; set; }   // gravity Network or PressurePipeNetwork
+        public string   PipeName     { get; set; } = "";
+        public string   NetworkName  { get; set; } = "";
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     //  LLabelGenEngine
     //
-    //  Scans for crossing pipe proxy entities inside a profile view,
-    //  queues ADDPROFILEVIEWSTAELEVLBL commands for each crossing,
-    //  and applies a diagonal drag offset after each label is placed.
-    //
-    //  Supports both native profile views (current DB) and XREFed profile views
-    //  (proxy entities live in the XREF database, DrawingX/Y are in host WCS).
+    //  Finds crossing pipe inverts using PipeAlignmentIntersector (same as
+    //  RrNetworkCheckCommand) and queues native Civil 3D label placement via
+    //  LISP (command ... pause ...) so the user clicks the PV once, then all
+    //  label coordinates are fed automatically.
     // ═══════════════════════════════════════════════════════════════════════════
     public static class LLabelGenEngine
     {
-        private const string DXF_NETWORK_PART  = "AECC_GRAPH_PROFILE_NETWORK_PART";
-        private const string DXF_PRESSURE_PART = "AECC_GRAPH_PROFILE_PRESSURE_PART";
-
-        private static readonly Queue<LabelGenJob> _pendingJobs       = new();
-        private static bool                        _handlerRegistered = false;
-
         // ─────────────────────────────────────────────────────────────────────
         //  NATIVE: profile view is in the current (host) database.
-        //  Scans host model space for AECC proxy entities inside the PV bounds.
         // ─────────────────────────────────────────────────────────────────────
         public static List<CrossingLabelPoint> FindCrossingPoints(
             ObjectId pvId, Database db)
@@ -64,13 +46,10 @@ namespace AdvancedLandDevTools.Engine
                 var pv = tx.GetObject(pvId, OpenMode.ForRead) as CivilDB.ProfileView;
                 if (pv == null) { tx.Abort(); return points; }
 
-                Extents3d pvExt;
-                try { pvExt = ((Entity)pv).GeometricExtents; }
-                catch { tx.Abort(); return points; }
+                var align = tx.GetObject(pv.AlignmentId, OpenMode.ForRead) as CivilDB.Alignment;
+                if (align == null) { tx.Abort(); return points; }
 
-                ScanModelSpaceForProxies(pv, pvExt, tx, db, points,
-                    entityToHostWCS: Matrix3d.Identity);
-
+                CollectFromDatabase(pv, align, db, tx, Matrix3d.Identity, points);
                 tx.Abort();
             }
             return points;
@@ -78,13 +57,9 @@ namespace AdvancedLandDevTools.Engine
 
         // ─────────────────────────────────────────────────────────────────────
         //  XREF: profile view is inside an XREF block reference.
-        //
-        //  Opens the XREF database directly, finds the ProfileView whose
-        //  (host-WCS) extents match pvExtentsHostWCS, then scans that XREF DB
-        //  for AECC proxy entities.  DrawingX/Y are transformed to host WCS.
         // ─────────────────────────────────────────────────────────────────────
         public static List<CrossingLabelPoint> FindCrossingPointsInXref(
-            Database xrefDb, Matrix3d xrefToHost, Extents3d pvExtentsHostWCS)
+            Database xrefDb, Matrix3d xrefToHost, string pvName)
         {
             var points = new List<CrossingLabelPoint>();
 
@@ -92,17 +67,12 @@ namespace AdvancedLandDevTools.Engine
             {
                 using (var xTx = xrefDb.TransactionManager.StartTransaction())
                 {
-                    // ── Find the ProfileView in the XREF DB ──────────────────
-                    // Its local extents, when transformed to host WCS, should
-                    // match pvExtentsHostWCS.
-                    Matrix3d hostToXref = xrefToHost.Inverse();
                     var xMs = xTx.GetObject(xrefDb.CurrentSpaceId, OpenMode.ForRead)
                               as BlockTableRecord;
                     if (xMs == null) { xTx.Abort(); return points; }
 
+                    // Find the exact ProfileView in the XREF DB by name
                     CivilDB.ProfileView? targetPv = null;
-                    Extents3d pvExtLocal           = default;
-
                     foreach (ObjectId xId in xMs)
                     {
                         CivilDB.ProfileView xPv;
@@ -110,32 +80,20 @@ namespace AdvancedLandDevTools.Engine
                         catch { continue; }
                         if (xPv == null) continue;
 
-                        // Check if this PV's host-WCS centre overlaps pvExtentsHostWCS
-                        Extents3d localExt;
-                        try { localExt = ((Entity)xPv).GeometricExtents; }
-                        catch { continue; }
-
-                        // Transform XREF-local centre → host WCS and test overlap
-                        double lCx = (localExt.MinPoint.X + localExt.MaxPoint.X) / 2.0;
-                        double lCy = (localExt.MinPoint.Y + localExt.MaxPoint.Y) / 2.0;
-                        var centreHost = new Point3d(lCx, lCy, 0).TransformBy(xrefToHost);
-
-                        if (centreHost.X < pvExtentsHostWCS.MinPoint.X ||
-                            centreHost.X > pvExtentsHostWCS.MaxPoint.X) continue;
-                        if (centreHost.Y < pvExtentsHostWCS.MinPoint.Y ||
-                            centreHost.Y > pvExtentsHostWCS.MaxPoint.Y) continue;
-
-                        targetPv   = xPv;
-                        pvExtLocal = localExt;
-                        break;
+                        if (xPv.Name.Equals(pvName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            targetPv = xPv;
+                            break;
+                        }
                     }
 
                     if (targetPv == null) { xTx.Abort(); return points; }
 
-                    // ── Scan XREF model space for AECC proxy entities ────────
-                    ScanModelSpaceForProxies(targetPv, pvExtLocal, xTx, xrefDb, points,
-                        entityToHostWCS: xrefToHost);
+                    var align = xTx.GetObject(targetPv.AlignmentId, OpenMode.ForRead)
+                                as CivilDB.Alignment;
+                    if (align == null) { xTx.Abort(); return points; }
 
+                    CollectFromDatabase(targetPv, align, xrefDb, xTx, xrefToHost, points);
                     xTx.Abort();
                 }
             }
@@ -145,249 +103,164 @@ namespace AdvancedLandDevTools.Engine
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Core proxy scanner.  Works on any database (host or XREF).
+        //  Core crossing collector — works on any database (host or XREF).
         //
-        //  pv            — the ProfileView in the same DB as the entities
-        //  pvExtLocal    — PV GeometricExtents in that DB's local space
-        //  entityToHostWCS — transform from local space to host WCS
-        //                    (Matrix3d.Identity for native, brTransform for XREF)
+        //  Phase 1: proxy scan to restrict to pipes drawn in this profile view.
+        //  Phase 2: PipeAlignmentIntersector for true 3D invert elevation.
+        //  Populates network info (NetworkId, PipeName, NetworkName) on each point.
         // ─────────────────────────────────────────────────────────────────────
-        private static void ScanModelSpaceForProxies(
+
+        private static void CollectFromDatabase(
             CivilDB.ProfileView pv,
-            Extents3d           pvExtLocal,
-            Transaction         tx,
+            CivilDB.Alignment   align,
             Database            db,
-            List<CrossingLabelPoint> points,
-            Matrix3d            entityToHostWCS)
+            Transaction         tx,
+            Matrix3d            entityToHostWCS,
+            List<CrossingLabelPoint> points)
         {
-            var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
-                      as BlockTableRecord;
+            double pvStaStart = pv.StationStart;
+            double pvStaEnd   = pv.StationEnd;
+
+            var btr = tx.GetObject(db.CurrentSpaceId, OpenMode.ForRead) as BlockTableRecord;
             if (btr == null) return;
 
+            // Direct scan — mirrors RrNetworkCheckCommand.CollectCrossings exactly.
+            // Cast every entity to CivilDB.Pipe / CivilDB.PressurePipe; no proxy phase needed.
+            // This finds ALL pipes regardless of their proxy representation.
             foreach (ObjectId id in btr)
             {
                 try
                 {
-                    string dxf = id.ObjectClass.DxfName;
-                    if (dxf != DXF_NETWORK_PART && dxf != DXF_PRESSURE_PART) continue;
+                    var obj = tx.GetObject(id, OpenMode.ForRead);
 
-                    var ent = tx.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent == null) continue;
+                    ObjectId netId    = ObjectId.Null;
+                    string   pipeName = "";
+                    string   netName  = "";
+                    bool     isPipe   = false;
 
-                    Extents3d ext;
-                    try { ext = ent.GeometricExtents; }
-                    catch { continue; }
-
-                    // Centre of the proxy ellipse in local (DB) space
-                    double cx = (ext.MinPoint.X + ext.MaxPoint.X) / 2.0;
-                    double cy = (ext.MinPoint.Y + ext.MaxPoint.Y) / 2.0;
-
-                    // Must be inside the profile view bounds (local space)
-                    if (cx < pvExtLocal.MinPoint.X || cx > pvExtLocal.MaxPoint.X) continue;
-                    if (cy < pvExtLocal.MinPoint.Y || cy > pvExtLocal.MaxPoint.Y) continue;
-
-                    // Bottom of ellipse = invert point (local space)
-                    double invertY = ext.MinPoint.Y;
-
-                    // Station + elevation from the ProfileView (uses local coords)
-                    double sta = 0, elev = 0;
-                    if (!pv.FindStationAndElevationAtXY(cx, invertY, ref sta, ref elev))
-                        continue;
-
-                    // Transform label insertion point to HOST WCS
-                    var hostPt = new Point3d(cx, invertY, 0).TransformBy(entityToHostWCS);
-
-                    points.Add(new CrossingLabelPoint
+                    if (obj is CivilDB.Pipe gp)
                     {
-                        Station   = sta,
-                        Elevation = elev,
-                        DrawingX  = hostPt.X,
-                        DrawingY  = hostPt.Y
-                    });
+                        netId    = gp.NetworkId;
+                        pipeName = gp.Name;
+                        isPipe   = true;
+                        try
+                        {
+                            var net = tx.GetObject(netId, OpenMode.ForRead) as CivilDB.Network;
+                            if (net != null) netName = net.Name;
+                        }
+                        catch { }
+                    }
+                    else if (obj is CivilDB.PressurePipe pp)
+                    {
+                        netId    = pp.NetworkId;
+                        pipeName = pp.Name;
+                        isPipe   = true;
+                        try
+                        {
+                            var net = tx.GetObject(netId, OpenMode.ForRead) as CivilDB.PressurePipeNetwork;
+                            if (net != null) netName = net.Name;
+                        }
+                        catch { }
+                    }
+
+                    if (!isPipe) continue;
+
+                    foreach (var c in PipeAlignmentIntersector.FindCrossings(id, align, tx))
+                    {
+                        if (c.Station < pvStaStart - 0.5 || c.Station > pvStaEnd + 0.5)
+                            continue;
+
+                        double cx = 0, cy = 0;
+                        if (!pv.FindXYAtStationAndElevation(
+                                c.Station, c.InvertElevation, ref cx, ref cy))
+                            continue;
+
+                        var hostPt = new Point3d(cx, cy, 0).TransformBy(entityToHostWCS);
+
+                        points.Add(new CrossingLabelPoint
+                        {
+                            Station     = c.Station,
+                            Elevation   = c.InvertElevation,
+                            DrawingX    = hostPt.X,
+                            DrawingY    = hostPt.Y,
+                            NetworkId   = netId,
+                            PipeName    = pipeName,
+                            NetworkName = netName
+                        });
+                    }
                 }
                 catch { }
             }
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Queue label placement jobs.
+        //  Queue native Civil 3D label placement via LISP.
         //
-        //  pvExtentsHostWCS is used to click the profile view in ADDPROFILEVIEWSTAELEVLBL.
-        //  We click the centre of the PV grid — this works for both native and
-        //  XREF profile views because the WCS coordinates are the same regardless.
-        //  This replaces the old (handent "handle") approach which does NOT work
-        //  inside SendStringToExecute (AutoCAD does not evaluate LISP there).
+        //  ADDPROFILEVIEWSTAELEVLBL needs 3 POINT CLICKS per label:
+        //    Click 1 — "Select a profile view:"
+        //        → (nentselp point) drills through any BlockReference (including
+        //          XREF) and returns the actual ProfileView entity underneath —
+        //          identical to what Civil 3D receives on an interactive click.
+        //          pvNearX/Y must be a point visually inside the PV grid (we use
+        //          5 % inset from the bottom-left corner of its host-WCS extents).
+        //    Click 2 — "Specify horizontal position:" (sets station)
+        //        → (list DrawingX DrawingY 0.0)  — X coordinate determines station.
+        //    Click 3 — "Specify vertical position:"   (sets elevation)
+        //        → (list DrawingX DrawingY 0.0)  — Y coordinate determines elevation.
+        //
+        //  Providing the same drawing point for clicks 2 and 3 is correct:
+        //  DrawingX/Y was produced by ProfileView.FindXYAtStationAndElevation so it
+        //  encodes the exact invert location.  Civil 3D reads X for station and Y
+        //  for elevation independently.
+        //
+        //  After click 3 the label is placed; the command repeats clicks 2+3
+        //  for each additional label, then "" exits.
+        //
+        //  Works identically for native PVs (nentselp returns the PV directly)
+        //  and XREF PVs (nentselp drills through the host BlockReference).
         // ─────────────────────────────────────────────────────────────────────
-        public static int QueueLabelJobs(
-            Extents3d                pvExtentsHostWCS,
+        public static void QueueLabelCommand(
             List<CrossingLabelPoint> crossings,
-            ObjectId                 labelStyleId,
-            ObjectId                 markerStyleId,
-            Database                 db,
-            Document                 doc)
+            string hostHandle, Point3d pickPt,
+            Document doc)
         {
-            if (crossings.Count == 0) return 0;
+            if (crossings.Count == 0) return;
 
-            // Safety reset
-            _pendingJobs.Clear();
-            if (_handlerRegistered)
-            {
-                try { doc.CommandEnded -= OnCommandEnded; } catch { }
-                _handlerRegistered = false;
-            }
+            var sb = new StringBuilder();
 
-            // Click point for selecting the profile view:
-            // Use the centre of the PV — safe area, always within the grid.
-            double pvCx = (pvExtentsHostWCS.MinPoint.X + pvExtentsHostWCS.MaxPoint.X) / 2.0;
-            double pvCy = (pvExtentsHostWCS.MinPoint.Y + pvExtentsHostWCS.MaxPoint.Y) / 2.0;
-            string pvClick = $"{pvCx:F4},{pvCy:F4}";
+            sb.Append("(progn ");
+            sb.Append($"(setq _aldt_ent (handent \"{hostHandle}\")) ");
+            sb.Append($"(if _aldt_ent (command \"ADDPROFILEVIEWSTAELEVLBL\" ");
+            
+            // Use entsel list format: (list ENAME (list X Y Z))
+            // This robustly selects XREF BlockReferences at the correct pick point.
+            // AutoCAD expects coordinate points relative to current UCS.
+            // Using (trans pt 0 1) converts our WCS programmatic coordinates correctly into UCS.
+            sb.Append($"(list _aldt_ent (trans (list {pickPt.X:F6} {pickPt.Y:F6} {pickPt.Z:F6}) 0 1)) ");
 
             foreach (var cp in crossings)
             {
-                // ADDPROFILEVIEWSTAELEVLBL prompts:
-                //   "Select a profile view:"           ← supply WCS click inside PV
-                //   "Specify station and elevation:"   ← supply label position
-                //   (loop continues — empty Enter exits)
-                string coords = $"{cp.DrawingX:F4},{cp.DrawingY:F4}";
-                string cmd    = $"ADDPROFILEVIEWSTAELEVLBL {pvClick}\n{coords}\n \n";
-
-                _pendingJobs.Enqueue(new LabelGenJob
-                {
-                    Command    = cmd,
-                    Db         = db,
-                    PreHandles = new HashSet<long>(),   // filled in ProcessNextJob
-                    DragDx     = 3.0,
-                    DragDy     = 3.0
-                });
+                // Click 2: horizontal position — X coord picks the station
+                sb.Append($"\"_NON\" (trans (list {cp.DrawingX:F6} {cp.DrawingY:F6} 0.0) 0 1) ");
+                // Click 3: vertical position   — Y coord picks the elevation
+                sb.Append($"\"_NON\" (trans (list {cp.DrawingX:F6} {cp.DrawingY:F6} 0.0) 0 1) ");
             }
 
-            if (_pendingJobs.Count > 0 && !_handlerRegistered)
-            {
-                doc.CommandEnded += OnCommandEnded;
-                _handlerRegistered = true;
-            }
+            sb.Append("\"\" ) ");   // exit repeat loop + close info
+            sb.Append("(princ \"\\nLLABELGEN: no valid entity found to label.\\n\") ) ) ");
+            // outer progn closed ──────────────────────────────────────────────
 
-            return crossings.Count;
+            doc.SendStringToExecute(sb.ToString() + "\n", true, false, false);
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Level-1: fires once after LLABELGEN exits — kicks off the job queue.
+        //  Format station as N+NN.NN (e.g. 1+23.45)
         // ─────────────────────────────────────────────────────────────────────
-        private static void OnCommandEnded(object sender, CommandEventArgs e)
+        public static string FormatStation(double station)
         {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
-
-            doc.CommandEnded -= OnCommandEnded;
-            _handlerRegistered = false;
-
-            ProcessNextJob(doc);
-        }
-
-        private static void ProcessNextJob(Document doc)
-        {
-            if (_pendingJobs.Count == 0) return;
-
-            var job = _pendingJobs.Dequeue();
-
-            // Snapshot right before firing — ensures each job detects only its own label.
-            job.PreHandles = SnapshotModelHandles(job.Db);
-
-            // Level-2 handler: self-removing named reference (not anonymous lambda)
-            // so it doesn't accumulate across successive jobs.
-            CommandEventHandler? levelTwo = null;
-            levelTwo = (s, ev) =>
-            {
-                doc.CommandEnded -= levelTwo;
-                ApplyDragOffset(doc, job);
-                ProcessNextJob(doc);
-            };
-            doc.CommandEnded += levelTwo;
-
-            try
-            {
-                doc.SendStringToExecute(job.Command, true, false, false);
-            }
-            catch (Exception ex)
-            {
-                doc.Editor.WriteMessage($"\n  ⚠ LLabelGen send error: {ex.Message}");
-                doc.CommandEnded -= levelTwo;
-                ProcessNextJob(doc);
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Find newly created labels and displace them (+DragDx, +DragDy).
-        // ─────────────────────────────────────────────────────────────────────
-        private static void ApplyDragOffset(Document doc, LabelGenJob job)
-        {
-            try
-            {
-                using (var tx = job.Db.TransactionManager.StartTransaction())
-                {
-                    var bt = (BlockTable)tx.GetObject(job.Db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tx.GetObject(
-                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-                    int moved = 0;
-                    foreach (ObjectId id in ms)
-                    {
-                        if (job.PreHandles.Contains(id.Handle.Value)) continue;
-
-                        try
-                        {
-                            var ent = tx.GetObject(id, OpenMode.ForRead) as Entity;
-                            if (ent == null) continue;
-
-                            string dxfName = id.ObjectClass.DxfName;
-                            bool isLabel   = (dxfName.Contains("AECC") && dxfName.Contains("LABEL"))
-                                          || ent is CivilDB.Label;
-                            if (!isLabel) continue;
-
-                            var entW = tx.GetObject(id, OpenMode.ForWrite) as Entity;
-                            entW?.TransformBy(Matrix3d.Displacement(
-                                new Vector3d(job.DragDx, job.DragDy, 0)));
-                            moved++;
-                        }
-                        catch { }
-                    }
-
-                    tx.Commit();
-
-                    if (moved > 0)
-                        doc.Editor.WriteMessage(
-                            $"\n  ✓ Label placed and offset (+{job.DragDx:F0}, +{job.DragDy:F0}).");
-                    else
-                        doc.Editor.WriteMessage("\n  ⚠ Label placed but drag offset not applied " +
-                            "(new entity not identified as a label).");
-                }
-            }
-            catch (Exception ex)
-            {
-                doc.Editor.WriteMessage($"\n  ⚠ Drag offset error: {ex.Message}");
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        //  Snapshot all entity handles in model space for diff-based detection.
-        // ─────────────────────────────────────────────────────────────────────
-        private static HashSet<long> SnapshotModelHandles(Database db)
-        {
-            var handles = new HashSet<long>();
-            try
-            {
-                using (var tx = db.TransactionManager.StartTransaction())
-                {
-                    var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tx.GetObject(
-                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    foreach (ObjectId id in ms)
-                        handles.Add(id.Handle.Value);
-                    tx.Abort();
-                }
-            }
-            catch { }
-            return handles;
+            int    full = (int)(station / 100.0);
+            double rem  = station - full * 100.0;
+            return $"{full}+{rem:00.00}";
         }
     }
 }

@@ -155,6 +155,29 @@ namespace AdvancedLandDevTools.Ribbon
 
             pvSource.Items.Add(new RibbonSeparator());
 
+            // ── Mark Fittings button ───────────────────────────────────────────
+            var btnMarkFittings = new RibbonButton
+            {
+                Id               = "ALDT_BTN_MARKFITTINGS",
+                Name             = "Mark Fittings",
+                Text             = "Mark\nFittings",
+                Description      = "Draws dashed vertical marker lines in a profile view for pressure fittings.",
+                ToolTip          = BuildToolTip(
+                    "Mark Fittings",
+                    "Select a profile view, and the tool will automatically detect pressure fittings within it " +
+                    "and draw dashed vertical marker lines from top to bottom.\n\n" +
+                    "Command:  MARKFITTINGS"),
+                CommandHandler   = new RibbonCommandHandler("MARKFITTINGS "),
+                CommandParameter = "MARKFITTINGS ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildMarkFittingsIcon(32),
+                Image            = BuildMarkFittingsIcon(16)
+            };
+            pvSource.Items.Add(btnMarkFittings);
+
             // ── Profile Off button ────────────────────────────────────────────
             var btnProfOff = new RibbonButton
             {
@@ -1858,6 +1881,78 @@ namespace AdvancedLandDevTools.Ribbon
             var label = new System.Windows.Controls.TextBlock
             {
                 Text = "ML", Foreground = C("#FFFFFF"),
+                FontSize = s * 3.5, FontWeight = System.Windows.FontWeights.Bold,
+                Opacity = 0.7
+            };
+            Canvas.SetLeft(label, s * 1); Canvas.SetTop(label, s * 0.5);
+            Add(label);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        //  Mark Fittings icon
+        // ═══════════════════════════════════════════════════════════════════
+        private static ImageSource BuildMarkFittingsIcon(int size)
+        {
+            double s = size / 32.0;
+
+            var canvas = new Canvas
+            {
+                Width = size, Height = size,
+                Background = Brushes.Transparent, ClipToBounds = true
+            };
+
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background rounded rect
+            Add(new Rectangle
+            {
+                Width = size, Height = size,
+                Fill = C("#2E3B32"),
+                RadiusX = s * 4, RadiusY = s * 4
+            });
+
+            // Horizontal alignment line (the alignment)
+            Add(new Line
+            {
+                X1 = s * 2, Y1 = s * 16, X2 = s * 30, Y2 = s * 16,
+                Stroke = C("#8BC34A"), StrokeThickness = s * 2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            });
+
+            // Vertical marker lines
+            foreach (double x in new[] { s * 10, s * 22 })
+            {
+                Add(new Line
+                {
+                    X1 = x, Y1 = s * 4, X2 = x, Y2 = s * 28,
+                    Stroke = C("#FF9800"), StrokeThickness = s * 2,
+                    StrokeDashArray = new DoubleCollection(new[] { 3.0, 1.5 }),
+                    StrokeStartLineCap = PenLineCap.Round,
+                    StrokeEndLineCap = PenLineCap.Round
+                });
+            }
+
+            // Small crossing indicators (representing fittings)
+            foreach (double x in new[] { s * 10, s * 22 })
+            {
+                Add(new Rectangle
+                {
+                    Width = s * 6, Height = s * 4,
+                    Fill = C("#03A9F4")
+                });
+                Canvas.SetLeft(canvas.Children[^1], x - s * 3);
+                Canvas.SetTop(canvas.Children[^1], s * 14);
+            }
+
+            // "MF" label
+            var label = new System.Windows.Controls.TextBlock
+            {
+                Text = "MF", Foreground = C("#FFFFFF"),
                 FontSize = s * 3.5, FontWeight = System.Windows.FontWeights.Bold,
                 Opacity = 0.7
             };
