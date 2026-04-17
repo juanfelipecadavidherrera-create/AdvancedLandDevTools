@@ -480,6 +480,31 @@ namespace AdvancedLandDevTools.Ribbon
             };
             piSource.Items.Add(btnRrNet);
 
+            piSource.Items.Add(new RibbonSeparator());
+
+            // ── Lateral Manager button ─────────────────────────────────────────
+            var btnLatMan = new RibbonButton
+            {
+                Id               = "ALDT_BTN_LATERALMANAGER",
+                Name             = "Lateral Manager",
+                Text             = "Lateral\nManager",
+                Description      = "Manage and project 2D sewer lateral crossings into profile views.",
+                ToolTip          = BuildToolTip(
+                    "Lateral Crossing Manager",
+                    "A dockable palette to track 2D sewer laterals. Add drawn ellipses " +
+                    "from lateral profile views and automatically project them accurately " +
+                    "into target profile views (e.g. water main).\n\nCommand:  LATMANAGER"),
+                CommandHandler   = new RibbonCommandHandler("LATMANAGER "),
+                CommandParameter = "LATMANAGER ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildLatManIcon(32),
+                Image            = BuildLatManIcon(16)
+            };
+            piSource.Items.Add(btnLatMan);
+
             tab.Panels.Add(new RibbonPanel { Source = piSource });
 
             // ══════════════════════════════════════════════════════════════════
@@ -3605,6 +3630,52 @@ namespace AdvancedLandDevTools.Ribbon
                 RadiusX = s * 1, RadiusY = s * 1
             });
             Canvas.SetLeft(canvas.Children[^1], s * 9); Canvas.SetTop(canvas.Children[^1], s * 2);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Lateral Manager icon
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildLatManIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0d1a2d"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // Small profile grid
+            Add(new Rectangle
+            {
+                Width = s * 22, Height = s * 14,
+                Fill = C("#1a2d40"),
+                Stroke = C("#4DB6AC"), StrokeThickness = s * 1,
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 5); Canvas.SetTop(canvas.Children[^1], s * 4);
+
+            // Ellipse (Lateral Crossing)
+            Add(new Ellipse
+            {
+                Width = s * 10, Height = s * 6,
+                Stroke = C("#FFB74D"), StrokeThickness = s * 1.5,
+                Fill = C("#663300")
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 11); Canvas.SetTop(canvas.Children[^1], s * 8);
+
+            // Target scope overlay
+            Add(new Ellipse
+            {
+                Width = s * 18, Height = s * 18,
+                Stroke = C("#00E676"), StrokeThickness = s * 1.5,
+                StrokeDashArray = new DoubleCollection(new[] { 2.0, 2.0 })
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 7); Canvas.SetTop(canvas.Children[^1], s * 12);
 
             return RenderToBitmap(canvas, size, size);
         }

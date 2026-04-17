@@ -40,6 +40,7 @@ namespace AdvancedLandDevTools.UI
             ("PIPESIZING ",      "Pipe Sizing Calc",      "PIPES",     "\xE81E", "#29B6F6", "Sizing"),
             ("PRESSCOUNT ",      "Pressure Count",        "PIPES",     "\xE946", "#CE93D8", "PCount"),
             ("RRNETWORKCHECK ",  "Network Check",         "PIPES",     "\xE73E", "#66BB6A", "RRChk"),
+            ("LATMANAGER ",      "Lateral Manager",       "PIPES",     "\xE9E9", "#FFB74D", "LatMan"),
 
             // SURFACES
             ("ELEVSLOPE ",       "Elev Slope",            "SURFACES",  "\xE879", "#66BB6A", "Slope"),

@@ -1,0 +1,164 @@
+<UserControl x:Class="AdvancedLandDevTools.UI.LateralManagerPalette"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:AdvancedLandDevTools.UI"
+             Background="#1e1e1e"
+             Foreground="#e0e0e0"
+             FontFamily="Segoe UI"
+             FontSize="12">
+    <UserControl.Resources>
+        <!-- Transparent button style -->
+        <Style x:Key="FlatBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#60CDFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="6,2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2D2D2D"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Blue primary button -->
+        <Style x:Key="PrimaryBtn" TargetType="Button">
+            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="12,6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#106EBE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Accent action button -->
+        <Style x:Key="AccentActionBtn" TargetType="Button">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Foreground" Value="#FFB74D"/>
+            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4" Padding="6,4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2D2D2D"/>
+                                <Setter Property="BorderBrush" Value="#60CDFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <local:NonEmptyToVisibilityConverter x:Key="VisConv"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── HEADER ── -->
+        <Border Grid.Row="0" Background="#252526" BorderBrush="#333" BorderThickness="0,0,0,1" Padding="12,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="LATERAL MANAGER" FontSize="10" FontWeight="SemiBold" Foreground="#9E9E9E"/>
+                    <Button Content="Projects ▼" Style="{StaticResource FlatBtn}" HorizontalAlignment="Right" Click="BtnShowProjects_Click" FontSize="11" Margin="0,-4,0,0"/>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBox x:Name="TxtProjectName" Width="140" Height="24" 
+                             Background="#1e1e1e" Foreground="White" BorderBrush="#454545" 
+                             Padding="4,2" VerticalContentAlignment="Center" 
+                             KeyDown="TxtProjectName_KeyDown"/>
+                    <Button Content="Load" Style="{StaticResource FlatBtn}" Margin="6,0,0,0" Click="BtnLoadProject_Click"/>
+                </StackPanel>
+
+                <!-- Project Actions -->
+                <DockPanel Margin="0,8,0,0">
+                    <Button x:Name="BtnAddCrossing" Content="+ Add Crossing Info" Style="{StaticResource PrimaryBtn}" 
+                            FontSize="11" DockPanel.Dock="Left" Click="BtnAddCrossing_Click"/>
+                    
+                    <Button x:Name="BtnProjectCrossings" Content="➤ Project to Profile" Style="{StaticResource AccentActionBtn}" 
+                            FontSize="11" DockPanel.Dock="Right" HorizontalAlignment="Right" Click="BtnProjectCrossings_Click"/>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ── CONTENT ── -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12">
+            <StackPanel>
+                <TextBlock x:Name="TxtSummary" Text="No project loaded" Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                <StackPanel x:Name="LateralListPanel"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ── FOOTER ── -->
+        <Border Grid.Row="2" Background="#252526" BorderBrush="#333" BorderThickness="0,1,0,0" Padding="8">
+            <Button Content="Delete Project" Style="{StaticResource FlatBtn}" Foreground="#FF6B6B" HorizontalAlignment="Right" Click="BtnDeleteProject_Click"/>
+        </Border>
+
+        <!-- ── POPUPS ── -->
+
+        <!-- Projects Popup -->
+        <Popup x:Name="ProjectPopup" StaysOpen="False" Placement="MousePoint">
+            <Border Background="#252526" BorderBrush="#454545" BorderThickness="1" CornerRadius="4" Padding="4" MaxHeight="200" Width="160">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="ProjectList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Padding="8,6" Cursor="Hand" Background="Transparent" Foreground="#60CDFF" MouseLeftButtonDown="ProjectItem_Click"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </Popup>
+
+        <!-- Rename Popup -->
+        <Popup x:Name="RenamePopup" StaysOpen="False" Placement="Center">
+            <Border Background="#252526" BorderBrush="#60CDFF" BorderThickness="1" CornerRadius="6" Padding="16" Width="240">
+                <StackPanel>
+                    <TextBlock Text="Rename Lateral" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="TxtRenameOldName" Foreground="#888" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBox x:Name="TxtRenameName" Background="#1e1e1e" Foreground="White" BorderBrush="#454545" Padding="4" Height="26" KeyDown="TxtRenameName_KeyDown"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <Button Content="Cancel" Style="{StaticResource FlatBtn}" Margin="0,0,8,0" Click="BtnCancelRename_Click"/>
+                        <Button Content="Save" Style="{StaticResource PrimaryBtn}" Click="BtnConfirmRename_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+    </Grid>
+</UserControl>

@@ -86,6 +86,7 @@
   <a href="#cmd-eeebend">EEEBEND</a>
   <a href="#cmd-presscount">PRESSCOUNT</a>
   <a href="#cmd-rrnetworkcheck">RRNETWORKCHECK <span class="sidebar-badge-beta">BETA</span></a>
+  <a href="#cmd-latmanager">LATMANAGER <span class="sidebar-badge">NEW</span></a>
 
   <h3>Surfaces</h3>
   <a href="#cmd-elevslope">ELEVSLOPE</a>
@@ -382,6 +383,20 @@ Checks vertical clearance and cover between pressure pipe parts and the existing
 </div>
 </div>
 
+<div class="cmd" id="cmd-latmanager">
+<strong>LATMANAGER</strong> -- Lateral Crossing Manager <span class="badge-new">v1.1.0</span><br>
+A dockable palette for tracking and projecting 2D sewer laterals across profile views. Since 2D laterals lack 3D information, users can draw an ellipse representing the pipe in the lateral's profile view. LATMANAGER saves that crossing data (station and invert elevation) and allows you to project it accurately as an ellipse into any intersecting profile view (e.g., a water main profile).
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>LATMANAGER</code> to open the Lateral Manager palette.</li>
+<li>Create or load a project.</li>
+<li>Click <strong>Add Crossing Info</strong>, select a lateral's profile view, and then click the ellipse representing the pipe crossing.</li>
+<li>To project saved laterals, click <strong>Project to Profile</strong>, and select a target profile view.</li>
+<li>The tool automatically checks for alignment intersections and draws ellipses at the correct stations and saved elevations.</li>
+</ol>
+</div>
+</div>
+
 <h3>Surfaces</h3>
 
 <div class="cmd" id="cmd-elevslope">
@@ -631,7 +646,7 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. Both new commands added to ribbon and Mini Toolbar.</td></tr>
+<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>LATMANAGER</strong> -- dockable palette to save 2D lateral profile crossing data and project it automatically into other profile views; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. All new commands added to ribbon and Mini Toolbar.</td></tr>
 <tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>
