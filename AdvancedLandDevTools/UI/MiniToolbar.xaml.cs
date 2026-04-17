@@ -24,6 +24,7 @@ namespace AdvancedLandDevTools.UI
             ("BULKSUR ",         "Bulk Surface Profile",  "PROFILES",  "\xE8A5", "#4FC3F7", "Bulk"),
             ("GETPARENT ",       "Get Parent Alignment",  "PROFILES",  "\xE71B", "#4DB6AC", "Parent"),
             ("PIPEMAGIC ",       "Pipe Magic",            "PROFILES",  "\xE945", "#BA68C8", "Magic"),
+            ("LLABELGEN ",       "Label Gen",             "PROFILES",  "\xE8F1", "#00E676", "Label"),
             ("MARKLINES ",       "Mark Lines",            "PROFILES",  "\xED63", "#FFB74D", "Mark"),
             ("MARKFITTINGS ",    "Mark Fittings",         "PROFILES",  "\xE81E", "#FF8A65", "MkFit"),
             ("PROFOFF ",         "Profile Off",           "PROFILES",  "\xE738", "#EF5350", "PrOff"),

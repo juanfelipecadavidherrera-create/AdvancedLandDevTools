@@ -128,6 +128,31 @@ namespace AdvancedLandDevTools.Ribbon
 
             pvSource.Items.Add(new RibbonSeparator());
 
+            // ── Label Gen button ──────────────────────────────────────────────
+            var btnLLabelGen = new RibbonButton
+            {
+                Id               = "ALDT_BTN_LLABELGEN",
+                Name             = "Label Gen",
+                Text             = "Label\nGen",
+                Description      = "Automatically places 3D Profile View Station Elevation Labels " +
+                                   "at pipe crossing inverts.",
+                ToolTip          = BuildToolTip(
+                    "Label Generator",
+                    "Select a profile view (native or XREF). The tool detects crossing pipes, " +
+                    "filters by network, and places formatted Station Elevation Labels at the pipe inverts.\n\nCommand:  LLABELGEN"),
+                CommandHandler   = new RibbonCommandHandler("LLABELGEN "),
+                CommandParameter = "LLABELGEN ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildLLabelGenIcon(32),
+                Image            = BuildLLabelGenIcon(16)
+            };
+            pvSource.Items.Add(btnLLabelGen);
+
+            pvSource.Items.Add(new RibbonSeparator());
+
             // ── Mark Lines button ───────────────────────────────────────────
             var btnMarkLines = new RibbonButton
             {
@@ -3527,6 +3552,59 @@ namespace AdvancedLandDevTools.Ribbon
             };
             Canvas.SetLeft(scissor, s * 24); Canvas.SetTop(scissor, s * 12);
             Add(scissor);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Label Gen icon — profile view grid with a crossing pipe and label
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildLLabelGenIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0d1a2d"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // Profile view grid
+            Add(new Rectangle
+            {
+                Width = s * 24, Height = s * 16,
+                Fill = C("#1a2d40"),
+                Stroke = C("#4488CC"), StrokeThickness = s * 1,
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 4); Canvas.SetTop(canvas.Children[^1], s * 8);
+
+            // Crossing pipe (circle)
+            Add(new Ellipse
+            {
+                Width = s * 6, Height = s * 6,
+                Stroke = C("#FF9800"), StrokeThickness = s * 1.5,
+                Fill = C("#331a00")
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 13); Canvas.SetTop(canvas.Children[^1], s * 13);
+
+            // Label line
+            Add(new Line
+            {
+                X1 = s * 16, Y1 = s * 13, X2 = s * 16, Y2 = s * 6,
+                Stroke = C("#00E676"), StrokeThickness = s * 1
+            });
+
+            // Label text box
+            Add(new Rectangle
+            {
+                Width = s * 14, Height = s * 6,
+                Fill = C("#00E676"),
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 9); Canvas.SetTop(canvas.Children[^1], s * 2);
 
             return RenderToBitmap(canvas, size, size);
         }

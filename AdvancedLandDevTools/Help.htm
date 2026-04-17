@@ -70,6 +70,7 @@
   <a href="#cmd-bulksur">BULKSUR</a>
   <a href="#cmd-getparent">GETPARENT</a>
   <a href="#cmd-pipemagic">PIPEMAGIC</a>
+  <a href="#cmd-llabelgen">LLABELGEN <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-marklines">MARKLINES</a>
   <a href="#cmd-profoff">PROFOFF</a>
   <a href="#cmd-pvstyle">PVSTYLE</a>
@@ -182,6 +183,20 @@ Select one or more profile views and PIPEMAGIC scans all pipe networks in the dr
 <li>If Fitting Detector is Off, you are prompted for <em>Manhole Mode [On/Off]</em>.</li>
 <li>If Manhole Mode is On, select which gravity networks to include from the list.</li>
 <li>All crossing pipes, fittings, and/or structures are projected automatically.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-llabelgen">
+<strong>LLABELGEN</strong> -- Label Generator <span class="badge-new">v1.1.0</span><br>
+Automatically places 3D Profile View Station Elevation Labels at crossing pipe inverts. Select a profile view (native or XREF), the tool detects all crossing pipes and pressure pipes, filters by network, allows you to choose your label and marker styles, and places the formatted Station Elevation Labels exactly at the pipe inverts.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>LLABELGEN</code> from the ribbon, mini toolbar, or command line.</li>
+<li>Click on a profile view in the drawing (works for both native and XREF profile views).</li>
+<li>Select a network to exclude, or enter 0 to keep all.</li>
+<li>Choose your desired Station Elevation Label Style and Marker Style from the dialog.</li>
+<li>The tool automatically generates the 3D labels at all pipe crossing inverts.</li>
 </ol>
 </div>
 </div>
@@ -616,7 +631,7 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. Both new commands added to ribbon and Mini Toolbar.</td></tr>
+<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. Both new commands added to ribbon and Mini Toolbar.</td></tr>
 <tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>
