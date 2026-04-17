@@ -59,42 +59,26 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- ── AutoCAD Core ── -->
-    <Reference Include="AcDbMgd">
-      <HintPath>$(AcadDir)\AcDbMgd.dll</HintPath>
-      <Private>false</Private>  <!-- NEVER copy local – use Civil 3D's version -->
+    <Reference Include="accoremgd">
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\AutoCAD 2026\accoremgd.dll</HintPath>
     </Reference>
-    <Reference Include="AcMgd">
-      <HintPath>$(AcadDir)\AcMgd.dll</HintPath>
-      <Private>false</Private>
+    <Reference Include="Acdbmgd">
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\AutoCAD 2026\acdbmgd.dll</HintPath>
     </Reference>
-    <Reference Include="AcCoreMgd">
-      <HintPath>$(AcadDir)\AcCoreMgd.dll</HintPath>
-      <Private>false</Private>
+    <Reference Include="Acmgd">
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\AutoCAD 2026\acmgd.dll</HintPath>
     </Reference>
-
-    <!-- ── Ribbon / UI ── -->
     <Reference Include="AdWindows">
-      <HintPath>$(AcadDir)\AdWindows.dll</HintPath>
-      <Private>false</Private>
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\AutoCAD 2026\AdWindows.dll</HintPath>
     </Reference>
-
-    <!-- ── Civil 3D Database ── -->
-    <Reference Include="AeccDbMgd">
-      <HintPath>$(AcadDir)\AeccDbMgd.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- ── Civil 3D Pressure Pipes (required for PressurePipe type) ── -->
-    <Reference Include="AeccPressurePipesMgd">
-      <HintPath>$(AcadDir)\AeccPressurePipesMgd.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- ── AEC Base (required by Civil 3D) ── -->
     <Reference Include="AecBaseMgd">
-      <HintPath>$(AcadDir)\AecBaseMgd.dll</HintPath>
-      <Private>false</Private>
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\Civil 3D 2026 Object Enabler\AecBaseMgd.dll</HintPath>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\AutoCAD 2026\C3D\AeccDbMgd.dll</HintPath>
+    </Reference>
+    <Reference Include="AeccPressurePipesMgd">
+      <HintPath>..\..\..\..\..\..\..\Program Files\Autodesk\AutoCAD 2026\C3D\AeccPressurePipesMgd.dll</HintPath>
     </Reference>
   </ItemGroup>
 

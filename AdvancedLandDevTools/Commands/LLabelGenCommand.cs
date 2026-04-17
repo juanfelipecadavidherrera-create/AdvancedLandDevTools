@@ -7,7 +7,9 @@ using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using AdvancedLandDevTools.Engine;
+using AdvancedLandDevTools.UI;
 using CivilDB  = Autodesk.Civil.DatabaseServices;
+using CivilApp = Autodesk.Civil.ApplicationServices;
 using AcApp    = Autodesk.AutoCAD.ApplicationServices.Application;
 
 [assembly: CommandClass(typeof(AdvancedLandDevTools.Commands.LLabelGenCommand))]
@@ -159,6 +161,61 @@ namespace AdvancedLandDevTools.Commands
                         $"  Pipe: {cp.PipeName}" +
                         $"  Net: {cp.NetworkName}");
 
+                // ── Step 4.5: Collect styles and show UI ─────────────────────
+                var labelStyles  = new List<StyleItem>();
+                var markerStyles = new List<StyleItem>();
+
+                using (Transaction tx = db.TransactionManager.StartTransaction())
+                {
+                    try
+                    {
+                        var civDoc = CivilApp.CivilDocument.GetCivilDocument(db);
+
+                        var pvElevStyles = civDoc.Styles.LabelStyles
+                                                 .ProfileViewLabelStyles
+                                                 .StationElevationLabelStyles;
+                        foreach (ObjectId id in pvElevStyles)
+                        {
+                            try
+                            {
+                                var st = tx.GetObject(id, OpenMode.ForRead) as CivilDB.Styles.LabelStyle;
+                                if (st != null)
+                                    labelStyles.Add(new StyleItem { Name = st.Name, Id = id });
+                            }
+                            catch { }
+                        }
+
+                        foreach (ObjectId id in civDoc.Styles.MarkerStyles)
+                        {
+                            try
+                            {
+                                var ms = tx.GetObject(id, OpenMode.ForRead) as CivilDB.Styles.MarkerStyle;
+                                if (ms != null)
+                                    markerStyles.Add(new StyleItem { Name = ms.Name, Id = id });
+                            }
+                            catch { }
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        ed.WriteMessage($"\n⚠ Style scan warning: {ex.Message}");
+                    }
+                    tx.Abort();
+                }
+
+                markerStyles.Insert(0, new StyleItem { Name = "(None)", Id = ObjectId.Null });
+
+                var dlg = new AdvancedLandDevTools.UI.LLabelGenDialog(labelStyles, markerStyles);
+                bool? dlgResult = AcApp.ShowModalWindow(dlg);
+                if (dlgResult != true)
+                {
+                    ed.WriteMessage("\n  Cancelled by user.\n");
+                    return;
+                }
+
+                ObjectId chosenLabelStyleId = dlg.SelectedLabelStyleId;
+                ObjectId chosenMarkerStyleId = dlg.SelectedMarkerStyleId;
+
                 // ── Step 5: Queue native label placement ─────────────────────
                 //  LISP (command ... pause ...) fires ADDPROFILEVIEWSTAELEVLBL
                 //  after this command exits.  The user clicks the profile view
@@ -167,7 +224,9 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage(
                     $"\n\n  Queuing {crossings.Count} native label(s)...");
 
-                LLabelGenEngine.QueueLabelCommand(crossings, ctx.HostHandle, ctx.PickPoint, doc);
+                LLabelGenEngine.QueueLabelCommand(
+                    crossings, ctx.HostHandle, ctx.PickPoint, doc, ctx.IsXref, 
+                    chosenLabelStyleId, chosenMarkerStyleId);
 
                 ed.WriteMessage(
                     $"\n  ✓ Finished — {crossings.Count} label(s) placed.");

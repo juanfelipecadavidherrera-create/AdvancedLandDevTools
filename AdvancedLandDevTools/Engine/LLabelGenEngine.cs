@@ -23,6 +23,17 @@ namespace AdvancedLandDevTools.Engine
         public string   NetworkName  { get; set; } = "";
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Data carried from QueueLabelCommand() through to InjectStyles().
+    // ─────────────────────────────────────────────────────────────────────────
+    internal class LLabelGenJob
+    {
+        public ObjectId      LabelStyleId    { get; set; }
+        public ObjectId      MarkerStyleId   { get; set; }
+        public HashSet<long> ExistingHandles { get; set; } = new();
+        public Database      Db              { get; set; } = null!;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     //  LLabelGenEngine
     //
@@ -33,6 +44,8 @@ namespace AdvancedLandDevTools.Engine
     // ═══════════════════════════════════════════════════════════════════════════
     public static class LLabelGenEngine
     {
+        private static readonly Queue<LLabelGenJob> _pendingJobs = new();
+        private static bool _eventRegistered = false;
         // ─────────────────────────────────────────────────────────────────────
         //  NATIVE: profile view is in the current (host) database.
         // ─────────────────────────────────────────────────────────────────────
@@ -222,9 +235,27 @@ namespace AdvancedLandDevTools.Engine
         public static void QueueLabelCommand(
             List<CrossingLabelPoint> crossings,
             string hostHandle, Point3d pickPt,
-            Document doc)
+            Document doc, bool isXref = false,
+            ObjectId chosenLabelStyleId = default,
+            ObjectId chosenMarkerStyleId = default)
         {
             if (crossings.Count == 0) return;
+
+            var existingHandles = SnapshotLabelHandles(doc.Database);
+            
+            _pendingJobs.Enqueue(new LLabelGenJob
+            {
+                LabelStyleId    = chosenLabelStyleId,
+                MarkerStyleId   = chosenMarkerStyleId,
+                ExistingHandles = existingHandles,
+                Db              = doc.Database
+            });
+
+            if (!_eventRegistered)
+            {
+                doc.CommandEnded += OnLabelCommandEnded;
+                _eventRegistered = true;
+            }
 
             var sb = new StringBuilder();
 
@@ -232,25 +263,144 @@ namespace AdvancedLandDevTools.Engine
             sb.Append($"(setq _aldt_ent (handent \"{hostHandle}\")) ");
             sb.Append($"(if _aldt_ent (command \"ADDPROFILEVIEWSTAELEVLBL\" ");
             
-            // Use entsel list format: (list ENAME (list X Y Z))
-            // This robustly selects XREF BlockReferences at the correct pick point.
-            // AutoCAD expects coordinate points relative to current UCS.
-            // Using (trans pt 0 1) converts our WCS programmatic coordinates correctly into UCS.
-            sb.Append($"(list _aldt_ent (trans (list {pickPt.X:F6} {pickPt.Y:F6} {pickPt.Z:F6}) 0 1)) ");
+            // For XREFs, _aldt_ent is the BlockReference. Civil 3D rejects BlockReferences 
+            // for the ADDPROFILEVIEWSTAELEVLBL command, so we simulate a direct point click.
+            // For Native, _aldt_ent is the ProfileView itself, which works perfectly.
+            if (isXref)
+            {
+                sb.Append($"\"_NON\" (trans (list {pickPt.X:F6} {pickPt.Y:F6} {pickPt.Z:F6}) 0 1) ");
+            }
+            else
+            {
+                sb.Append($"(list _aldt_ent (trans (list {pickPt.X:F6} {pickPt.Y:F6} {pickPt.Z:F6}) 0 1)) ");
+            }
 
             foreach (var cp in crossings)
             {
-                // Click 2: horizontal position — X coord picks the station
-                sb.Append($"\"_NON\" (trans (list {cp.DrawingX:F6} {cp.DrawingY:F6} 0.0) 0 1) ");
-                // Click 3: vertical position   — Y coord picks the elevation
-                sb.Append($"\"_NON\" (trans (list {cp.DrawingX:F6} {cp.DrawingY:F6} 0.0) 0 1) ");
+                if (isXref)
+                {
+                    // Pass literal numerical values for Station and Elevation
+                    // This bypasses Civil 3D's buggy coordinate projection for XREF profile views.
+                    sb.Append($"\"{cp.Station:F6}\" \"{cp.Elevation:F6}\" ");
+                }
+                else
+                {
+                    // Click 2: horizontal position — X coord picks the station
+                    sb.Append($"\"_NON\" (trans (list {cp.DrawingX:F6} {cp.DrawingY:F6} 0.0) 0 1) ");
+                    // Click 3: vertical position   — Y coord picks the elevation
+                    sb.Append($"\"_NON\" (trans (list {cp.DrawingX:F6} {cp.DrawingY:F6} 0.0) 0 1) ");
+                }
             }
 
             sb.Append("\"\" ) ");   // exit repeat loop + close info
             sb.Append("(princ \"\\nLLABELGEN: no valid entity found to label.\\n\") ) ) ");
             // outer progn closed ──────────────────────────────────────────────
 
-            doc.SendStringToExecute(sb.ToString() + "\n", true, false, false);
+            doc.SendStringToExecute(sb.ToString(), true, false, false);
+        }
+
+        // ── Level-2: fires after ADDPROFILEVIEWSTAELEVLBL exits ──────────────
+        private static void OnLabelCommandEnded(object sender, CommandEventArgs e)
+        {
+            if (e.GlobalCommandName.ToUpper() == "ADDPROFILEVIEWSTAELEVLBL")
+            {
+                var doc = Application.DocumentManager.MdiActiveDocument;
+                if (doc == null) return;
+
+                if (_pendingJobs.Count > 0)
+                {
+                    var job = _pendingJobs.Dequeue();
+                    InjectStyles(doc, job);
+                }
+
+                if (_pendingJobs.Count == 0)
+                {
+                    doc.CommandEnded -= OnLabelCommandEnded;
+                    _eventRegistered = false;
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Find newly created Labels (not in pre-run snapshot) and apply styles.
+        // ─────────────────────────────────────────────────────────────────────
+        private static void InjectStyles(Document doc, LLabelGenJob job)
+        {
+            try
+            {
+                Database db = job.Db;
+
+                using (Transaction tx = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tx.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+                    foreach (ObjectId id in ms)
+                    {
+                        if (job.ExistingHandles.Contains(id.Handle.Value)) continue;
+
+                        CivilDB.Label? lbl;
+                        try
+                        {
+                            lbl = tx.GetObject(id, OpenMode.ForWrite) as CivilDB.Label;
+                        }
+                        catch { continue; }
+                        
+                        if (lbl == null) continue;
+
+                        if (!job.LabelStyleId.IsNull && job.LabelStyleId.IsValid)
+                        {
+                            try { lbl.StyleId = job.LabelStyleId; } catch { }
+                        }
+
+                        if (!job.MarkerStyleId.IsNull && job.MarkerStyleId.IsValid)
+                        {
+                            try 
+                            { 
+                                dynamic dynLbl = lbl;
+                                dynLbl.MarkerStyleId = job.MarkerStyleId; 
+                            } 
+                            catch { }
+                        }
+                    }
+
+                    tx.Commit();
+                }
+            }
+            catch (Exception ex)
+            {
+                doc.Editor.WriteMessage($"\n  ⚠ Style injection error: {ex.Message}\n");
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  Snapshot handles of all current Labels in model space.
+        // ─────────────────────────────────────────────────────────────────────
+        private static HashSet<long> SnapshotLabelHandles(Database db)
+        {
+            var handles = new HashSet<long>();
+            try
+            {
+                using (Transaction tx = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tx.GetObject(
+                        bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    foreach (ObjectId id in ms)
+                    {
+                        try
+                        {
+                            if (tx.GetObject(id, OpenMode.ForRead) is CivilDB.Label)
+                                handles.Add(id.Handle.Value);
+                        }
+                        catch { }
+                    }
+                    tx.Abort();
+                }
+            }
+            catch { }
+            return handles;
         }
 
         // ─────────────────────────────────────────────────────────────────────
