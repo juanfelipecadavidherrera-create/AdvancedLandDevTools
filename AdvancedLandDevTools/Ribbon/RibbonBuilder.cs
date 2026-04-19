@@ -629,6 +629,31 @@ namespace AdvancedLandDevTools.Ribbon
                 Title = "Property Information"
             };
 
+            // ── Property Appraiser Lookup button ────────────────────────────────────
+            var btnPropertyAppraisal = new RibbonButton
+            {
+                Id               = "ALDT_BTN_PROPERTYAPPRAISAL",
+                Name             = "Property Appraiser",
+                Text             = "Property\nAppraiser",
+                Description      = "Click a point in the drawing to query Miami-Dade Property Appraiser " +
+                                   "for folio, owner, and address.",
+                ToolTip          = BuildToolTip(
+                    "Property Appraiser Lookup",
+                    "Pick a point in the drawing. The tool queries MDC GIS to " +
+                    "retrieve property information including folio, owner name, and address.\n\nCommand:  FOLIO"),
+                CommandHandler   = new RibbonCommandHandler("FOLIO "),
+                CommandParameter = "FOLIO ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildPropertyAppraisalIcon(32),
+                Image            = BuildPropertyAppraisalIcon(16)
+            };
+            fzSource.Items.Add(btnPropertyAppraisal);
+
+            fzSource.Items.Add(new RibbonSeparator());
+
             // ── Flood Zone Lookup button ────────────────────────────────────
             var btnFloodZone = new RibbonButton
             {
@@ -3676,6 +3701,52 @@ namespace AdvancedLandDevTools.Ribbon
                 StrokeDashArray = new DoubleCollection(new[] { 2.0, 2.0 })
             });
             Canvas.SetLeft(canvas.Children[^1], s * 7); Canvas.SetTop(canvas.Children[^1], s * 12);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+        // ═════════════════════════════════════════════════════════════════════
+        //  Property Appraisal Lookup icon
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildPropertyAppraisalIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark blue background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#122A42"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // Document paper
+            Add(new Path
+            {
+                Data = Geometry.Parse($"M {s*6},{s*4} L {s*20},{s*4} L {s*26},{s*10} L {s*26},{s*28} L {s*6},{s*28} Z"),
+                Fill = C("#E0E0E0")
+            });
+            // Fold
+            Add(new Path
+            {
+                Data = Geometry.Parse($"M {s*20},{s*4} L {s*20},{s*10} L {s*26},{s*10} Z"),
+                Fill = C("#BDBDBD")
+            });
+
+            // Lines on document
+            Add(new Rectangle { Width = s * 12, Height = s * 2, Fill = C("#757575"),
+                Margin = new System.Windows.Thickness(s*9, s*12, 0, 0) });
+            Add(new Rectangle { Width = s * 14, Height = s * 2, Fill = C("#757575"),
+                Margin = new System.Windows.Thickness(s*9, s*16, 0, 0) });
+            Add(new Rectangle { Width = s * 10, Height = s * 2, Fill = C("#757575"),
+                Margin = new System.Windows.Thickness(s*9, s*20, 0, 0) });
+
+            // Magnifying glass over it
+            Add(new Ellipse { Width = s*10, Height = s*10, Stroke = C("#4FC3F7"),
+                StrokeThickness = s*2, Margin = new System.Windows.Thickness(s*14, s*16, 0, 0) });
+            Add(new Path
+            {
+                Data = Geometry.Parse($"M {s*22},{s*24} L {s*28},{s*30}"),
+                Stroke = C("#4FC3F7"), StrokeThickness = s*3, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+            });
 
             return RenderToBitmap(canvas, size, size);
         }

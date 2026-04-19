@@ -49,6 +49,7 @@ namespace AdvancedLandDevTools.UI
             ("LOWRIM ",          "Lowest Rim",            "SURFACES",  "\xE74B", "#EF5350", "LoRim"),
 
             // INFO
+            ("FOLIO ", "Property Appraiser",  "INFO",      "\xE8A5", "#4FC3F7", "Apprs"),
             ("FLOODZONE ",       "FEMA Flood Zone",       "INFO",      "\xE773", "#EF5350", "FEMA"),
             ("FLOODCRITERIA ",   "County Flood",          "INFO",      "\xE81D", "#FF7043", "County"),
             ("SECTIONLOOKUP ",   "PLSS Section",          "INFO",      "\xE909", "#AED581", "PLSS"),

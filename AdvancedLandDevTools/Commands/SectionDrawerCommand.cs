@@ -135,8 +135,7 @@ namespace AdvancedLandDevTools.Commands
             foreach (var region in geo.RoadRegions)
             {
                 if (region.Count < 2) continue;
-
-                double[] offsets  = { 0.5, 2.0, 2.0 };
+                double[] offsets  = { 0.2, 1.5, 2.0 };
                 string[] patterns = { "SOLID", "GRAVEL", "ANSI31" };
                 double[] scales   = { 1.0, 0.5, 0.5 };
                 short[] colors    = { 8, 9, 8 };

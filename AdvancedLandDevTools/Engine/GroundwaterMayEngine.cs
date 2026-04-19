@@ -48,20 +48,10 @@ namespace AdvancedLandDevTools.Engine
             ed.WriteMessage($"\n  Picked point (Drawing coords): " +
                             $"X={pickedPoint.X:F3}, Y={pickedPoint.Y:F3}");
 
-            // Convert drawing coords to WGS84
-            if (!GroundwaterCoords.ConvertToLatLon(doc, pickedPoint, out double lat, out double lon))
-            {
-                ed.WriteMessage("\n  ** Could not convert coordinates to Lat/Lon.");
-                ed.WriteMessage("\n  Make sure your drawing has a valid coordinate system assigned.");
-                ed.WriteMessage("\n  (Settings > Drawing Settings > Zone tab)\n");
-                return;
-            }
-
-            ed.WriteMessage($"\n  Converted to WGS84: Lat={lat:F6}, Lon={lon:F6}");
-            ed.WriteMessage("\n  Querying MDC Groundwater Level (Average May) service...");
+            ed.WriteMessage("\n  Querying MDC Groundwater Level (Average May) service (Assuming FL83-EF)...");
 
             // Query nearest contours and interpolate
-            if (!QueryAndInterpolate(lat, lon, out double navd88,
+            if (!QueryAndInterpolate(pickedPoint.X, pickedPoint.Y, out double navd88,
                     out double lowerElev, out double upperElev,
                     out double lowerDist, out double upperDist,
                     out string errorMsg))
@@ -95,7 +85,7 @@ namespace AdvancedLandDevTools.Engine
         // ═══════════════════════════════════════════════════════════════
 
         private static bool QueryAndInterpolate(
-            double lat, double lon,
+            double x, double y,
             out double navd88,
             out double lowerElev, out double upperElev,
             out double lowerDist, out double upperDist,
@@ -108,13 +98,13 @@ namespace AdvancedLandDevTools.Engine
 
             try
             {
-                // Query contours within a search radius (start at 2 km, expand if needed)
+                // Query contours within a search radius (start at 6500 ft, expand if needed)
                 List<ContourHit> hits = null!;
-                int[] radiiMeters = { 2000, 5000, 10000 };
+                int[] radiiFeet = { 6500, 16000, 33000 };
 
-                foreach (int radius in radiiMeters)
+                foreach (int radius in radiiFeet)
                 {
-                    hits = QueryContours(lat, lon, radius, out errorMsg);
+                    hits = QueryContours(x, y, radius, out errorMsg);
                     if (hits != null && hits.Count >= 1) break;
                 }
 
@@ -198,7 +188,7 @@ namespace AdvancedLandDevTools.Engine
         // ═══════════════════════════════════════════════════════════════
 
         private static List<ContourHit> QueryContours(
-            double lat, double lon, int radiusMeters, out string errorMsg)
+            double x, double y, int radiusFeet, out string errorMsg)
         {
             errorMsg = "";
             var results = new List<ContourHit>();
@@ -206,16 +196,16 @@ namespace AdvancedLandDevTools.Engine
             try
             {
                 string queryUrl = $"{MDC_GW_MAY_URL}" +
-                    $"?geometry={lon.ToString(CultureInfo.InvariantCulture)}" +
-                    $",{lat.ToString(CultureInfo.InvariantCulture)}" +
+                    $"?geometry={x.ToString(CultureInfo.InvariantCulture)}" +
+                    $",{y.ToString(CultureInfo.InvariantCulture)}" +
                     $"&geometryType=esriGeometryPoint" +
                     $"&spatialRel=esriSpatialRelIntersects" +
-                    $"&distance={radiusMeters}" +
-                    $"&units=esriSRUnit_Meter" +
-                    $"&inSR=4326" +
+                    $"&distance={radiusFeet}" +
+                    $"&units=esriSRUnit_Foot" +
+                    $"&inSR=2236" +
                     $"&outFields=Elevation" +
                     $"&returnGeometry=true" +
-                    $"&outSR=4326" +
+                    $"&outSR=2236" +
                     $"&f=json";
 
                 string jsonResponse = System.Threading.Tasks.Task.Run(() =>
@@ -242,8 +232,8 @@ namespace AdvancedLandDevTools.Engine
                     double? elev = (double?)attrs["Elevation"];
                     if (elev == null) continue;
 
-                    // Calculate distance from point to nearest vertex on contour
-                    double dist = ComputeDistanceToContour(feature, lon, lat);
+                    // Calculate distance from point to nearest vertex on contour (in feet)
+                    double dist = ComputeDistanceToContour(feature, x, y);
 
                     results.Add(new ContourHit
                     {
@@ -262,15 +252,11 @@ namespace AdvancedLandDevTools.Engine
         }
 
         // ═══════════════════════════════════════════════════════════════
-        //  Distance from point to polyline contour (WGS84 → approx ft)
+        //  Distance from point to polyline contour (in drawing units / ft)
         // ═══════════════════════════════════════════════════════════════
 
-        private static double ComputeDistanceToContour(JObject feature, double ptLon, double ptLat)
+        private static double ComputeDistanceToContour(JObject feature, double ptX, double ptY)
         {
-            // Approximate conversion from degrees to feet at Miami latitude (~25.7°N)
-            const double DEG_LAT_TO_FT = 364173.0;  // 1° lat ≈ 364,173 ft
-            const double DEG_LON_TO_FT = 328084.0;  // 1° lon ≈ 328,084 ft at 25.7°N
-
             double minDist = double.MaxValue;
 
             var geometry = feature["geometry"] as JObject;
@@ -287,12 +273,12 @@ namespace AdvancedLandDevTools.Engine
                     var p2 = path[i + 1] as JArray;
                     if (p1 == null || p2 == null || p1.Count < 2 || p2.Count < 2) continue;
 
-                    double x1 = ((double)p1[0] - ptLon) * DEG_LON_TO_FT;
-                    double y1 = ((double)p1[1] - ptLat) * DEG_LAT_TO_FT;
-                    double x2 = ((double)p2[0] - ptLon) * DEG_LON_TO_FT;
-                    double y2 = ((double)p2[1] - ptLat) * DEG_LAT_TO_FT;
+                    double x1 = (double)p1[0];
+                    double y1 = (double)p1[1];
+                    double x2 = (double)p2[0];
+                    double y2 = (double)p2[1];
 
-                    double dist = PointToSegmentDist(0, 0, x1, y1, x2, y2);
+                    double dist = PointToSegmentDist(ptX, ptY, x1, y1, x2, y2);
                     if (dist < minDist) minDist = dist;
                 }
             }

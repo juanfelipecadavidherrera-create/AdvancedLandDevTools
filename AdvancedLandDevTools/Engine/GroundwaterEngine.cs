@@ -36,25 +36,14 @@ namespace AdvancedLandDevTools.Engine
         public static void LookupAtPoint(Document doc, Point3d pickedPoint)
         {
             Editor ed = doc.Editor;
-
             ed.WriteMessage($"\n  Picked point (Drawing coords): " +
                             $"X={pickedPoint.X:F3}, Y={pickedPoint.Y:F3}");
 
-            // Convert drawing coords to WGS84
-            if (!GroundwaterCoords.ConvertToLatLon(doc, pickedPoint, out double lat, out double lon))
-            {
-                ed.WriteMessage("\n  ** Could not convert coordinates to Lat/Lon.");
-                ed.WriteMessage("\n  Make sure your drawing has a valid coordinate system assigned.");
-                ed.WriteMessage("\n  (Settings > Drawing Settings > Zone tab)\n");
-                return;
-            }
-
-            ed.WriteMessage($"\n  Converted to WGS84: Lat={lat:F6}, Lon={lon:F6}");
-            ed.WriteMessage("\n  Querying MDC Groundwater Level (October 2040) service...");
+            ed.WriteMessage("\n  Querying MDC Groundwater Level (October 2040) service (Assuming FL83-EF)...");
 
             // Query MDC MapServer
             double navd88;
-            if (!QueryGroundwater(lat, lon, out navd88, out string errorMsg))
+            if (!QueryGroundwater(pickedPoint.X, pickedPoint.Y, out navd88, out string errorMsg))
             {
                 ed.WriteMessage($"\n  ** Query failed: {errorMsg}");
                 ed.WriteMessage("\n  The point may be outside Miami-Dade County,");
@@ -80,7 +69,7 @@ namespace AdvancedLandDevTools.Engine
         // ═══════════════════════════════════════════════════════════════════
         //  MDC MapServer identify — synchronous HTTP
         // ═══════════════════════════════════════════════════════════════════
-        private static bool QueryGroundwater(double lat, double lon,
+        private static bool QueryGroundwater(double x, double y,
             out double navd88, out string errorMsg)
         {
             navd88 = 0;
@@ -88,14 +77,14 @@ namespace AdvancedLandDevTools.Engine
 
             try
             {
-                double buffer = 0.001;
-                string mapExtent = $"{lon - buffer},{lat - buffer}," +
-                                   $"{lon + buffer},{lat + buffer}";
+                double buffer = 100.0;
+                string mapExtent = $"{x - buffer},{y - buffer}," +
+                                   $"{x + buffer},{y + buffer}";
 
                 string queryUrl = $"{MDC_GROUNDWATER_URL}" +
-                    $"?geometry={lon},{lat}" +
+                    $"?geometry={x},{y}" +
                     $"&geometryType=esriGeometryPoint" +
-                    $"&sr=4326" +
+                    $"&sr=2236" +
                     $"&layers=all:0" +
                     $"&tolerance=1" +
                     $"&mapExtent={mapExtent}" +

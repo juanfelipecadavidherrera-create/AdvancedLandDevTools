@@ -44,6 +44,7 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(ChopChopCommand))]
 [assembly: CommandClass(typeof(LLabelGenCommand))]
 [assembly: CommandClass(typeof(MarkFittingsCommand))]
+[assembly: CommandClass(typeof(PropertyAppraisalCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -160,6 +161,7 @@ namespace AdvancedLandDevTools
                 "\n║  Cross Sections:                                        ║" +
                 "\n║    SECDRAW         – Road Section Drawer                ║" +
                 "\n║  Property Information:                                  ║" +
+                "\n║    FOLIO           – MDC Property Appraiser Lookup      ║" +
                 "\n║    FLOODZONE       – FEMA Flood Zone Lookup             ║" +
                 "\n║    FLOODCRITERIA   – MDC County Flood Criteria          ║" +
                 "\n║    SECTIONLOOKUP   – PLSS Township/Range/Section        ║" +

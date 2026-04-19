@@ -11,67 +11,7 @@ using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace AdvancedLandDevTools.Engine
 {
-    // ═════════════════════════════════════════════════════════════════════
-    //  Cached coordinate transformer — created ONCE, reused for all points.
-    //  Avoids per-vertex reflection overhead that freezes Civil 3D.
-    // ═════════════════════════════════════════════════════════════════════
-    internal class CachedCoordTransformer
-    {
-        private readonly object? _transformer;
-        private readonly System.Reflection.MethodInfo? _transformMethod;
-        private readonly bool _useFallback;
-
-        internal CachedCoordTransformer(string drawingCS)
-        {
-            _useFallback = true;
-            if (string.IsNullOrEmpty(drawingCS)) return;
-
-            try
-            {
-                var asm = System.Reflection.Assembly.Load("Autodesk.Geolocation");
-                if (asm == null) return;
-
-                var csType = asm.GetType("Autodesk.Geolocation.CoordinateSystem");
-                var txType = asm.GetType("Autodesk.Geolocation.CoordinateSystemTransformer");
-                if (csType == null || txType == null) return;
-
-                var src = Activator.CreateInstance(csType, "LL84");
-                var tgt = Activator.CreateInstance(csType, drawingCS);
-                _transformer = Activator.CreateInstance(txType, src, tgt);
-                _transformMethod = txType.GetMethod("Transform",
-                    new[] { typeof(Point3d) });
-
-                if (_transformer != null && _transformMethod != null)
-                    _useFallback = false;
-            }
-            catch { /* fall back to approximate conversion */ }
-        }
-
-        internal bool Transform(double lat, double lon,
-                                out double drawingX, out double drawingY)
-        {
-            drawingX = 0; drawingY = 0;
-
-            if (_useFallback)
-                return GroundwaterCoords.ConvertStatePlaneFromLatLon(
-                    lat, lon, out drawingX, out drawingY);
-
-            try
-            {
-                var pt = new Point3d(lon, lat, 0);
-                var result = (Point3d)_transformMethod!.Invoke(
-                    _transformer, new object[] { pt })!;
-                drawingX = result.X;
-                drawingY = result.Y;
-                return true;
-            }
-            catch
-            {
-                return GroundwaterCoords.ConvertStatePlaneFromLatLon(
-                    lat, lon, out drawingX, out drawingY);
-            }
-        }
-    }
+    // removed CachedCoordTransformer
 
     public static class FloodCriteriaEngine
     {
@@ -102,46 +42,29 @@ namespace AdvancedLandDevTools.Engine
             Editor ed = doc.Editor;
 
             ed.WriteMessage($"\n  Picked point (Drawing coords): X={pickedPoint.X:F3}, Y={pickedPoint.Y:F3}");
-
-            // 1) Convert picked point to WGS84
-            if (!GroundwaterCoords.ConvertToLatLon(doc, pickedPoint, out double lat, out double lon))
-            {
-                return new FloodCriteriaResult
-                {
-                    Success = false,
-                    ErrorMessage = "Could not convert coordinates to Lat/Lon. " +
-                                   "Make sure your drawing has a valid coordinate system assigned."
-                };
-            }
-
-            ed.WriteMessage($"\n  Converted to WGS84: Lat={lat:F6}, Lon={lon:F6}");
-            ed.WriteMessage("\n  Querying Miami-Dade County Flood Criteria 2022...");
-
-            // 2) Get drawing CS for reverse conversion of returned geometry
-            string drawingCS = GroundwaterCoords.GetDrawingCoordinateSystem(doc);
+            ed.WriteMessage("\n  Querying Miami-Dade County Flood Criteria 2022 (Assuming FL83-EF)...");
 
             // 3) Query MDC — find nearest contour + collect geometry for drawing
-            return QueryFloodCriteria(lat, lon, pickedPoint, drawingCS);
+            return QueryFloodCriteria(pickedPoint);
         }
 
         // ═════════════════════════════════════════════════════════════════════
         //  MDC Flood Criteria query — returns nearest contour + clipped lines
         // ═════════════════════════════════════════════════════════════════════
-        private static FloodCriteriaResult QueryFloodCriteria(
-            double lat, double lon, Point3d pickedPoint, string drawingCS)
+        private static FloodCriteriaResult QueryFloodCriteria(Point3d pickedPoint)
         {
             try
             {
                 // Generous envelope to catch nearby contours
-                double buffer = 0.02;  // ~2 km
-                string envelope = $"{lon - buffer},{lat - buffer},{lon + buffer},{lat + buffer}";
+                double buffer = 5000.0;  // 5000 ft
+                string envelope = $"{pickedPoint.X - buffer},{pickedPoint.Y - buffer},{pickedPoint.X + buffer},{pickedPoint.Y + buffer}";
 
                 string queryUrl = MDC_FLOOD_CRITERIA_URL +
                     $"?where=1=1" +
                     $"&geometry={envelope}" +
                     $"&geometryType=esriGeometryEnvelope" +
-                    $"&inSR=4326" +
-                    $"&outSR=4326" +
+                    $"&inSR=2236" +
+                    $"&outSR=2236" +
                     $"&spatialRel=esriSpatialRelIntersects" +
                     $"&outFields=ELEV" +
                     $"&returnGeometry=true" +
@@ -161,10 +84,10 @@ namespace AdvancedLandDevTools.Engine
                 if (features == null || features.Count == 0)
                 {
                     // Try wider search — get all 13 features
-                    return QueryFloodCriteriaWide(lat, lon, pickedPoint, drawingCS);
+                    return QueryFloodCriteriaWide(pickedPoint);
                 }
 
-                return BuildResult(features, lat, lon, pickedPoint, drawingCS);
+                return BuildResult(features, pickedPoint);
             }
             catch (Exception ex)
             {
@@ -176,15 +99,14 @@ namespace AdvancedLandDevTools.Engine
             }
         }
 
-        private static FloodCriteriaResult QueryFloodCriteriaWide(
-            double lat, double lon, Point3d pickedPoint, string drawingCS)
+        private static FloodCriteriaResult QueryFloodCriteriaWide(Point3d pickedPoint)
         {
             try
             {
                 string queryUrl = MDC_FLOOD_CRITERIA_URL +
                     $"?where=1=1" +
                     $"&outFields=ELEV" +
-                    $"&outSR=4326" +
+                    $"&outSR=2236" +
                     $"&returnGeometry=true" +
                     $"&resultRecordCount=30" +
                     $"&f=json";
@@ -208,7 +130,7 @@ namespace AdvancedLandDevTools.Engine
                     };
                 }
 
-                return BuildResult(features, lat, lon, pickedPoint, drawingCS);
+                return BuildResult(features, pickedPoint);
             }
             catch (Exception ex)
             {
@@ -224,16 +146,12 @@ namespace AdvancedLandDevTools.Engine
         //  Build result from features — nearest elevation + clipped contours
         // ═════════════════════════════════════════════════════════════════════
         private static FloodCriteriaResult BuildResult(
-            JArray features, double lat, double lon,
-            Point3d pickedPoint, string drawingCS)
+            JArray features, Point3d pickedPoint)
         {
             double minDist = double.MaxValue;
             double nearestElev = 0;
             var contours = new List<ContourLineData>();
             var center = new Point2d(pickedPoint.X, pickedPoint.Y);
-
-            // Create transformer ONCE — reused for all vertices across all features
-            var transformer = new CachedCoordTransformer(drawingCS);
 
             foreach (var feature in features)
             {
@@ -243,8 +161,8 @@ namespace AdvancedLandDevTools.Engine
 
                 double elev = attrs["ELEV"]?.Value<double>() ?? 0;
 
-                // Distance in WGS84 degrees for nearest-contour determination
-                double dist = ComputeDistanceToPolyline(lon, lat, geom);
+                // Distance in drawing units for nearest-contour determination
+                double dist = ComputeDistanceToPolyline(pickedPoint.X, pickedPoint.Y, geom);
                 if (dist < minDist)
                 {
                     minDist = dist;
@@ -252,7 +170,7 @@ namespace AdvancedLandDevTools.Engine
                 }
 
                 // Convert geometry to drawing coords and clip to 500 ft radius
-                var clipped = ConvertAndClipPaths(geom, elev, center, transformer);
+                var clipped = ConvertAndClipPaths(geom, elev, center);
                 contours.AddRange(clipped);
             }
 
@@ -265,8 +183,8 @@ namespace AdvancedLandDevTools.Engine
                 };
             }
 
-            // Convert degrees distance to approximate feet
-            double distFeet = minDist * 364567.0;  // rough deg-to-ft at lat ~25.8
+            // Distance is already in feet
+            double distFeet = minDist;
 
             return new FloodCriteriaResult
             {
@@ -278,11 +196,10 @@ namespace AdvancedLandDevTools.Engine
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        //  Convert ArcGIS polyline paths (WGS84) → drawing coords, clip to radius
+        //  Clip ArcGIS polyline paths (native coords) to radius
         // ═════════════════════════════════════════════════════════════════════
         private static List<ContourLineData> ConvertAndClipPaths(
-            JObject geometry, double elev, Point2d center,
-            CachedCoordTransformer transformer)
+            JObject geometry, double elev, Point2d center)
         {
             var result = new List<ContourLineData>();
             var paths = geometry["paths"] as JArray;
@@ -290,17 +207,13 @@ namespace AdvancedLandDevTools.Engine
 
             foreach (JArray path in paths)
             {
-                // Convert all vertices to drawing coordinates
+                // Vertices are already in drawing coordinates
                 var drawingPts = new List<Point2d>(path.Count);
                 foreach (var coord in path)
                 {
-                    double wgsX = coord[0]!.Value<double>();  // lon
-                    double wgsY = coord[1]!.Value<double>();  // lat
-
-                    if (transformer.Transform(wgsY, wgsX, out double dx, out double dy))
-                    {
-                        drawingPts.Add(new Point2d(dx, dy));
-                    }
+                    double x = coord[0]!.Value<double>();
+                    double y = coord[1]!.Value<double>();
+                    drawingPts.Add(new Point2d(x, y));
                 }
 
                 if (drawingPts.Count < 2) continue;
@@ -441,7 +354,7 @@ namespace AdvancedLandDevTools.Engine
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        //  Distance from point to ArcGIS polyline geometry (in WGS84 degrees)
+        //  Distance from point to ArcGIS polyline geometry (in drawing units)
         // ═════════════════════════════════════════════════════════════════════
         private static double ComputeDistanceToPolyline(double px, double py, JObject geometry)
         {
