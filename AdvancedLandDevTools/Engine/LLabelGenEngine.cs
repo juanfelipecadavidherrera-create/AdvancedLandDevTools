@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -32,6 +33,11 @@ namespace AdvancedLandDevTools.Engine
         public ObjectId      MarkerStyleId   { get; set; }
         public HashSet<long> ExistingHandles { get; set; } = new();
         public Database      Db              { get; set; } = null!;
+        /// <summary>
+        /// Drag offset applied to each new label text box (in host WCS drawing units).
+        /// Positive X = right, positive Y = up.  Zero = no drag.
+        /// </summary>
+        public Vector3d      DragOffset      { get; set; } = new Vector3d(0, 0, 0);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -237,7 +243,8 @@ namespace AdvancedLandDevTools.Engine
             string hostHandle, Point3d pickPt,
             Document doc, bool isXref = false,
             ObjectId chosenLabelStyleId = default,
-            ObjectId chosenMarkerStyleId = default)
+            ObjectId chosenMarkerStyleId = default,
+            Vector3d dragOffset = default)
         {
             if (crossings.Count == 0) return;
 
@@ -248,7 +255,8 @@ namespace AdvancedLandDevTools.Engine
                 LabelStyleId    = chosenLabelStyleId,
                 MarkerStyleId   = chosenMarkerStyleId,
                 ExistingHandles = existingHandles,
-                Db              = doc.Database
+                Db              = doc.Database,
+                DragOffset      = dragOffset
             });
 
             if (!_eventRegistered)
@@ -302,7 +310,19 @@ namespace AdvancedLandDevTools.Engine
         // ── Level-2: fires after ADDPROFILEVIEWSTAELEVLBL exits ──────────────
         private static void OnLabelCommandEnded(object sender, CommandEventArgs e)
         {
-            if (e.GlobalCommandName.ToUpper() == "ADDPROFILEVIEWSTAELEVLBL")
+            // Log every command that ends while we have pending jobs so we can
+            // see the exact GlobalCommandName Civil 3D reports.
+            if (_pendingJobs.Count > 0)
+            {
+                var doc2 = Application.DocumentManager.MdiActiveDocument;
+                doc2?.Editor.WriteMessage($"\n  DIAG evt: '{e.GlobalCommandName}'");
+            }
+
+            // Accept the command however Civil 3D registers it — upper-case, with
+            // or without leading underscore, and regardless of locale suffix.
+            string cmd = e.GlobalCommandName.ToUpper().TrimStart('_');
+            if (cmd == "ADDPROFILEVIEWSTAELEVLBL" ||
+                cmd.Contains("ADDPROFILEVIEWSTAELEVLBL"))
             {
                 var doc = Application.DocumentManager.MdiActiveDocument;
                 if (doc == null) return;
@@ -323,55 +343,99 @@ namespace AdvancedLandDevTools.Engine
 
         // ─────────────────────────────────────────────────────────────────────
         //  Find newly created Labels (not in pre-run snapshot) and apply styles.
+        //  Drag: Civil 3D's managed API has no settable DraggedOffset property.
+        //  We read each label's anchor via LabelLocation (readable), collect the
+        //  per-label drag targets, commit styles, then fire a single LISP call
+        //  that sets LabelLocation on each label via COM (vlax-put-property).
+        //  Setting LabelLocation to a position different from the anchor puts
+        //  the label into dragged state and Civil 3D draws the leader automatically.
         // ─────────────────────────────────────────────────────────────────────
         private static void InjectStyles(Document doc, LLabelGenJob job)
         {
+            bool hasDrag = job.DragOffset.Length > 0;
+
+            doc.Editor.WriteMessage(
+                $"\n  DIAG InjectStyles: hasDrag={hasDrag}  offset=({job.DragOffset.X:F3},{job.DragOffset.Y:F3})");
+
+            int totalNew = 0, totalLabels = 0;
+
             try
             {
                 Database db = job.Db;
 
-                using (Transaction tx = db.TransactionManager.StartTransaction())
+                using (Transaction dbTx = db.TransactionManager.StartTransaction())
                 {
-                    var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tx.GetObject(
+                    var bt = (BlockTable)dbTx.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)dbTx.GetObject(
                         bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
                     foreach (ObjectId id in ms)
                     {
                         if (job.ExistingHandles.Contains(id.Handle.Value)) continue;
+                        totalNew++;
 
                         CivilDB.Label? lbl;
-                        try
-                        {
-                            lbl = tx.GetObject(id, OpenMode.ForWrite) as CivilDB.Label;
-                        }
+                        try { lbl = dbTx.GetObject(id, OpenMode.ForWrite) as CivilDB.Label; }
                         catch { continue; }
-                        
                         if (lbl == null) continue;
+                        totalLabels++;
+
+                        // One-time .NET reflection dump
+                        if (totalLabels == 1)
+                        {
+                            doc.Editor.WriteMessage($"\n  DIAG type: {lbl.GetType().FullName}");
+                            var dragProps = lbl.GetType()
+                                .GetProperties(
+                                    System.Reflection.BindingFlags.Public |
+                                    System.Reflection.BindingFlags.Instance)
+                                .Where(p =>
+                                    p.Name.IndexOf("drag",     System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    p.Name.IndexOf("offset",   System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    p.Name.IndexOf("location", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    p.Name.IndexOf("text",     System.StringComparison.OrdinalIgnoreCase) >= 0)
+                                .Select(p =>
+                                    $"{p.Name}[{(p.CanWrite ? "RW" : "RO")}:{p.PropertyType.Name}]");
+                            doc.Editor.WriteMessage(
+                                $"\n  DIAG drag-props: {string.Join(", ", dragProps)}");
+                        }
 
                         if (!job.LabelStyleId.IsNull && job.LabelStyleId.IsValid)
-                        {
                             try { lbl.StyleId = job.LabelStyleId; } catch { }
-                        }
 
                         if (!job.MarkerStyleId.IsNull && job.MarkerStyleId.IsValid)
+                            try { dynamic d = lbl; d.MarkerStyleId = job.MarkerStyleId; } catch { }
+
+                        if (hasDrag)
                         {
-                            try 
-                            { 
-                                dynamic dynLbl = lbl;
-                                dynLbl.MarkerStyleId = job.MarkerStyleId; 
-                            } 
-                            catch { }
+                            try
+                            {
+                                Point3d anchor = lbl.LabelLocation;
+                                double  tx     = anchor.X + job.DragOffset.X;
+                                double  ty     = anchor.Y + job.DragOffset.Y;
+                                
+                                // Direct .NET assignment automatically puts the label into Dragged State
+                                lbl.LabelLocation = new Point3d(tx, ty, 0);
+
+                                doc.Editor.WriteMessage(
+                                    $"\n  DIAG drag applied: h={id.Handle} anchor({anchor.X:F2},{anchor.Y:F2}) -> target({tx:F2},{ty:F2})");
+                            }
+                            catch (Exception ex)
+                            {
+                                doc.Editor.WriteMessage($"\n  DIAG drag err: {ex.Message}");
+                            }
                         }
                     }
 
-                    tx.Commit();
+                    dbTx.Commit();
                 }
             }
             catch (Exception ex)
             {
                 doc.Editor.WriteMessage($"\n  ⚠ Style injection error: {ex.Message}\n");
             }
+
+            doc.Editor.WriteMessage(
+                $"\n  DIAG InjectStyles done: totalNew={totalNew} totalLabels={totalLabels}");
         }
 
         // ─────────────────────────────────────────────────────────────────────

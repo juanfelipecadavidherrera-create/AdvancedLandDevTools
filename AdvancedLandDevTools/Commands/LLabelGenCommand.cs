@@ -224,9 +224,36 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage(
                     $"\n\n  Queuing {crossings.Count} native label(s)...");
 
+                // Compute drag offset — ~2.5% of PV width right, ~10% of PV height up.
+                // For XREF profile views GeometricExtents is often degenerate (zero),
+                // so fall back to the spread of the actual crossing DrawingX/Y values.
+                var    pvExt = ctx.ExtentsHostWCS;
+                double pvW   = pvExt.MaxPoint.X - pvExt.MinPoint.X;
+                double pvH   = pvExt.MaxPoint.Y - pvExt.MinPoint.Y;
+
+                Vector3d dragOffset;
+                if (pvW > 1.0 && pvH > 1.0)
+                {
+                    dragOffset = new Vector3d(pvW * 0.025, pvH * 0.10, 0);
+                }
+                else
+                {
+                    // XREF fallback: derive scale from the spread of crossing coords.
+                    double xSpan = crossings.Count > 1
+                        ? crossings.Max(c => c.DrawingX) - crossings.Min(c => c.DrawingX)
+                        : Math.Abs(crossings[0].DrawingX) * 0.05;
+                    double ySpan = crossings.Count > 1
+                        ? crossings.Max(c => c.DrawingY) - crossings.Min(c => c.DrawingY)
+                        : Math.Abs(crossings[0].DrawingY) * 0.05;
+                    xSpan = Math.Max(xSpan, 5.0);
+                    ySpan = Math.Max(ySpan, 2.0);
+                    dragOffset = new Vector3d(xSpan * 0.30, ySpan * 0.60, 0);
+                }
+                ed.WriteMessage($"\n  DIAG drag: pvW={pvW:F1} pvH={pvH:F1}  offset=({dragOffset.X:F3},{dragOffset.Y:F3})");
+
                 LLabelGenEngine.QueueLabelCommand(
-                    crossings, ctx.HostHandle, ctx.PickPoint, doc, ctx.IsXref, 
-                    chosenLabelStyleId, chosenMarkerStyleId);
+                    crossings, ctx.HostHandle, ctx.PickPoint, doc, ctx.IsXref,
+                    chosenLabelStyleId, chosenMarkerStyleId, dragOffset);
 
                 ed.WriteMessage(
                     $"\n  ✓ Finished — {crossings.Count} label(s) placed.");
