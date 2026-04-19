@@ -38,6 +38,7 @@ namespace AdvancedLandDevTools.UI
             ("INVERTPULLUP ",    "Invert Pull Up",        "PIPES",     "\xE74A", "#FFD54F", "Invert"),
             ("CHANGEELEVATION ", "Change Elevation",      "PIPES",     "\xE70E", "#FF8A65", "Elev"),
             ("PIPESIZING ",      "Pipe Sizing Calc",      "PIPES",     "\xE81E", "#29B6F6", "Sizing"),
+            ("COVERADJUST ",      "Cover Adjust",          "PIPES",     "\xE74B", "#00BCD4", "Cover"),
             ("PRESSCOUNT ",      "Pressure Count",        "PIPES",     "\xE946", "#CE93D8", "PCount"),
             ("RRNETWORKCHECK ",  "Network Check",         "PIPES",     "\xE73E", "#66BB6A", "RRChk"),
             ("LATMANAGER ",      "Lateral Manager",       "PIPES",     "\xE9E9", "#FFB74D", "LatMan"),

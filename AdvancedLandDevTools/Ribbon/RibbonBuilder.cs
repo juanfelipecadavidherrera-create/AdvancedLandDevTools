@@ -429,6 +429,35 @@ namespace AdvancedLandDevTools.Ribbon
 
             piSource.Items.Add(new RibbonSeparator());
 
+            // ── Cover Adjust button ───────────────────────────────────────────
+            var btnCoverAdjust = new RibbonButton
+            {
+                Id               = "ALDT_BTN_COVERADJUST",
+                Name             = "Cover Adjust",
+                Text             = "Cover\nAdjust",
+                Description      = "Selects two pressure fittings in a profile view and adjusts " +
+                                   "both PVIs to the shallowest depth that gives each fitting " +
+                                   "≥ 4 ft of crown cover, placing both at the same elevation.",
+                ToolTip          = BuildToolTip(
+                    "Cover Adjust",
+                    "Click two pressure fitting proxies in a profile view. The tool " +
+                    "auto-detects the ground-surface elevation from the alignment's " +
+                    "surface profile, computes the minimum depth that gives both fittings " +
+                    "≥ 4 ft of crown cover, and moves both PVIs to that elevation so they " +
+                    "sit at the same height.\n\nCommand:  COVERADJUST"),
+                CommandHandler   = new RibbonCommandHandler("COVERADJUST "),
+                CommandParameter = "COVERADJUST ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildCoverAdjustIcon(32),
+                Image            = BuildCoverAdjustIcon(16)
+            };
+            piSource.Items.Add(btnCoverAdjust);
+
+            piSource.Items.Add(new RibbonSeparator());
+
             // ── Pressure Count button ─────────────────────────────────────────
             var btnPressCount = new RibbonButton
             {
@@ -3747,6 +3776,128 @@ namespace AdvancedLandDevTools.Ribbon
                 Data = Geometry.Parse($"M {s*22},{s*24} L {s*28},{s*30}"),
                 Stroke = C("#4FC3F7"), StrokeThickness = s*3, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
             });
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Cover Adjust icon — ground surface, two pipes at depth, cover arrows
+        //  Concept: brown ground line at top, two small pipe circles below it,
+        //  cyan double-headed arrows showing cover, target depth dashed line.
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildCoverAdjustIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background — deep blue-green
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#071820"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Ground surface (wavy brown fill) ──────────────────────────────
+            // filled earth shape
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*0},{s*0} L {s*32},{s*0} L {s*32},{s*10} " +
+                    $"Q {s*24},{s*8} {s*16},{s*10} Q {s*8},{s*12} {s*0},{s*10} Z"),
+                Fill = C("#5C3A1E")
+            });
+            // surface grass line
+            Add(new Path
+            {
+                Data = Geometry.Parse(
+                    $"M {s*0},{s*10} Q {s*8},{s*12} {s*16},{s*10} Q {s*24},{s*8} {s*32},{s*10}"),
+                Stroke = C("#8BC34A"), StrokeThickness = s * 1.8,
+                Fill = Brushes.Transparent, StrokeLineJoin = PenLineJoin.Round
+            });
+
+            // ── Target depth line (dashed, cyan dim) ─────────────────────────
+            Add(new Line
+            {
+                X1 = s * 1, Y1 = s * 25, X2 = s * 31, Y2 = s * 25,
+                Stroke = new SolidColorBrush(Color.FromArgb(140, 0, 188, 212)),
+                StrokeThickness = s * 0.9,
+                StrokeDashArray = new DoubleCollection(new[] { 3.0, 2.0 })
+            });
+
+            // ── Fitting 1 (left) — pipe circle, originally deeper ─────────────
+            double p1x = s * 9, p1y = s * 22, pr = s * 3.2;
+            Add(new Ellipse { Width = pr*2, Height = pr*2, Fill = C("#607D8B"),
+                Stroke = C("#90A4AE"), StrokeThickness = s * 0.8 });
+            Canvas.SetLeft(canvas.Children[^1], p1x - pr);
+            Canvas.SetTop(canvas.Children[^1],  p1y - pr);
+            // highlight
+            Add(new Ellipse { Width = pr * 0.9, Height = pr * 0.9,
+                Fill = new SolidColorBrush(Color.FromArgb(80, 200, 230, 255)) });
+            Canvas.SetLeft(canvas.Children[^1], p1x - pr * 0.6);
+            Canvas.SetTop(canvas.Children[^1],  p1y - pr * 0.8);
+
+            // ── Fitting 2 (right) — pipe circle, originally shallower ─────────
+            double p2x = s * 23, p2y = s * 22, p2r = s * 3.2;
+            Add(new Ellipse { Width = p2r*2, Height = p2r*2, Fill = C("#607D8B"),
+                Stroke = C("#90A4AE"), StrokeThickness = s * 0.8 });
+            Canvas.SetLeft(canvas.Children[^1], p2x - p2r);
+            Canvas.SetTop(canvas.Children[^1],  p2y - p2r);
+            Add(new Ellipse { Width = p2r * 0.9, Height = p2r * 0.9,
+                Fill = new SolidColorBrush(Color.FromArgb(80, 200, 230, 255)) });
+            Canvas.SetLeft(canvas.Children[^1], p2x - p2r * 0.6);
+            Canvas.SetTop(canvas.Children[^1],  p2y - p2r * 0.8);
+
+            // ── Cover arrows: surface crown → fitting crown, both sides ────────
+            // Arrow helper: vertical line + arrowhead at bottom
+            void CoverArrow(double cx, double topY, double botY, string hexCol)
+            {
+                Add(new Line { X1 = s*cx, Y1 = topY, X2 = s*cx, Y2 = botY,
+                    Stroke = C(hexCol), StrokeThickness = s * 1.2,
+                    StrokeStartLineCap = PenLineCap.Round,
+                    StrokeEndLineCap   = PenLineCap.Flat });
+                // arrowhead down
+                Add(new Polygon
+                {
+                    Points = new System.Windows.Media.PointCollection(new[]
+                    {
+                        new System.Windows.Point(s*cx,        botY + s*2),
+                        new System.Windows.Point(s*cx - s*1.5, botY - s*1),
+                        new System.Windows.Point(s*cx + s*1.5, botY - s*1)
+                    }),
+                    Fill = C(hexCol)
+                });
+                // tick at top
+                Add(new Line { X1 = s*cx - s*1.5, Y1 = topY, X2 = s*cx + s*1.5, Y2 = topY,
+                    Stroke = C(hexCol), StrokeThickness = s * 1.2 });
+            }
+
+            CoverArrow(9,  s * 11, p1y - pr - s*0.5, "#00BCD4");
+            CoverArrow(23, s * 11, p2y - p2r - s*0.5, "#00BCD4");
+
+            // ── "4'" label centred between the arrows ─────────────────────────
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text       = "4'",
+                Foreground = C("#00BCD4"),
+                FontSize   = s * 5,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(lbl, s * 13.5);
+            Canvas.SetTop(lbl,  s * 13.5);
+            Add(lbl);
+
+            // ── Equal sign below the pipes (= same elevation) ─────────────────
+            foreach (double dy in new[] { 0.0, s * 2.2 })
+            {
+                Add(new Line
+                {
+                    X1 = s * 12.5, Y1 = s * 28 + dy, X2 = s * 19.5, Y2 = s * 28 + dy,
+                    Stroke = new SolidColorBrush(Color.FromArgb(200, 0, 188, 212)),
+                    StrokeThickness = s * 1.2,
+                    StrokeStartLineCap = PenLineCap.Round,
+                    StrokeEndLineCap   = PenLineCap.Round
+                });
+            }
 
             return RenderToBitmap(canvas, size, size);
         }
