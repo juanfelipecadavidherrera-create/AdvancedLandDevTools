@@ -199,17 +199,22 @@ namespace AdvancedLandDevTools.VehicleTracking.Data
                 // City of Hialeah Fire Dept. Aerial Tower — spec sheet values:
                 //   Length 44.16', WB 22.58', Width 8.42', Track 8.42',
                 //   Front overhang 7.83', Rear overhang 13.75' (= L - WB - FOH),
-                //   Max wheel (physical inner) angle 42°, Lock-to-lock 4.0 s.
-                // MaxSteeringAngle stores the CENTERLINE (bicycle-model) angle used
-                // by SweptPathSolver. Convert 42° physical inner → centerline via
-                // Ackermann:  R = WB/tan(42°) + T/2 = 25.08 + 4.21 = 29.29',
-                //             α_c = atan(WB/R) = atan(22.58/29.29) ≈ 37.63°.
+                //   Physical inner-wheel angle 42°, Lock-to-lock 4.0 s.
+                // MaxWheelAngle carries the physical spec; the solver derives the
+                // centerline (37.63°) via Ackermann. MaxSteeringAngle is set as a
+                // cached convenience for code paths that haven't adopted
+                // ResolvedCenterlineMaxSteer() yet.
                 Name = "City of Hialeah Fire Dept. Aerial Tower", Symbol = "HLH-AERIAL",
                 Category = "Fire Apparatus", IsFloridaVehicle = true,
                 Length = 44.16, Width = 8.42, Wheelbase = 22.58,
                 FrontOverhang = 7.83, RearOverhang = 13.75,
-                TrackWidth = 8.42, MaxSteeringAngle = ToRad(37.63),
-                LockToLockTime = 4.0, MinTurningRadius = 29.29
+                TrackWidth = 8.42,
+                FrontTrackWidth = 8.42, RearTrackWidth = 8.42,
+                TireWidth = 0.95, TireDiameter = 3.58, // 11R22.5 duals
+                MaxWheelAngle = ToRad(42.0),
+                MaxSteeringAngle = ToRad(37.63), // = Ackermann(42°, WB=22.58, T=8.42)
+                LockToLockTime = 4.0, LockToLockTimeReverse = 4.5,
+                MinTurningRadius = 29.29
             },
             new VehicleUnit
             {

@@ -22,6 +22,10 @@ namespace AdvancedLandDevTools.VehicleTracking.Core
         /// <summary>Interval (in steps) at which full body snapshots are recorded. 0 = every step.</summary>
         public int SnapshotInterval { get; set; } = 50;
 
+        /// <summary>Optional user-imposed steering limits (percentage / angle / radius /
+        /// turn-rate). null → use the vehicle's physical maxima unchanged.</summary>
+        public SteeringLimits? Limits { get; set; }
+
         /// <summary>
         /// Run swept path simulation for a single-unit vehicle along a discretized path.
         /// </summary>
@@ -38,9 +42,16 @@ namespace AdvancedLandDevTools.VehicleTracking.Core
             if (samples.Count < 2) return new SimulationResult();
 
             var result = new SimulationResult();
-            double maxSteer = vehicle.MaxSteeringAngle;
+            // Resolve effective max steer angle + rate:
+            //   • physical max is the centerline derived from MaxWheelAngle (via
+            //     Ackermann) when the spec sheet provided a wheel angle,
+            //     otherwise MaxSteeringAngle directly.
+            //   • SteeringLimits then narrows by percentage / absolute angle /
+            //     target radius, and scales the turn-rate.
+            var limits = Limits ?? new SteeringLimits();
+            double maxSteer = limits.EffectiveMaxSteer(vehicle);
             double wb = vehicle.Wheelbase;
-            double maxSteerRate = (2.0 * maxSteer) / vehicle.LockToLockTime; // rad/s
+            double maxSteerRate = limits.EffectiveMaxSteerRate(vehicle, Reverse); // rad/s
             double dt = StepSize / Math.Max(Speed, 0.1); // time per step
 
             // Initial state — rear axle starts behind front by wheelbase
@@ -153,9 +164,10 @@ namespace AdvancedLandDevTools.VehicleTracking.Core
 
             var result = new SimulationResult();
             var lead = vehicle.LeadUnit;
-            double maxSteer = lead.MaxSteeringAngle;
+            var limits = Limits ?? new SteeringLimits();
+            double maxSteer = limits.EffectiveMaxSteer(lead);
             double wb = lead.Wheelbase;
-            double maxSteerRate = (2.0 * maxSteer) / lead.LockToLockTime;
+            double maxSteerRate = limits.EffectiveMaxSteerRate(lead, Reverse);
             double dt = StepSize / Math.Max(Speed, 0.1);
 
             // Initial lead unit state
@@ -262,6 +274,21 @@ namespace AdvancedLandDevTools.VehicleTracking.Core
                     {
                         // Update trailer heading to point toward hitch
                         double targetHead = Math.Atan2(dy, dx);
+
+                        // Enforce articulation-angle limit (research §7.1):
+                        // the angle between the leading unit's heading (prevHead)
+                        // and the trailer heading cannot exceed MaxArticulationAngle.
+                        double maxArt = td.Unit.MaxArticulationAngle;
+                        if (maxArt > 1e-9)
+                        {
+                            double rel = NormalizeAngle(targetHead - prevHead);
+                            if (Math.Abs(rel) > maxArt)
+                            {
+                                rel = Math.Sign(rel) * maxArt;
+                                targetHead = NormalizeAngle(prevHead + rel);
+                                result.SteeringClamped = true;
+                            }
+                        }
                         th = targetHead;
 
                         // Place rear axle at wheelbase distance behind hitch
