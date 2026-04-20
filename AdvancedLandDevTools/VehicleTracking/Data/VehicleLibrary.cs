@@ -196,12 +196,20 @@ namespace AdvancedLandDevTools.VehicleTracking.Data
             // ── Miami-Dade Specific Vehicles ────────────────────────
             new VehicleUnit
             {
-                Name = "Miami-Dade Fire Ladder Truck", Symbol = "MD-FIRE",
+                // City of Hialeah Fire Dept. Aerial Tower — spec sheet values:
+                //   Length 44.16', WB 22.58', Width 8.42', Track 8.42',
+                //   Front overhang 7.83', Rear overhang 13.75' (= L - WB - FOH),
+                //   Max wheel (physical inner) angle 42°, Lock-to-lock 4.0 s.
+                // MaxSteeringAngle stores the CENTERLINE (bicycle-model) angle used
+                // by SweptPathSolver. Convert 42° physical inner → centerline via
+                // Ackermann:  R = WB/tan(42°) + T/2 = 25.08 + 4.21 = 29.29',
+                //             α_c = atan(WB/R) = atan(22.58/29.29) ≈ 37.63°.
+                Name = "City of Hialeah Fire Dept. Aerial Tower", Symbol = "HLH-AERIAL",
                 Category = "Fire Apparatus", IsFloridaVehicle = true,
-                Length = 46.0, Width = 8.5, Wheelbase = 28.0,
-                FrontOverhang = 6.0, RearOverhang = 12.0,
-                TrackWidth = 8.0, MaxSteeringAngle = ToRad(31.0),
-                LockToLockTime = 5.5, MinTurningRadius = 50.0
+                Length = 44.16, Width = 8.42, Wheelbase = 22.58,
+                FrontOverhang = 7.83, RearOverhang = 13.75,
+                TrackWidth = 8.42, MaxSteeringAngle = ToRad(37.63),
+                LockToLockTime = 4.0, MinTurningRadius = 29.29
             },
             new VehicleUnit
             {
