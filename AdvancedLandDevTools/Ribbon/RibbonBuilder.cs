@@ -916,6 +916,31 @@ namespace AdvancedLandDevTools.Ribbon
             };
             qaSource.Items.Add(btnMiniToolbar);
 
+            // ── Layout Dark Mode button ────────────────────────────────────
+            var btnLayoutDark = new RibbonButton
+            {
+                Id               = "ALDT_BTN_LAYOUTDARK",
+                Name             = "Layout Dark Mode",
+                Text             = "Layout\nDark",
+                Description      = "Toggle layout (paper space) dark mode on or off. " +
+                                   "Dims the background and hides the white paper boundary " +
+                                   "to reduce eye strain during long sessions.",
+                ToolTip          = BuildToolTip(
+                    "Layout Dark Mode",
+                    "Switches the layout background to dark gray and hides the white paper " +
+                    "boundary and drop shadow. Run again to restore your original settings " +
+                    "exactly — nothing is permanently changed.\n\nCommand:  LAYOUTDARK"),
+                CommandHandler   = new RibbonCommandHandler("LAYOUTDARK "),
+                CommandParameter = "LAYOUTDARK ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildLayoutDarkIcon(32),
+                Image            = BuildLayoutDarkIcon(16)
+            };
+            qaSource.Items.Add(btnLayoutDark);
+
             qaSource.Items.Add(new RibbonSeparator());
 
             // ── Area Manager button ────────────────────────────────────────
@@ -3897,6 +3922,85 @@ namespace AdvancedLandDevTools.Ribbon
                     StrokeStartLineCap = PenLineCap.Round,
                     StrokeEndLineCap   = PenLineCap.Round
                 });
+            }
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Layout Dark Mode icon — split paper: dark left / light right,
+        //  moon crescent on the dark side, sun circle on the light side.
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildLayoutDarkIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background — deep navy
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // Layout paper (landscape)
+            double lx = s * 3, ly = s * 8, lw = s * 26, lh = s * 17;
+
+            // Dark left half
+            var darkHalf = new Rectangle { Width = lw / 2, Height = lh, Fill = C("#252526") };
+            Canvas.SetLeft(darkHalf, lx); Canvas.SetTop(darkHalf, ly);
+            Add(darkHalf);
+
+            // Light right half
+            var lightHalf = new Rectangle { Width = lw / 2, Height = lh, Fill = C("#EEEEEE") };
+            Canvas.SetLeft(lightHalf, lx + lw / 2); Canvas.SetTop(lightHalf, ly);
+            Add(lightHalf);
+
+            // Paper border
+            var border = new Rectangle
+            {
+                Width = lw, Height = lh,
+                Stroke = C("#90A4AE"), StrokeThickness = s,
+                Fill = Brushes.Transparent
+            };
+            Canvas.SetLeft(border, lx); Canvas.SetTop(border, ly);
+            Add(border);
+
+            // Centre dividing line
+            Add(new Line
+            {
+                X1 = lx + lw / 2, Y1 = ly,
+                X2 = lx + lw / 2, Y2 = ly + lh,
+                Stroke = C("#60CDFF"), StrokeThickness = s * 1.5
+            });
+
+            // Crescent moon on dark side
+            double mx = lx + lw * 0.25, my = ly + lh * 0.5, mr = s * 4;
+            var moonOuter = new EllipseGeometry(new System.Windows.Point(mx, my), mr, mr);
+            var moonCut   = new EllipseGeometry(
+                new System.Windows.Point(mx + mr * 0.55, my - mr * 0.15), mr * 0.75, mr * 0.75);
+            var crescent  = new CombinedGeometry(GeometryCombineMode.Exclude, moonOuter, moonCut);
+            Add(new Path { Data = crescent, Fill = C("#FFF176") });
+
+            // Sun circle on light side
+            double sx = lx + lw * 0.75, sy = ly + lh * 0.5, sr = s * 3;
+            var sun = new Ellipse { Width = sr * 2, Height = sr * 2, Fill = C("#FFB300") };
+            Canvas.SetLeft(sun, sx - sr); Canvas.SetTop(sun, sy - sr);
+            Add(sun);
+
+            // Tab strip at the bottom (simulates layout tabs)
+            double tx = lx, ty2 = ly + lh + s * 1.5;
+            foreach (double tabOffset in new[] { 0.0, lw * 0.32, lw * 0.62 })
+            {
+                var tab = new Rectangle
+                {
+                    Width = lw * 0.28, Height = s * 3.5,
+                    Fill = tabOffset == 0 ? C("#252526") : C("#3A3A3A"),
+                    Stroke = C("#60CDFF"), StrokeThickness = tabOffset == 0 ? s * 0.8 : 0,
+                    RadiusX = s, RadiusY = s
+                };
+                Canvas.SetLeft(tab, tx + tabOffset); Canvas.SetTop(tab, ty2);
+                Add(tab);
             }
 
             return RenderToBitmap(canvas, size, size);

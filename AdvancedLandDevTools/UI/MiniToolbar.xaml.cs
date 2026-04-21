@@ -73,6 +73,9 @@ namespace AdvancedLandDevTools.UI
             ("VTSWEEP ",         "Swept Path",            "VEHICLE",   "\xE81E", "#FFB74D", "Sweep"),
             ("VTPARK ",          "Parking Layout",        "VEHICLE",   "\xE81E", "#BA68C8", "Park"),
 
+            // DISPLAY
+            ("LAYOUTDARK ",      "Layout Dark Mode",      "DISPLAY",   "\xE708", "#7E57C2", "Dark"),
+
             // HELP
             ("ALDTHELP ",        "ALDT Help",             "HELP",      "\xE897", "#60CDFF", "Help"),
         };

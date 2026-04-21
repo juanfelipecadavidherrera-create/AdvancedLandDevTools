@@ -178,6 +178,8 @@ namespace AdvancedLandDevTools
                 "\n║    VTDRIVE         – Interactive Drive Mode             ║" +
                 "\n║    VTEDIT          – Edit Existing Drive Path           ║" +
                 "\n║    VTPARK          – Parking Layout Generator           ║" +
+                "\n║  Display:                                               ║" +
+                "\n║    LAYOUTDARK      – Layout Dark Mode Toggle             ║" +
                 "\n║  Quick Access:                                          ║" +
                 "\n║    ALDTTOOLBAR     – Toggle Mini Toolbar                ║" +
                 "\n╠══════════════════════════════════════════════════════════╣" +
