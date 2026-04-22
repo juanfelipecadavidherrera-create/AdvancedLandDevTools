@@ -916,32 +916,7 @@ namespace AdvancedLandDevTools.Ribbon
             };
             qaSource.Items.Add(btnMiniToolbar);
 
-            // ── Layout Dark Mode button ────────────────────────────────────
-            var btnLayoutDark = new RibbonButton
-            {
-                Id               = "ALDT_BTN_LAYOUTDARK",
-                Name             = "Layout Dark Mode",
-                Text             = "Layout\nDark",
-                Description      = "Toggle layout (paper space) dark mode on or off. " +
-                                   "Dims the background and hides the white paper boundary " +
-                                   "to reduce eye strain during long sessions.",
-                ToolTip          = BuildToolTip(
-                    "Layout Dark Mode",
-                    "Switches the layout background to dark gray and hides the white paper " +
-                    "boundary and drop shadow. Run again to restore your original settings " +
-                    "exactly — nothing is permanently changed.\n\nCommand:  LAYOUTDARK"),
-                CommandHandler   = new RibbonCommandHandler("LAYOUTDARK "),
-                CommandParameter = "LAYOUTDARK ",
-                ShowText         = true,
-                ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
-                LargeImage       = BuildLayoutDarkIcon(32),
-                Image            = BuildLayoutDarkIcon(16)
-            };
-            qaSource.Items.Add(btnLayoutDark);
 
-            qaSource.Items.Add(new RibbonSeparator());
 
             // ── Area Manager button ────────────────────────────────────────
             var btnAreaManager = new RibbonButton
@@ -1052,6 +1027,79 @@ namespace AdvancedLandDevTools.Ribbon
             secSource.Items.Add(btnSecDraw);
 
             tab.Panels.Add(new RibbonPanel { Source = secSource });
+
+            // ═══════════════════════════════════════════════════════════════
+            //  Panel — As-Builts
+            // ═══════════════════════════════════════════════════════════════
+            var abSource = new RibbonPanelSource
+            {
+                Id    = "ALDT_PANEL_ASBUILTS",
+                Title = "As-Builts"
+            };
+
+            var btnCoralAsBuilt = new RibbonButton
+            {
+                Id               = "ALDT_BTN_CORALASBUILT",
+                Name             = "Coral As-Built",
+                Text             = "Coral\nAs-Built",
+                Description      = "Queries the Coral Gables Sewer GIS within 1000 ft of a " +
+                                   "picked point and draws gravity mains, force mains, " +
+                                   "manholes, and laterals into model space.",
+                ToolTip          = BuildToolTip(
+                    "Coral Gables Sewer As-Built",
+                    "Pick a center point in the drawing. The tool queries the Coral Gables " +
+                    "Sewer ArcGIS FeatureServer and draws all sewer features within the " +
+                    "specified radius directly into model space.\n\n" +
+                    "Layers:\n" +
+                    "  ALDT-CG-GRAVITY-MAIN  (cyan)\n" +
+                    "  ALDT-CG-FORCE-MAIN    (red)\n" +
+                    "  ALDT-CG-MANHOLE       (yellow)\n" +
+                    "  ALDT-CG-LATERAL       (magenta)\n\n" +
+                    "Command:  CORALASBUILT"),
+                CommandHandler   = new RibbonCommandHandler("CORALASBUILT "),
+                CommandParameter = "CORALASBUILT ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildCoralAsBuiltIcon(32),
+                Image            = BuildCoralAsBuiltIcon(16)
+            };
+            abSource.Items.Add(btnCoralAsBuilt);
+
+            abSource.Items.Add(new RibbonSeparator());
+
+            // ── Table Drawer button ────────────────────────────────────────
+            var btnTableDraw = new RibbonButton
+            {
+                Id               = "ALDT_BTN_TABLEDRAW",
+                Name             = "Table Drawer",
+                Text             = "Table\nDrawer",
+                Description      = "Design Excel-like tables with merged cells, free text, and " +
+                                   "live links to Civil 3D entities. Draws a grid into model " +
+                                   "space and auto-updates when linked entities change.",
+                ToolTip          = BuildToolTip(
+                    "Table Drawer",
+                    "Opens a table designer. Define rows, columns, and cell content.\n\n" +
+                    "Each cell can contain:\n" +
+                    "  • Free text\n" +
+                    "  • A live link to a Civil 3D entity property\n\n" +
+                    "Linked cells update automatically when the entity changes.\n" +
+                    "Cells can be merged horizontally or vertically.\n" +
+                    "Save and reload table layouts for reuse.\n\n" +
+                    "Command:  TABLEDRAW"),
+                CommandHandler   = new RibbonCommandHandler("TABLEDRAW "),
+                CommandParameter = "TABLEDRAW ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildTableDrawIcon(32),
+                Image            = BuildTableDrawIcon(16)
+            };
+            abSource.Items.Add(btnTableDraw);
+
+            tab.Panels.Add(new RibbonPanel { Source = abSource });
 
             ribbon.Tabs.Add(tab);
         }
@@ -3927,11 +3975,12 @@ namespace AdvancedLandDevTools.Ribbon
             return RenderToBitmap(canvas, size, size);
         }
 
+
         // ═════════════════════════════════════════════════════════════════════
-        //  Layout Dark Mode icon — split paper: dark left / light right,
-        //  moon crescent on the dark side, sun circle on the light side.
+        //  Coral As-Built icon — sewer pipe network with manholes
+        //  Cyan gravity main, red force main, yellow manhole dot.
         // ═════════════════════════════════════════════════════════════════════
-        private static ImageSource BuildLayoutDarkIcon(int size)
+        private static ImageSource BuildCoralAsBuiltIcon(int size)
         {
             double s = size / 32.0;
             var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
@@ -3939,69 +3988,163 @@ namespace AdvancedLandDevTools.Ribbon
                 => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
 
-            // Background — deep navy
-            Add(new Rectangle { Width = size, Height = size, Fill = C("#1A1A2E"),
-                RadiusX = s * 3, RadiusY = s * 3 });
-
-            // Layout paper (landscape)
-            double lx = s * 3, ly = s * 8, lw = s * 26, lh = s * 17;
-
-            // Dark left half
-            var darkHalf = new Rectangle { Width = lw / 2, Height = lh, Fill = C("#252526") };
-            Canvas.SetLeft(darkHalf, lx); Canvas.SetTop(darkHalf, ly);
-            Add(darkHalf);
-
-            // Light right half
-            var lightHalf = new Rectangle { Width = lw / 2, Height = lh, Fill = C("#EEEEEE") };
-            Canvas.SetLeft(lightHalf, lx + lw / 2); Canvas.SetTop(lightHalf, ly);
-            Add(lightHalf);
-
-            // Paper border
-            var border = new Rectangle
+            // Background — dark navy
+            Add(new Rectangle
             {
-                Width = lw, Height = lh,
-                Stroke = C("#90A4AE"), StrokeThickness = s,
-                Fill = Brushes.Transparent
-            };
-            Canvas.SetLeft(border, lx); Canvas.SetTop(border, ly);
-            Add(border);
-
-            // Centre dividing line
-            Add(new Line
-            {
-                X1 = lx + lw / 2, Y1 = ly,
-                X2 = lx + lw / 2, Y2 = ly + lh,
-                Stroke = C("#60CDFF"), StrokeThickness = s * 1.5
+                Width = size, Height = size,
+                Fill = C("#1A1A2E"),
+                RadiusX = s * 3, RadiusY = s * 3
             });
 
-            // Crescent moon on dark side
-            double mx = lx + lw * 0.25, my = ly + lh * 0.5, mr = s * 4;
-            var moonOuter = new EllipseGeometry(new System.Windows.Point(mx, my), mr, mr);
-            var moonCut   = new EllipseGeometry(
-                new System.Windows.Point(mx + mr * 0.55, my - mr * 0.15), mr * 0.75, mr * 0.75);
-            var crescent  = new CombinedGeometry(GeometryCombineMode.Exclude, moonOuter, moonCut);
-            Add(new Path { Data = crescent, Fill = C("#FFF176") });
-
-            // Sun circle on light side
-            double sx = lx + lw * 0.75, sy = ly + lh * 0.5, sr = s * 3;
-            var sun = new Ellipse { Width = sr * 2, Height = sr * 2, Fill = C("#FFB300") };
-            Canvas.SetLeft(sun, sx - sr); Canvas.SetTop(sun, sy - sr);
-            Add(sun);
-
-            // Tab strip at the bottom (simulates layout tabs)
-            double tx = lx, ty2 = ly + lh + s * 1.5;
-            foreach (double tabOffset in new[] { 0.0, lw * 0.32, lw * 0.62 })
+            // ── Gravity main — cyan horizontal pipe ───────────────────────────
+            // Top line
+            Add(new Line
             {
-                var tab = new Rectangle
+                X1 = s * 3, Y1 = s * 10, X2 = s * 29, Y2 = s * 10,
+                Stroke = C("#00BCD4"), StrokeThickness = s * 2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap   = PenLineCap.Round
+            });
+            // Bottom line (gravity main has double line)
+            Add(new Line
+            {
+                X1 = s * 3, Y1 = s * 13, X2 = s * 29, Y2 = s * 13,
+                Stroke = C("#00BCD4"), StrokeThickness = s * 2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap   = PenLineCap.Round
+            });
+
+            // ── Force main — red diagonal pipe ────────────────────────────────
+            Add(new Line
+            {
+                X1 = s * 3, Y1 = s * 22, X2 = s * 29, Y2 = s * 22,
+                Stroke = C("#F44336"), StrokeThickness = s * 2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap   = PenLineCap.Round,
+                StrokeDashArray    = new System.Windows.Media.DoubleCollection(new double[] { 3, 1.5 })
+            });
+
+            // ── Manhole circles (yellow) — at gravity main junctions ──────────
+            foreach (double mx in new[] { s * 10.5, s * 21 })
+            {
+                // Drop line connecting gravity main to manhole
+                Add(new Line
                 {
-                    Width = lw * 0.28, Height = s * 3.5,
-                    Fill = tabOffset == 0 ? C("#252526") : C("#3A3A3A"),
-                    Stroke = C("#60CDFF"), StrokeThickness = tabOffset == 0 ? s * 0.8 : 0,
-                    RadiusX = s, RadiusY = s
+                    X1 = mx, Y1 = s * 13, X2 = mx, Y2 = s * 19,
+                    Stroke = C("#00BCD4"), StrokeThickness = s * 1.2
+                });
+                // Manhole circle
+                var mh = new Ellipse
+                {
+                    Width  = s * 5, Height = s * 5,
+                    Fill   = C("#FFC107"),
+                    Stroke = C("#FFD54F"), StrokeThickness = s * 0.8
                 };
-                Canvas.SetLeft(tab, tx + tabOffset); Canvas.SetTop(tab, ty2);
-                Add(tab);
+                Canvas.SetLeft(mh, mx - s * 2.5);
+                Canvas.SetTop(mh,  s * 19);
+                Add(mh);
             }
+
+            // ── "AB" label — small text in bottom-right corner ────────────────
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text       = "AB",
+                Foreground = C("#B0BEC5"),
+                FontSize   = s * 5,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(lbl, s * 20);
+            Canvas.SetTop(lbl,  s * 24.5);
+            Add(lbl);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        private static ImageSource BuildTableDrawIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background — dark green
+            Add(new Rectangle
+            {
+                Width = size, Height = size,
+                Fill = C("#1A2E1A"),
+                RadiusX = s * 3, RadiusY = s * 3
+            });
+
+            // Table grid — 3×3 cells
+            double left   = s * 3;
+            double top    = s * 4;
+            double right  = s * 29;
+            double bottom = s * 28;
+            double midX   = s * 14;
+            double midX2  = s * 21;
+            double midY   = s * 14;
+            double midY2  = s * 21;
+
+            var gridStroke = C("#4CAF50");
+            double gt = s * 1.2;
+
+            // Outer border
+            Add(new Rectangle { Width = right - left, Height = bottom - top,
+                Stroke = C("#6BCB77"), StrokeThickness = s * 1.5, Fill = Brushes.Transparent,
+                RadiusX = s * 1, RadiusY = s * 1 });
+            Canvas.SetLeft(canvas.Children[^1], left);
+            Canvas.SetTop(canvas.Children[^1],  top);
+
+            // Vertical lines
+            Add(new Line { X1 = midX,  Y1 = top, X2 = midX,  Y2 = bottom, Stroke = gridStroke, StrokeThickness = gt });
+            Add(new Line { X1 = midX2, Y1 = top, X2 = midX2, Y2 = bottom, Stroke = gridStroke, StrokeThickness = gt });
+
+            // Horizontal lines
+            Add(new Line { X1 = left, Y1 = midY,  X2 = right, Y2 = midY,  Stroke = gridStroke, StrokeThickness = gt });
+            Add(new Line { X1 = left, Y1 = midY2, X2 = right, Y2 = midY2, Stroke = gridStroke, StrokeThickness = gt });
+
+            // Header row fill (top row, lighter)
+            Add(new Rectangle { Width = right - left, Height = midY - top,
+                Fill = C("#2E4A2E") });
+            Canvas.SetLeft(canvas.Children[^1], left);
+            Canvas.SetTop(canvas.Children[^1],  top);
+
+            // Link icon in one cell — small chain symbol (bottom-right cell)
+            var lbl = new System.Windows.Controls.TextBlock
+            {
+                Text       = "⛓",
+                Foreground = C("#60CDFF"),
+                FontSize   = s * 6,
+                FontWeight = System.Windows.FontWeights.Normal
+            };
+            Canvas.SetLeft(lbl, midX2 + s * 1.5);
+            Canvas.SetTop(lbl,  midY2 + s * 1.5);
+            Add(lbl);
+
+            // "T" label — top-left cell
+            var t = new System.Windows.Controls.TextBlock
+            {
+                Text       = "T",
+                Foreground = C("#6BCB77"),
+                FontSize   = s * 6,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(t, left + s * 2);
+            Canvas.SetTop(t,  top + s * 1.5);
+            Add(t);
+
+            // Row count badge bottom
+            var rowLbl = new System.Windows.Controls.TextBlock
+            {
+                Text       = "3×3",
+                Foreground = C("#9E9E9E"),
+                FontSize   = s * 4.5,
+                FontWeight = System.Windows.FontWeights.Bold
+            };
+            Canvas.SetLeft(rowLbl, left + s * 2);
+            Canvas.SetTop(rowLbl,  bottom + s * 1);
+            Add(rowLbl);
 
             return RenderToBitmap(canvas, size, size);
         }

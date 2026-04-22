@@ -38,9 +38,13 @@ namespace AdvancedLandDevTools.Engine
         [JsonProperty("isRoad")]
         public bool IsRoad { get; set; }
 
-        /// <summary>When true, an earth/grass fill layer (2 ft deep) is drawn under this segment. Mutually exclusive with IsRoad.</summary>
+        /// <summary>When true, an earth/grass fill layer (2 ft deep) is drawn under this segment. Mutually exclusive with IsRoad and IsSidewalk.</summary>
         [JsonProperty("isGrass")]
         public bool IsGrass { get; set; }
+
+        /// <summary>When true, a concrete sidewalk slab (0.5 ft deep, AR-CONC hatch) is drawn under this segment. Mutually exclusive with IsRoad and IsGrass.</summary>
+        [JsonProperty("isSidewalk")]
+        public bool IsSidewalk { get; set; }
     }
 
     public class SectionProfile
@@ -84,6 +88,9 @@ namespace AdvancedLandDevTools.Engine
 
         /// <summary>Contiguous grass surface regions for earth hatch layer.</summary>
         public List<List<(double X, double Y)>> GrassRegions { get; set; } = new();
+
+        /// <summary>Contiguous sidewalk surface regions for concrete slab (0.5 ft deep).</summary>
+        public List<List<(double X, double Y)>> SidewalkRegions { get; set; } = new();
 
         public double CenterlineBaseY => 0;
         public double CenterlineTopY { get; set; }
@@ -146,9 +153,10 @@ namespace AdvancedLandDevTools.Engine
                 AddBlockOutline(geo, seg, sx, sy, -1);
             }
 
-            // Build road and grass regions from both sides
+            // Build road, grass and sidewalk regions from both sides
             BuildRoadRegions(geo, profile);
             BuildGrassRegions(geo, profile);
+            BuildSidewalkRegions(geo, profile);
 
             return geo;
         }
@@ -241,6 +249,43 @@ namespace AdvancedLandDevTools.Engine
 
             if (current != null && current.Count >= 2)
                 geo.GrassRegions.Add(current);
+        }
+
+        /// <summary>Build contiguous sidewalk surface regions for concrete slab drawing.</summary>
+        private static void BuildSidewalkRegions(SectionGeometry geo, SectionProfile profile)
+        {
+            BuildSideSidewalkRegions(geo, profile.RightSegments, geo.RightPoints);
+            BuildSideSidewalkRegions(geo, profile.LeftSegments,  geo.LeftPoints);
+        }
+
+        private static void BuildSideSidewalkRegions(SectionGeometry geo,
+            List<SectionSegment> segments, List<(double X, double Y)> points)
+        {
+            List<(double X, double Y)>? current = null;
+            int ptIdx = 0;
+
+            foreach (var seg in segments)
+            {
+                int count = SubPointCount(seg);
+
+                if (seg.IsSidewalk)
+                {
+                    if (current == null)
+                        current = new List<(double X, double Y)> { points[ptIdx] };
+                    for (int k = 1; k <= count; k++)
+                        current.Add(points[ptIdx + k]);
+                }
+                else if (current != null)
+                {
+                    if (current.Count >= 2) geo.SidewalkRegions.Add(current);
+                    current = null;
+                }
+
+                ptIdx += count;
+            }
+
+            if (current != null && current.Count >= 2)
+                geo.SidewalkRegions.Add(current);
         }
 
         /// <summary>Returns sub-point deltas for a segment. dirSign = +1 for right, -1 for left.</summary>

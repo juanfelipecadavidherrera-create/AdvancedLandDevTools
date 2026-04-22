@@ -123,6 +123,23 @@
                                                 Click="BtnReloadProjects_Click"/>
                                     </Grid>
 
+                                    <!-- SubProject scope selector -->
+                                    <Grid Margin="0,0,0,8"
+                                          x:Name="PnlSubProjectScope"
+                                          Visibility="Collapsed">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Scope:"
+                                                   Foreground="{StaticResource AldtTextSecondary}"
+                                                   FontSize="11" VerticalAlignment="Center"
+                                                   Margin="0,0,6,0"/>
+                                        <ComboBox Grid.Column="1" x:Name="CboAmSubProject"
+                                                  Style="{StaticResource FluentComboBox}"
+                                                  SelectionChanged="CboAmSubProject_SelectionChanged"/>
+                                    </Grid>
+
                                     <!-- Area checklist -->
                                     <Border MaxHeight="160" BorderThickness="1"
                                             BorderBrush="{StaticResource AldtBorder}"

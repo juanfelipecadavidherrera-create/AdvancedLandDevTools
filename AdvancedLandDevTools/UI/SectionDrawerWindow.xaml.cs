@@ -11,6 +11,8 @@ namespace AdvancedLandDevTools.UI
 {
     public partial class SectionDrawerWindow : Window
     {
+        private const string DefaultLayer = "ALDT-SECTION";
+
         private SectionProfile _profile = new();
 
         /// <summary>Set when user clicks "Draw in Model". The command reads this.</summary>
@@ -19,11 +21,38 @@ namespace AdvancedLandDevTools.UI
         /// <summary>Whether to draw vertical divider lines at each segment boundary.</summary>
         public bool DrawSegmentLines { get; private set; }
 
+        /// <summary>
+        /// The drawing layer chosen by the user. Defaults to "ALDT-SECTION" when
+        /// no selection is made or the combo is empty.
+        /// </summary>
+        public string SelectedLayerName { get; private set; } = DefaultLayer;
 
-        public SectionDrawerWindow()
+        /// <param name="drawingLayers">
+        /// All layer names that exist in the active drawing, collected by the
+        /// command before opening the window.
+        /// </param>
+        public SectionDrawerWindow(IEnumerable<string> drawingLayers)
         {
             InitializeComponent();
             RefreshSavedList();
+            PopulateLayerCombo(drawingLayers);
+        }
+
+        /// <summary>
+        /// Fills the layer ComboBox. "ALDT-SECTION" is always first so it is
+        /// the clear default; remaining layers are sorted alphabetically.
+        /// </summary>
+        private void PopulateLayerCombo(IEnumerable<string> drawingLayers)
+        {
+            var sorted = drawingLayers
+                .Where(n => !string.Equals(n, DefaultLayer, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            sorted.Insert(0, DefaultLayer);   // always at the top
+
+            CmbLayer.ItemsSource = sorted;
+            CmbLayer.SelectedIndex = 0;       // pre-select ALDT-SECTION
         }
 
         // ── List item display model ──────────────────────────────────
@@ -40,6 +69,10 @@ namespace AdvancedLandDevTools.UI
             public string GrassBg { get; set; } = "#333333";
             public string GrassFg { get; set; } = "#666666";
             public Visibility GrassVisible { get; set; } = Visibility.Visible;
+            public string SidewalkLabel { get; set; } = "S";
+            public string SidewalkBg { get; set; } = "#333333";
+            public string SidewalkFg { get; set; } = "#666666";
+            public Visibility SidewalkVisible { get; set; } = Visibility.Visible;
         }
 
         // ── Add / Delete segments ────────────────────────────────────
@@ -94,7 +127,7 @@ namespace AdvancedLandDevTools.UI
             {
                 var seg = _profile.LeftSegments[idx];
                 seg.IsRoad = !seg.IsRoad;
-                if (seg.IsRoad) seg.IsGrass = false;
+                if (seg.IsRoad) { seg.IsGrass = false; seg.IsSidewalk = false; }
                 RefreshAll();
             }
         }
@@ -105,7 +138,7 @@ namespace AdvancedLandDevTools.UI
             {
                 var seg = _profile.RightSegments[idx];
                 seg.IsRoad = !seg.IsRoad;
-                if (seg.IsRoad) seg.IsGrass = false;
+                if (seg.IsRoad) { seg.IsGrass = false; seg.IsSidewalk = false; }
                 RefreshAll();
             }
         }
@@ -116,7 +149,7 @@ namespace AdvancedLandDevTools.UI
             {
                 var seg = _profile.LeftSegments[idx];
                 seg.IsGrass = !seg.IsGrass;
-                if (seg.IsGrass) seg.IsRoad = false;
+                if (seg.IsGrass) { seg.IsRoad = false; seg.IsSidewalk = false; }
                 RefreshAll();
             }
         }
@@ -127,7 +160,29 @@ namespace AdvancedLandDevTools.UI
             {
                 var seg = _profile.RightSegments[idx];
                 seg.IsGrass = !seg.IsGrass;
-                if (seg.IsGrass) seg.IsRoad = false;
+                if (seg.IsGrass) { seg.IsRoad = false; seg.IsSidewalk = false; }
+                RefreshAll();
+            }
+        }
+
+        private void BtnToggleLeftSidewalk_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int idx && idx < _profile.LeftSegments.Count)
+            {
+                var seg = _profile.LeftSegments[idx];
+                seg.IsSidewalk = !seg.IsSidewalk;
+                if (seg.IsSidewalk) { seg.IsRoad = false; seg.IsGrass = false; }
+                RefreshAll();
+            }
+        }
+
+        private void BtnToggleRightSidewalk_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is int idx && idx < _profile.RightSegments.Count)
+            {
+                var seg = _profile.RightSegments[idx];
+                seg.IsSidewalk = !seg.IsSidewalk;
+                if (seg.IsSidewalk) { seg.IsRoad = false; seg.IsGrass = false; }
                 RefreshAll();
             }
         }
@@ -210,8 +265,9 @@ namespace AdvancedLandDevTools.UI
                     MessageBoxButton.OK);
                 return;
             }
-            ResultProfile = _profile;
-            DrawSegmentLines = ChkSegmentLines.IsChecked == true;
+            ResultProfile      = _profile;
+            DrawSegmentLines   = ChkSegmentLines.IsChecked == true;
+            SelectedLayerName  = CmbLayer.SelectedItem as string ?? DefaultLayer;
             DialogResult = true;
             Close();
         }
@@ -253,7 +309,11 @@ namespace AdvancedLandDevTools.UI
                     GrassLabel = "G",
                     GrassBg = s.IsGrass ? "#1A3322" : "#333333",
                     GrassFg = s.IsGrass ? "#5CDB95" : "#666666",
-                    GrassVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible
+                    GrassVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible,
+                    SidewalkLabel = "S",
+                    SidewalkBg = s.IsSidewalk ? "#2A2A3A" : "#333333",
+                    SidewalkFg = s.IsSidewalk ? "#A0A0D0" : "#666666",
+                    SidewalkVisible = isSpecial ? Visibility.Collapsed : Visibility.Visible
                 };
             }).ToList();
         }
@@ -332,6 +392,28 @@ namespace AdvancedLandDevTools.UI
             // Block outlines (filled concrete shapes)
             foreach (var block in geo.BlockOutlines)
                 DrawBlockOutline(block, ToCanvas);
+
+            // Sidewalk slabs (light blue-gray fill, 0.5 ft deep in model coords → scaled)
+            foreach (var region in geo.SidewalkRegions)
+            {
+                if (region.Count < 2) continue;
+                const double swDepth = 0.5;
+                var fill   = new SolidColorBrush(Color.FromArgb(0x55, 0xA0, 0xA0, 0xD0));
+                var stroke = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xD0));
+
+                var polygon = new Polygon
+                {
+                    Fill = fill, Stroke = stroke,
+                    StrokeThickness = 1.0, StrokeLineJoin = PenLineJoin.Miter
+                };
+                // Top edge L→R
+                foreach (var p in region)
+                    polygon.Points.Add(ToCanvas(p));
+                // Bottom edge R→L (surface - swDepth)
+                for (int i = region.Count - 1; i >= 0; i--)
+                    polygon.Points.Add(ToCanvas((region[i].X, region[i].Y - swDepth)));
+                PreviewCanvas.Children.Add(polygon);
+            }
 
             // Centerline drawn LAST — from section surface UPWARD
             var clBase = ToCanvas((0, surfaceY));

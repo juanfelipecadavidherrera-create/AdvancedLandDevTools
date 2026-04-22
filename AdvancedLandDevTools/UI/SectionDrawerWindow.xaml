@@ -59,17 +59,29 @@
         </Border>
 
         <!-- ═══════ OPTIONS ═══════ -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="12,4">
+        <DockPanel Grid.Row="2" Margin="12,4" LastChildFill="False">
+            <!-- Layer picker — docked to the right so it's always visible and prominent -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Layer:"
+                           Foreground="{StaticResource AldtTextSecondary}"
+                           VerticalAlignment="Center" FontSize="11"
+                           Margin="0,0,8,0"/>
+                <ComboBox x:Name="CmbLayer" Width="210"
+                          Style="{StaticResource FluentComboBox}"
+                          ToolTip="Drawing layer for the section geometry.&#x0a;Entity color schemes are preserved on any layer."/>
+            </StackPanel>
+
+            <!-- Segment options — left side -->
             <CheckBox x:Name="ChkSegmentLines" Content="Draw segment divider lines"
                       Foreground="{StaticResource AldtTextSecondary}"
                       VerticalContentAlignment="Center" FontSize="11"
                       IsChecked="False"
                       Checked="ChkSegmentLines_Changed"
                       Unchecked="ChkSegmentLines_Changed"/>
-            <TextBlock Text="  (Toggle 'R' for road layers, 'G' for grass/earth — mutually exclusive)"
+            <TextBlock Text="  (Toggle 'R' road · 'G' grass · 'S' sidewalk — mutually exclusive)"
                        Foreground="{StaticResource AldtTextTertiary}"
                        VerticalAlignment="Center" FontSize="10" Margin="12,0,0,0"/>
-        </StackPanel>
+        </DockPanel>
 
         <!-- ═══════ INPUT CONTROLS ═══════ -->
         <Grid Grid.Row="3" Margin="12,4,12,4">
@@ -104,6 +116,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding Display}"
@@ -126,7 +139,16 @@
                                             ToolTip="Toggle grass/earth layer for this segment"
                                             Click="BtnToggleLeftGrass_Click"
                                             Visibility="{Binding GrassVisible}"/>
-                                    <Button Grid.Column="3" Content="X"
+                                    <Button Grid.Column="3" Content="{Binding SidewalkLabel}"
+                                            Width="22" Height="22" FontSize="10"
+                                            Background="{Binding SidewalkBg}"
+                                            Foreground="{Binding SidewalkFg}"
+                                            BorderThickness="0" Cursor="Hand"
+                                            Tag="{Binding Index}" Margin="2,0"
+                                            ToolTip="Toggle sidewalk concrete slab (0.5 ft) for this segment"
+                                            Click="BtnToggleLeftSidewalk_Click"
+                                            Visibility="{Binding SidewalkVisible}"/>
+                                    <Button Grid.Column="4" Content="X"
                                             Width="22" Height="22" FontSize="10"
                                             Background="#442222" Foreground="#FF6B6B"
                                             BorderThickness="0" Cursor="Hand"
@@ -198,6 +220,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding Display}"
@@ -220,7 +243,16 @@
                                             ToolTip="Toggle grass/earth layer for this segment"
                                             Click="BtnToggleRightGrass_Click"
                                             Visibility="{Binding GrassVisible}"/>
-                                    <Button Grid.Column="3" Content="X"
+                                    <Button Grid.Column="3" Content="{Binding SidewalkLabel}"
+                                            Width="22" Height="22" FontSize="10"
+                                            Background="{Binding SidewalkBg}"
+                                            Foreground="{Binding SidewalkFg}"
+                                            BorderThickness="0" Cursor="Hand"
+                                            Tag="{Binding Index}" Margin="2,0"
+                                            ToolTip="Toggle sidewalk concrete slab (0.5 ft) for this segment"
+                                            Click="BtnToggleRightSidewalk_Click"
+                                            Visibility="{Binding SidewalkVisible}"/>
+                                    <Button Grid.Column="4" Content="X"
                                             Width="22" Height="22" FontSize="10"
                                             Background="#442222" Foreground="#FF6B6B"
                                             BorderThickness="0" Cursor="Hand"

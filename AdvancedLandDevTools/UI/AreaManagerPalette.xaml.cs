@@ -38,7 +38,17 @@ namespace AdvancedLandDevTools.UI
     public partial class AreaManagerPalette : UserControl
     {
         private AreaManagerProject? _project;
-        private readonly List<AreaEntry> _areas = new();
+        private string? _activeSubProjectId; // null = root scope
+        private bool _suppressSubProjectEvents;
+
+        // ── Scope helpers ──
+        private bool IsRootScope => _activeSubProjectId == null;
+        private AreaSubProject? ActiveSubProject =>
+            IsRootScope ? null : _project?.FindSubProjectById(_activeSubProjectId!);
+        private List<AreaEntry> ActiveAreas =>
+            IsRootScope ? (_project?.Areas ?? new List<AreaEntry>()) : (ActiveSubProject?.Areas ?? new List<AreaEntry>());
+        private List<string> ActiveCategories =>
+            IsRootScope ? (_project?.Categories ?? new List<string>()) : (ActiveSubProject?.Categories ?? new List<string>());
 
         public AreaManagerPalette()
         {
@@ -60,9 +70,9 @@ namespace AdvancedLandDevTools.UI
                 AreaManagerStore.Save(proj);
             }
             _project = proj;
-            _areas.Clear();
-            _areas.AddRange(_project.Areas);
+            _activeSubProjectId = null;
             TxtProjectName.Text = _project.ProjectName;
+            BuildSubProjectSelector();
             RebuildGroupedList();
         }
 
@@ -109,9 +119,155 @@ namespace AdvancedLandDevTools.UI
             if (result != MessageBoxResult.Yes) return;
             AreaManagerStore.Delete(_project.ProjectName);
             _project = null;
-            _areas.Clear();
+            _activeSubProjectId = null;
             TxtProjectName.Text = "";
+            BuildSubProjectSelector();
             RebuildGroupedList();
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  SUBPROJECT MANAGEMENT
+        // ═════════════════════════════════════════════════════════════════════
+
+        private void BuildSubProjectSelector()
+        {
+            _suppressSubProjectEvents = true;
+            CboSubProject.Items.Clear();
+            CboSubProject.Items.Add("<Root>");
+            if (_project != null)
+                foreach (var sp in _project.SubProjects)
+                    CboSubProject.Items.Add(sp.Name);
+            // Select current
+            if (_activeSubProjectId == null)
+                CboSubProject.SelectedIndex = 0;
+            else
+            {
+                var sp = _project?.FindSubProjectById(_activeSubProjectId);
+                CboSubProject.SelectedItem = sp?.Name ?? "<Root>";
+                if (CboSubProject.SelectedIndex < 0) CboSubProject.SelectedIndex = 0;
+            }
+            _suppressSubProjectEvents = false;
+        }
+
+        private void CboSubProject_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressSubProjectEvents || _project == null) return;
+            string? selected = CboSubProject.SelectedItem as string;
+            if (selected == null || selected == "<Root>")
+                _activeSubProjectId = null;
+            else
+            {
+                var sp = _project.FindSubProjectByName(selected);
+                _activeSubProjectId = sp?.Id;
+            }
+            RebuildGroupedList();
+            UpdateSummary();
+        }
+
+        private void BtnNewSubProject_Click(object sender, RoutedEventArgs e)
+        {
+            if (_project == null) { AcadMessage("Load or create a project first."); return; }
+            TxtSubProjectName.Text = "";
+            SubProjectPopup.IsOpen = true;
+            TxtSubProjectName.Focus();
+        }
+
+        private void BtnConfirmSubProject_Click(object sender, RoutedEventArgs e)
+        {
+            string name = TxtSubProjectName.Text?.Trim() ?? "";
+            SubProjectPopup.IsOpen = false;
+            if (string.IsNullOrEmpty(name) || _project == null) return;
+            if (_project.FindSubProjectByName(name) != null)
+            { AcadMessage($"Subproject \"{name}\" already exists."); return; }
+            var sp = new AreaSubProject { Name = name };
+            _project.SubProjects.Add(sp);
+            SaveProject();
+            _activeSubProjectId = sp.Id;
+            BuildSubProjectSelector();
+            RebuildGroupedList();
+            UpdateSummary();
+        }
+
+        private void BtnCancelSubProject_Click(object sender, RoutedEventArgs e)
+        {
+            SubProjectPopup.IsOpen = false;
+        }
+
+        private void TxtSubProjectName_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter) BtnConfirmSubProject_Click(sender, e);
+            else if (e.Key == Key.Escape) SubProjectPopup.IsOpen = false;
+        }
+
+        private void BtnRenameSubProject_Click(object sender, RoutedEventArgs e)
+        {
+            if (_project == null || IsRootScope) return;
+            var sp = ActiveSubProject;
+            if (sp == null) return;
+            TxtSubProjectRename.Text = sp.Name;
+            SubProjectRenamePopup.IsOpen = true;
+            TxtSubProjectRename.Focus();
+            TxtSubProjectRename.SelectAll();
+        }
+
+        private void BtnConfirmSubProjectRename_Click(object sender, RoutedEventArgs e)
+        {
+            string name = TxtSubProjectRename.Text?.Trim() ?? "";
+            SubProjectRenamePopup.IsOpen = false;
+            if (string.IsNullOrEmpty(name) || _project == null) return;
+            var sp = ActiveSubProject;
+            if (sp == null) return;
+            sp.Name = name;
+            sp.ModifiedUtc = DateTime.UtcNow;
+            SaveProject();
+            BuildSubProjectSelector();
+        }
+
+        private void BtnCancelSubProjectRename_Click(object sender, RoutedEventArgs e)
+        {
+            SubProjectRenamePopup.IsOpen = false;
+        }
+
+        private void TxtSubProjectRename_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter) BtnConfirmSubProjectRename_Click(sender, e);
+            else if (e.Key == Key.Escape) SubProjectRenamePopup.IsOpen = false;
+        }
+
+        private void BtnDeleteSubProject_Click(object sender, RoutedEventArgs e)
+        {
+            if (_project == null || IsRootScope) return;
+            var sp = ActiveSubProject;
+            if (sp == null) return;
+            var res = System.Windows.MessageBox.Show(
+                $"Delete subproject \"{sp.Name}\" and all its areas?",
+                "Delete SubProject", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (res != MessageBoxResult.Yes) return;
+            _project.SubProjects.RemoveAll(s => s.Id == sp.Id);
+            _activeSubProjectId = null;
+            SaveProject();
+            BuildSubProjectSelector();
+            RebuildGroupedList();
+            UpdateSummary();
+        }
+
+        private void UpdateSummary()
+        {
+            if (_project == null)
+            {
+                TxtSummary.Text = "No project loaded";
+                TxtGrandTotal.Visibility = System.Windows.Visibility.Collapsed;
+                return;
+            }
+            var active = ActiveAreas;
+            double scopeTotal = active.Sum(a => a.AreaSqFt);
+            string scopeName = IsRootScope ? "Root" : (ActiveSubProject?.Name ?? "Subproject");
+            TxtSummary.Text = $"{scopeName}: {active.Count} area(s) — {scopeTotal:N2} sq ft";
+
+            double grandTotal = _project.AllAreas.Sum(a => a.AreaSqFt);
+            int grandCount = _project.AllAreas.Count();
+            TxtGrandTotal.Text = $"Project total: {grandCount} area(s) — {grandTotal:N2} sq ft";
+            TxtGrandTotal.Visibility = System.Windows.Visibility.Visible;
         }
 
         // ═════════════════════════════════════════════════════════════════════
@@ -153,8 +309,9 @@ namespace AdvancedLandDevTools.UI
                         continue;
                     }
 
-                    _project.Areas.Add(entry);
-                    _areas.Add(entry);
+                    ActiveAreas.Add(entry);
+                    if (!IsRootScope && ActiveSubProject != null)
+                        ActiveSubProject.ModifiedUtc = DateTime.UtcNow;
                     SaveProject();
                     RebuildGroupedList();
 
@@ -281,13 +438,14 @@ namespace AdvancedLandDevTools.UI
             CategoryPopup.IsOpen = false;
             if (string.IsNullOrEmpty(cat) || _project == null) return;
 
-            if (_project.Categories.Contains(cat))
+            var cats = ActiveCategories;
+            if (cats.Contains(cat))
             {
                 AcadMessage($"Category \"{cat}\" already exists.");
                 return;
             }
 
-            _project.Categories.Add(cat);
+            cats.Add(cat);
             SaveProject();
             RebuildGroupedList();
             AcadMessage($"Category added: {cat}");
@@ -307,7 +465,7 @@ namespace AdvancedLandDevTools.UI
         private void BtnRename_Click(object sender, RoutedEventArgs e)
         {
             string id = (string)((Button)sender).Tag;
-            var area = _areas.FirstOrDefault(a => a.Id == id);
+            var area = ActiveAreas.FirstOrDefault(a => a.Id == id);
             if (area == null) return;
 
             _renameTargetId = id;
@@ -330,7 +488,7 @@ namespace AdvancedLandDevTools.UI
             RenamePopup.IsOpen = false;
             if (string.IsNullOrEmpty(newName) || _renameTargetId == null) return;
 
-            var area = _areas.FirstOrDefault(a => a.Id == _renameTargetId);
+            var area = ActiveAreas.FirstOrDefault(a => a.Id == _renameTargetId);
             if (area == null) return;
 
             area.Name = newName;
@@ -351,7 +509,7 @@ namespace AdvancedLandDevTools.UI
         {
             if (sender is not ComboBox cmb) return;
             string id = cmb.Tag as string ?? "";
-            var area = _areas.FirstOrDefault(a => a.Id == id);
+            var area = ActiveAreas.FirstOrDefault(a => a.Id == id);
             if (area == null) return;
 
             string selected = cmb.SelectedItem as string ?? "";
@@ -372,7 +530,7 @@ namespace AdvancedLandDevTools.UI
         private void BtnRedraw_Click(object sender, RoutedEventArgs e)
         {
             string id = (string)((Button)sender).Tag;
-            var area = _areas.FirstOrDefault(a => a.Id == id);
+            var area = ActiveAreas.FirstOrDefault(a => a.Id == id);
             if (area == null || area.BoundaryLoops.Count == 0) return;
 
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
@@ -448,7 +606,7 @@ namespace AdvancedLandDevTools.UI
         private void BtnRemoveArea_Click(object sender, RoutedEventArgs e)
         {
             string id = (string)((Button)sender).Tag;
-            var area = _areas.FirstOrDefault(a => a.Id == id);
+            var area = ActiveAreas.FirstOrDefault(a => a.Id == id);
             if (area == null) return;
 
             var result = System.Windows.MessageBox.Show(
@@ -456,8 +614,9 @@ namespace AdvancedLandDevTools.UI
                 "Remove Area", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
 
-            _project!.Areas.RemoveAll(a => a.Id == id);
-            _areas.RemoveAll(a => a.Id == id);
+            ActiveAreas.RemoveAll(a => a.Id == id);
+            if (!IsRootScope && ActiveSubProject != null)
+                ActiveSubProject.ModifiedUtc = DateTime.UtcNow;
             SaveProject();
             RebuildGroupedList();
         }
@@ -499,21 +658,20 @@ namespace AdvancedLandDevTools.UI
         {
             GroupedAreaPanel.Children.Clear();
 
-            if (_project == null || _areas.Count == 0)
+            var areas = ActiveAreas;
+
+            if (_project == null || areas.Count == 0)
             {
-                TxtSummary.Text = _project == null ? "No project loaded" : "No areas — click Add Area";
+                UpdateSummary();
                 return;
             }
 
-            double grandTotal = _areas.Sum(a => a.AreaSqFt);
-            TxtSummary.Text = $"{_areas.Count} area(s) — Total: {grandTotal:N2} sq ft";
-
             // Build category options for dropdowns
             var catOptions = new List<string> { "(None)" };
-            catOptions.AddRange(_project.Categories);
+            catOptions.AddRange(ActiveCategories);
 
             // Group areas by category
-            var groups = _areas
+            var groups = areas
                 .GroupBy(a => string.IsNullOrEmpty(a.Category) ? "" : a.Category)
                 .OrderBy(g => g.Key == "" ? "zzz" : g.Key); // uncategorized last
 
@@ -564,6 +722,8 @@ namespace AdvancedLandDevTools.UI
                     GroupedAreaPanel.Children.Add(BuildAreaCard(area, catOptions));
                 }
             }
+
+            UpdateSummary();
         }
 
         private Border BuildAreaCard(AreaEntry area, List<string> catOptions)
@@ -697,7 +857,9 @@ namespace AdvancedLandDevTools.UI
         private void SaveProject()
         {
             if (_project == null) return;
-            _project.Areas = _areas.ToList();
+            _project.ModifiedUtc = DateTime.UtcNow;
+            if (!IsRootScope && ActiveSubProject != null)
+                ActiveSubProject.ModifiedUtc = DateTime.UtcNow;
             AreaManagerStore.Save(_project);
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -14,7 +15,7 @@ namespace AdvancedLandDevTools.Commands
 {
     public class SectionDrawerCommand
     {
-        private const string LAYER_NAME = "ALDT-SECTION";
+        private const string DefaultLayer = "ALDT-SECTION";
 
         [CommandMethod("SECDRAW", CommandFlags.Modal)]
         public void SectionDraw()
@@ -31,8 +32,11 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage("  Advanced Land Development Tools  |  Section Drawer     \n");
                 ed.WriteMessage("========================================================\n");
 
-                // 1. Show the section designer window
-                var win = new SectionDrawerWindow();
+                // 1. Collect existing layer names for the picker
+                var layers = GetDrawingLayers(doc.Database);
+
+                // 2. Show the section designer window
+                var win = new SectionDrawerWindow(layers);
                 bool? result = AcadApp.ShowModalWindow(win);
 
                 if (result != true || win.ResultProfile == null)
@@ -41,9 +45,10 @@ namespace AdvancedLandDevTools.Commands
                     return;
                 }
 
-                var profile = win.ResultProfile;
+                var profile   = win.ResultProfile;
+                string layer  = win.SelectedLayerName;
 
-                // 2. Prompt for insertion point
+                // 3. Prompt for insertion point
                 var ppo = new PromptPointOptions(
                     "\nClick insertion point for the section (centerline base): ")
                 { AllowNone = false };
@@ -55,10 +60,10 @@ namespace AdvancedLandDevTools.Commands
                     return;
                 }
 
-                // 3. Draw the section as polylines at 1:1
-                DrawSection(doc.Database, profile, ppr.Value, win.DrawSegmentLines);
+                // 4. Draw the section as polylines at 1:1
+                DrawSection(doc.Database, profile, ppr.Value, win.DrawSegmentLines, layer);
 
-                ed.WriteMessage($"\n  Section \"{profile.Name}\" placed " +
+                ed.WriteMessage($"\n  Section \"{profile.Name}\" placed on layer \"{layer}\" " +
                     $"({profile.LeftSegments.Count}L + {profile.RightSegments.Count}R segments).\n");
             }
             catch (System.Exception ex)
@@ -68,29 +73,54 @@ namespace AdvancedLandDevTools.Commands
             }
         }
 
-        private static void DrawSection(Database db, SectionProfile profile,
-            Point3d insertPt, bool drawSegmentLines)
+        /// <summary>
+        /// Collects all layer names present in the database, sorted alphabetically.
+        /// </summary>
+        private static List<string> GetDrawingLayers(Database db)
         {
+            var names = new List<string>();
+            using var tx = db.TransactionManager.StartTransaction();
+            var lt = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead);
+            foreach (ObjectId id in lt)
+            {
+                var lr = (LayerTableRecord)tx.GetObject(id, OpenMode.ForRead);
+                names.Add(lr.Name);
+            }
+            tx.Commit();
+            return names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        /// <param name="targetLayer">
+        /// Layer to place all geometry on. Created with cyan colour if it does not
+        /// already exist; entity colour indices are always applied explicitly so the
+        /// colour scheme is preserved regardless of which layer is chosen.
+        /// </param>
+        private static void DrawSection(Database db, SectionProfile profile,
+            Point3d insertPt, bool drawSegmentLines, string targetLayer)
+        {
+            if (string.IsNullOrWhiteSpace(targetLayer))
+                targetLayer = DefaultLayer;
+
             var geo = SectionDrawerEngine.ComputePoints(profile);
 
             using var tx = db.TransactionManager.StartTransaction();
             var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
             var btr = (BlockTableRecord)tx.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-            // Ensure layer
+            // Ensure the target layer exists; create it only when missing.
             var lt = (LayerTable)tx.GetObject(db.LayerTableId, OpenMode.ForRead);
-            if (!lt.Has(LAYER_NAME))
+            if (!lt.Has(targetLayer))
             {
                 lt.UpgradeOpen();
                 var lr = new LayerTableRecord
                 {
-                    Name = LAYER_NAME,
-                    Color = Color.FromColorIndex(ColorMethod.ByAci, 4) // cyan
+                    Name  = targetLayer,
+                    Color = Color.FromColorIndex(ColorMethod.ByAci, 4) // cyan default
                 };
                 lt.Add(lr);
                 tx.AddNewlyCreatedDBObject(lr, true);
             }
-            var layerId = lt[LAYER_NAME];
+            var layerId = lt[targetLayer];
 
             // Left + right surface lines — split at block segments so lines don't overdraw block outlines
             DrawSurfaceLines(btr, tx, insertPt, layerId, geo.LeftPoints,  profile.LeftSegments);
@@ -281,6 +311,80 @@ namespace AdvancedLandDevTools.Commands
                         new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y - grassDepth, 0))
                     {
                         LayerId = layerId, ColorIndex = 3
+                    };
+                    btr.AppendEntity(edgeLine);
+                    tx.AddNewlyCreatedDBObject(edgeLine, true);
+                }
+            }
+
+            // ── Sidewalk concrete slab (per-segment IsSidewalk) ───────────
+            foreach (var region in geo.SidewalkRegions)
+            {
+                if (region.Count < 2) continue;
+
+                const double sidewalkDepth = 0.5; // ft — single concrete slab
+
+                var boundary = new AcDbPolyline();
+                int vtx = 0;
+
+                // Top edge L→R
+                foreach (var p in region)
+                    boundary.AddVertexAt(vtx++,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y), 0, 0, 0);
+
+                // Bottom edge R→L
+                for (int i = region.Count - 1; i >= 0; i--)
+                {
+                    var p = region[i];
+                    boundary.AddVertexAt(vtx++,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - sidewalkDepth), 0, 0, 0);
+                }
+                boundary.Closed = true;
+                boundary.LayerId = layerId;
+                boundary.ColorIndex = 9; // light gray — distinct from road (8) and grass (3)
+                btr.AppendEntity(boundary);
+                tx.AddNewlyCreatedDBObject(boundary, true);
+
+                try
+                {
+                    var hatch = new Hatch();
+                    btr.AppendEntity(hatch);
+                    tx.AddNewlyCreatedDBObject(hatch, true);
+                    hatch.LayerId    = layerId;
+                    hatch.ColorIndex = 9;
+                    hatch.SetHatchPattern(HatchPatternType.PreDefined, "AR-CONC");
+                    hatch.PatternScale  = 0.25;
+                    hatch.HatchStyle    = HatchStyle.Normal;
+                    hatch.Associative   = false;
+                    var ids = new ObjectIdCollection { boundary.ObjectId };
+                    hatch.AppendLoop(HatchLoopTypes.Polyline, ids);
+                    hatch.EvaluateHatch(true);
+                }
+                catch { }
+
+                // Bottom line
+                var botLine = new AcDbPolyline();
+                for (int i = 0; i < region.Count; i++)
+                {
+                    var p = region[i];
+                    botLine.AddVertexAt(i,
+                        new Point2d(insertPt.X + p.X, insertPt.Y + p.Y - sidewalkDepth), 0, 0, 0);
+                }
+                botLine.LayerId    = layerId;
+                botLine.ColorIndex = 9;
+                btr.AppendEntity(botLine);
+                tx.AddNewlyCreatedDBObject(botLine, true);
+
+                // Vertical closing lines at region edges
+                var lPt = region[0];
+                var rPt = region[region.Count - 1];
+                foreach (var edgePt in new[] { lPt, rPt })
+                {
+                    var edgeLine = new Autodesk.AutoCAD.DatabaseServices.Line(
+                        new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y, 0),
+                        new Point3d(insertPt.X + edgePt.X, insertPt.Y + edgePt.Y - sidewalkDepth, 0))
+                    {
+                        LayerId = layerId, ColorIndex = 9
                     };
                     btr.AppendEntity(edgeLine);
                     tx.AddNewlyCreatedDBObject(edgeLine, true);

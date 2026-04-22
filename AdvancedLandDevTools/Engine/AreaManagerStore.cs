@@ -6,10 +6,6 @@ using AdvancedLandDevTools.Models;
 
 namespace AdvancedLandDevTools.Engine
 {
-    /// <summary>
-    /// Persists AreaManager projects as JSON files in %APPDATA%\AdvancedLandDevTools\AreaManager\.
-    /// Each project is a separate .json file named by a sanitized project name.
-    /// </summary>
     public static class AreaManagerStore
     {
         private static readonly string StoreDir = Path.Combine(
@@ -22,29 +18,33 @@ namespace AdvancedLandDevTools.Engine
             NullValueHandling = NullValueHandling.Ignore
         };
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  Save / Load a single project
-        // ─────────────────────────────────────────────────────────────────────
         public static void Save(AreaManagerProject project)
         {
             Directory.CreateDirectory(StoreDir);
             project.ModifiedUtc = DateTime.UtcNow;
             string path = GetFilePath(project.ProjectName);
-            string json = JsonConvert.SerializeObject(project, JsonSettings);
-            File.WriteAllText(path, json);
+            File.WriteAllText(path, JsonConvert.SerializeObject(project, JsonSettings));
         }
 
         public static AreaManagerProject? Load(string projectName)
         {
             string path = GetFilePath(projectName);
             if (!File.Exists(path)) return null;
-            string json = File.ReadAllText(path);
-            return JsonConvert.DeserializeObject<AreaManagerProject>(json, JsonSettings);
+            var proj = JsonConvert.DeserializeObject<AreaManagerProject>(
+                File.ReadAllText(path), JsonSettings);
+            if (proj == null) return null;
+
+            // Normalise fields that may be absent in JSON written by older versions
+            proj.SubProjects ??= new List<AreaSubProject>();
+            foreach (var sp in proj.SubProjects)
+            {
+                sp.Categories ??= new List<string>();
+                sp.Areas      ??= new List<AreaEntry>();
+                if (string.IsNullOrEmpty(sp.Id)) sp.Id = Guid.NewGuid().ToString("N");
+            }
+            return proj;
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  List all saved project names
-        // ─────────────────────────────────────────────────────────────────────
         public static List<string> ListProjects()
         {
             var names = new List<string>();
@@ -53,42 +53,29 @@ namespace AdvancedLandDevTools.Engine
             {
                 try
                 {
-                    string json = File.ReadAllText(file);
-                    var proj = JsonConvert.DeserializeObject<AreaManagerProject>(json, JsonSettings);
-                    if (proj != null)
-                        names.Add(proj.ProjectName);
+                    var proj = JsonConvert.DeserializeObject<AreaManagerProject>(
+                        File.ReadAllText(file), JsonSettings);
+                    if (proj != null) names.Add(proj.ProjectName);
                 }
-                catch { /* skip corrupt files */ }
+                catch { }
             }
             return names;
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  Delete a project file
-        // ─────────────────────────────────────────────────────────────────────
         public static void Delete(string projectName)
         {
             string path = GetFilePath(projectName);
-            if (File.Exists(path))
-                File.Delete(path);
+            if (File.Exists(path)) File.Delete(path);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  Helpers
-        // ─────────────────────────────────────────────────────────────────────
-        private static string GetFilePath(string projectName)
-        {
-            string safe = SanitizeFileName(projectName);
-            return Path.Combine(StoreDir, safe + ".json");
-        }
+        private static string GetFilePath(string projectName) =>
+            Path.Combine(StoreDir, SanitizeFileName(projectName) + ".json");
 
         private static string SanitizeFileName(string name)
         {
-            char[] invalid = Path.GetInvalidFileNameChars();
-            string result = name;
-            foreach (char c in invalid)
-                result = result.Replace(c, '_');
-            return result.Trim();
+            foreach (char c in Path.GetInvalidFileNameChars())
+                name = name.Replace(c, '_');
+            return name.Trim();
         }
     }
 }

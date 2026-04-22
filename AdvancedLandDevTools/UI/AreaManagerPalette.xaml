@@ -260,6 +260,40 @@
         </Border>
 
         <!-- ══════════════════════════════════════════════════════════════
+             SUBPROJECT SELECTOR ROW
+             ══════════════════════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top" Background="#1E1E1E" Padding="8,5"
+                BorderBrush="#454545" BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="BtnDeleteSubProject" DockPanel.Dock="Right"
+                        Content="&#xE74D;" FontFamily="Segoe MDL2 Assets"
+                        Style="{StaticResource DeleteIconBtn}"
+                        Width="26" Height="26" Margin="2,0,0,0"
+                        ToolTip="Delete subproject"
+                        Click="BtnDeleteSubProject_Click"/>
+                <Button x:Name="BtnRenameSubProject" DockPanel.Dock="Right"
+                        Content="&#xE8AC;" FontFamily="Segoe MDL2 Assets"
+                        Style="{StaticResource SmallIconBtn}"
+                        Width="26" Height="26" Margin="2,0,0,0"
+                        ToolTip="Rename subproject"
+                        Click="BtnRenameSubProject_Click"/>
+                <Button x:Name="BtnNewSubProject" DockPanel.Dock="Right"
+                        Content="&#xE710;" FontFamily="Segoe MDL2 Assets"
+                        Style="{StaticResource SmallIconBtn}"
+                        Width="26" Height="26" Margin="2,0,0,0"
+                        ToolTip="New subproject"
+                        Click="BtnNewSubProject_Click"/>
+                <TextBlock Text="Subproject:" Foreground="#9E9E9E" FontSize="11"
+                           VerticalAlignment="Center" Margin="0,0,6,0"
+                           DockPanel.Dock="Left"/>
+                <ComboBox x:Name="CboSubProject"
+                          Style="{StaticResource CatDropdown}"
+                          Height="24" FontSize="11"
+                          SelectionChanged="CboSubProject_SelectionChanged"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════════════════
              ACTION BAR
              ══════════════════════════════════════════════════════════════ -->
         <Border DockPanel.Dock="Top" Background="#252526" Padding="8,6" BorderBrush="#454545" BorderThickness="0,0,0,1">
@@ -296,8 +330,14 @@
         <!-- ══════════════════════════════════════════════════════════════
              SUMMARY BAR
              ══════════════════════════════════════════════════════════════ -->
-        <Border DockPanel.Dock="Top" Background="#2D2D2D" Padding="10,5" BorderBrush="#454545" BorderThickness="0,0,0,1">
-            <TextBlock x:Name="TxtSummary" Text="No project loaded" Foreground="#9E9E9E" FontSize="11"/>
+        <Border DockPanel.Dock="Top" Background="#2D2D2D" Padding="10,5"
+                BorderBrush="#454545" BorderThickness="0,0,0,1">
+            <StackPanel>
+                <TextBlock x:Name="TxtSummary" Text="No project loaded"
+                           Foreground="#9E9E9E" FontSize="11"/>
+                <TextBlock x:Name="TxtGrandTotal" Foreground="#555" FontSize="10"
+                           Visibility="Collapsed"/>
+            </StackPanel>
         </Border>
 
         <!-- ══════════════════════════════════════════════════════════════
@@ -343,6 +383,54 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                         <Button Content="Cancel" Style="{StaticResource ActionBtn}" Click="BtnCancelRename_Click"/>
                         <Button Content="Rename" Style="{StaticResource ActionBtn}" Click="BtnConfirmRename_Click"
+                                Margin="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             SUBPROJECT NEW POPUP
+             ══════════════════════════════════════════════════════════════ -->
+        <Popup x:Name="SubProjectPopup" Placement="Center" PlacementTarget="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+               StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#2D2D2D" BorderBrush="#60CDFF" BorderThickness="1"
+                    CornerRadius="8" Padding="16" MinWidth="260">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20" Opacity="0.6" ShadowDepth="4" Color="Black"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="New Subproject" FontSize="13" FontWeight="SemiBold"
+                               Foreground="#60CDFF" Margin="0,0,0,8"/>
+                    <TextBox x:Name="TxtSubProjectName" Style="{StaticResource FluentTextBox}"
+                             KeyDown="TxtSubProjectName_KeyDown"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Cancel" Style="{StaticResource ActionBtn}" Click="BtnCancelSubProject_Click"/>
+                        <Button Content="Create" Style="{StaticResource ActionBtn}" Click="BtnConfirmSubProject_Click"
+                                Margin="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             SUBPROJECT RENAME POPUP
+             ══════════════════════════════════════════════════════════════ -->
+        <Popup x:Name="SubProjectRenamePopup" Placement="Center" PlacementTarget="{Binding RelativeSource={RelativeSource AncestorType=UserControl}}"
+               StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="#2D2D2D" BorderBrush="#60CDFF" BorderThickness="1"
+                    CornerRadius="8" Padding="16" MinWidth="260">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20" Opacity="0.6" ShadowDepth="4" Color="Black"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Rename Subproject" FontSize="13" FontWeight="SemiBold"
+                               Foreground="#60CDFF" Margin="0,0,0,8"/>
+                    <TextBox x:Name="TxtSubProjectRename" Style="{StaticResource FluentTextBox}"
+                             KeyDown="TxtSubProjectRename_KeyDown"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                        <Button Content="Cancel" Style="{StaticResource ActionBtn}" Click="BtnCancelSubProjectRename_Click"/>
+                        <Button Content="Rename" Style="{StaticResource ActionBtn}" Click="BtnConfirmSubProjectRename_Click"
                                 Margin="0"/>
                     </StackPanel>
                 </StackPanel>

@@ -45,6 +45,8 @@ using AdvancedLandDevTools.VehicleTracking.Commands; // needed for CommandClass 
 [assembly: CommandClass(typeof(LLabelGenCommand))]
 [assembly: CommandClass(typeof(MarkFittingsCommand))]
 [assembly: CommandClass(typeof(PropertyAppraisalCommand))]
+[assembly: CommandClass(typeof(CoralAsBuiltCommand))]
+[assembly: CommandClass(typeof(TableDrawerCommand))]
 
 namespace AdvancedLandDevTools
 {
@@ -59,17 +61,8 @@ namespace AdvancedLandDevTools
         // ─────────────────────────────────────────────────────────────────────
         public void Initialize()
         {
-            // Ribbon may not yet exist if Civil 3D is still starting up.
-            // Hooking the ComponentManager event guarantees we build it
-            // as soon as the ribbon is ready.
             try
             {
-                // !! DO NOT hook VtPathReactor here !!
-                // Hooking Database.ObjectModified during Initialize() interferes with
-                // Civil 3D's managed wrapper registration and causes trans.GetObject()
-                // to return ImpCurve instead of Alignment — breaking ALL Civil 3D commands.
-                // The reactor is hooked lazily on first VTDRIVE/VTEDIT invocation instead.
-
                 if (Autodesk.Windows.ComponentManager.Ribbon != null)
                 {
                     // Ribbon already available (e.g. NETLOAD command used)
@@ -93,7 +86,9 @@ namespace AdvancedLandDevTools
         // ─────────────────────────────────────────────────────────────────────
         //  Terminate – called when AutoCAD unloads the plugin
         // ─────────────────────────────────────────────────────────────────────
-        public void Terminate() { }
+        public void Terminate()
+        {
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         //  Event handler – fires when Ribbon becomes available on startup
@@ -178,8 +173,10 @@ namespace AdvancedLandDevTools
                 "\n║    VTDRIVE         – Interactive Drive Mode             ║" +
                 "\n║    VTEDIT          – Edit Existing Drive Path           ║" +
                 "\n║    VTPARK          – Parking Layout Generator           ║" +
-                "\n║  Display:                                               ║" +
-                "\n║    LAYOUTDARK      – Layout Dark Mode Toggle             ║" +
+                "\n║  As-Builts:                                             ║" +
+                "\n║    CORALASBUILT    – Coral Gables Sewer As-Built Query  ║" +
+                "\n║  Tables:                                                ║" +
+                "\n║    TABLEDRAW       – Excel-Like Table Drawer            ║" +
                 "\n║  Quick Access:                                          ║" +
                 "\n║    ALDTTOOLBAR     – Toggle Mini Toolbar                ║" +
                 "\n╠══════════════════════════════════════════════════════════╣" +

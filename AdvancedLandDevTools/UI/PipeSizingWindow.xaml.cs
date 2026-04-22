@@ -16,8 +16,11 @@ namespace AdvancedLandDevTools.UI
         private static readonly Brush PassFg  = new SolidColorBrush(Color.FromRgb(107, 203, 119));
         private static readonly Brush FailFg  = new SolidColorBrush(Color.FromRgb(255, 107, 107));
 
-        private List<AreaEntry> _currentAreas = new();
+        private AreaManagerProject? _amProject;
         private bool _areaMgrExpanded = false;
+
+        private const string ScopeAll  = "<All>";
+        private const string ScopeRoot = "<Root>";
 
         // Material → (n value, description)
         private static readonly (string Label, double N, string Hint)[] _materials =
@@ -86,7 +89,7 @@ namespace AdvancedLandDevTools.UI
             var projects = AreaManagerStore.ListProjects();
             CboProject.Items.Clear();
             PnlAreaList.Children.Clear();
-            _currentAreas.Clear();
+            _amProject = null;
             UpdateTotal();
 
             if (projects.Count == 0)
@@ -106,42 +109,74 @@ namespace AdvancedLandDevTools.UI
         {
             if (CboProject.SelectedItem is not string projectName) return;
 
-            var project = AreaManagerStore.Load(projectName);
-            _currentAreas = project?.Areas ?? new List<AreaEntry>();
+            _amProject = AreaManagerStore.Load(projectName);
 
+            // Rebuild subproject scope selector
+            CboAmSubProject.Items.Clear();
+            CboAmSubProject.Items.Add(ScopeAll);
+            CboAmSubProject.Items.Add(ScopeRoot);
+            if (_amProject != null)
+                foreach (var sp in _amProject.SubProjects)
+                    CboAmSubProject.Items.Add(sp.Name);
+            CboAmSubProject.SelectedIndex = 0;
+            PnlSubProjectScope.Visibility =
+                (_amProject != null && _amProject.SubProjects.Count > 0)
+                    ? Visibility.Visible : Visibility.Collapsed;
+
+            RebuildAmAreaList();
+        }
+
+        private void CboAmSubProject_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            RebuildAmAreaList();
+        }
+
+        private void RebuildAmAreaList()
+        {
             PnlAreaList.Children.Clear();
             UpdateTotal();
+            if (_amProject == null) return;
 
-            if (_currentAreas.Count == 0)
-            {
-                var empty = new TextBlock
+            System.Collections.Generic.IEnumerable<AreaEntry> scope =
+                CboAmSubProject.SelectedItem as string switch
                 {
-                    Text = "No areas in this project.",
+                    ScopeRoot  => _amProject.Areas,
+                    ScopeAll   => _amProject.AllAreas,
+                    string name => _amProject.FindSubProjectByName(name)?.Areas
+                                   ?? System.Linq.Enumerable.Empty<AreaEntry>(),
+                    _          => System.Linq.Enumerable.Empty<AreaEntry>()
+                };
+
+            var list = scope.ToList();
+            if (list.Count == 0)
+            {
+                PnlAreaList.Children.Add(new TextBlock
+                {
+                    Text = "No areas in this scope.",
                     Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
                     FontStyle = FontStyles.Italic,
                     Margin = new Thickness(4, 6, 4, 6),
                     FontSize = 11
-                };
-                PnlAreaList.Children.Add(empty);
+                });
                 return;
             }
 
-            foreach (var area in _currentAreas)
+            foreach (var area in list)
             {
+                double acres = area.AreaSqFt / 43560.0;
                 var cb = new CheckBox
                 {
                     Tag = area,
+                    Content = $"{area.Name}  —  {area.AreaSqFt:N0} sq ft  ({acres:F3} ac)",
                     Margin = new Thickness(2, 3, 2, 3),
                     Foreground = new SolidColorBrush(Colors.White),
                     FontSize = 12
                 };
-
-                double acres = area.AreaSqFt / 43560.0;
-                cb.Content = $"{area.Name}  —  {area.AreaSqFt:N0} sq ft  ({acres:F3} ac)";
                 cb.Checked   += (s, _) => UpdateTotal();
                 cb.Unchecked += (s, _) => UpdateTotal();
                 PnlAreaList.Children.Add(cb);
             }
+            UpdateTotal();
         }
 
         private void UpdateTotal()
