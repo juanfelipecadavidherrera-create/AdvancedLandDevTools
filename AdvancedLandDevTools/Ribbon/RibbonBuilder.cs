@@ -367,7 +367,7 @@ namespace AdvancedLandDevTools.Ribbon
                 Size             = RibbonItemSize.Standard,
                 Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildChangeElevationIcon(32),
-                Image            = BuildChangeElevationIcon(16)
+                Image            = BuildLateralBeastIcon(16)
             };
             // ── Pipe Sizing button ────────────────────────────────────────────
             var btnPipeSizing = new RibbonButton
@@ -459,7 +459,7 @@ namespace AdvancedLandDevTools.Ribbon
                 ShowImage        = true,
                 Size             = RibbonItemSize.Standard,
                 Orientation      = System.Windows.Controls.Orientation.Horizontal,
-                Image            = BuildChangeElevationIcon(16) // Reusing icon for now
+                Image            = BuildLateralBeastIcon(16)
             };
 
             // ── Pressure Count button ─────────────────────────────────────────
@@ -3777,6 +3777,55 @@ namespace AdvancedLandDevTools.Ribbon
         // ═════════════════════════════════════════════════════════════════════
         //  Lateral Manager icon
         // ═════════════════════════════════════════════════════════════════════
+        
+        private static ImageSource BuildLateralBeastIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex) => new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Background - dark orange/brown
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#2e1a00"), RadiusX = s * 3, RadiusY = s * 3 });
+
+            // Ears
+            var earL = new Ellipse { Width = s*8, Height = s*8, Fill = C("#F57C00") };
+            Canvas.SetLeft(earL, s*4); Canvas.SetTop(earL, s*3); Add(earL);
+            var earR = new Ellipse { Width = s*8, Height = s*8, Fill = C("#F57C00") };
+            Canvas.SetLeft(earR, s*20); Canvas.SetTop(earR, s*3); Add(earR);
+
+            // Tiger Face
+            var face = new Ellipse { Width = s*24, Height = s*20, Fill = C("#FF9800") };
+            Canvas.SetLeft(face, s*4);
+            Canvas.SetTop(face, s*6);
+            Add(face);
+
+            // Stripes
+            Add(new Line { X1 = s*16, Y1 = s*6, X2 = s*16, Y2 = s*12, Stroke = System.Windows.Media.Brushes.Black, StrokeThickness = s*2.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+            Add(new Line { X1 = s*10, Y1 = s*8, X2 = s*13, Y2 = s*11, Stroke = System.Windows.Media.Brushes.Black, StrokeThickness = s*2, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+            Add(new Line { X1 = s*22, Y1 = s*8, X2 = s*19, Y2 = s*11, Stroke = System.Windows.Media.Brushes.Black, StrokeThickness = s*2, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            // Eyes
+            var eyeL = new Ellipse { Width = s*3.5, Height = s*3.5, Fill = System.Windows.Media.Brushes.Black };
+            Canvas.SetLeft(eyeL, s*9); Canvas.SetTop(eyeL, s*13); Add(eyeL);
+            var eyeR = new Ellipse { Width = s*3.5, Height = s*3.5, Fill = System.Windows.Media.Brushes.Black };
+            Canvas.SetLeft(eyeR, s*19); Canvas.SetTop(eyeR, s*13); Add(eyeR);
+
+            // Pipe (Grey rectangle horizontal, covering the mouth)
+            var pipe = new Rectangle { Width = size, Height = s*6, Fill = C("#90A4AE"), Stroke = C("#546E7A"), StrokeThickness = s*1.5 };
+            Canvas.SetLeft(pipe, 0);
+            Canvas.SetTop(pipe, s*20);
+            Add(pipe);
+
+            // Fangs over the pipe
+            var fangL = new System.Windows.Shapes.Polygon { Points = new System.Windows.Media.PointCollection { new System.Windows.Point(s*11, s*18), new System.Windows.Point(s*14, s*18), new System.Windows.Point(s*12.5, s*24) }, Fill = System.Windows.Media.Brushes.White };
+            Add(fangL);
+            var fangR = new System.Windows.Shapes.Polygon { Points = new System.Windows.Media.PointCollection { new System.Windows.Point(s*18, s*18), new System.Windows.Point(s*21, s*18), new System.Windows.Point(s*19.5, s*24) }, Fill = System.Windows.Media.Brushes.White };
+            Add(fangR);
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
         private static ImageSource BuildLatManIcon(int size)
         {
             double s = size / 32.0;

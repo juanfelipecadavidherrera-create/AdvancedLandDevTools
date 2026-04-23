@@ -85,7 +85,8 @@
   <a href="#cmd-changeelevation">CHANGEELEVATION</a>
   <a href="#cmd-pipesizing">PIPESIZING</a>
     <a href="#cmd-eeebend">EEEBEND</a>
-  <a href="#cmd-coveradjust">COVERADJUST <span class="sidebar-badge">NEW</span></a>
+    <a href="#cmd-coveradjust">COVERADJUST <span class="sidebar-badge">NEW</span></a>
+  <a href="#cmd-lateralbeast">LATERALBEAST <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-presscount">PRESSCOUNT</a>
   <a href="#cmd-rrnetworkcheck">RRNETWORKCHECK <span class="sidebar-badge-beta">BETA</span></a>
   <a href="#cmd-latmanager">LATMANAGER <span class="sidebar-badge">NEW</span></a>
@@ -390,6 +391,20 @@ Automates the placement of a pressure pipe bypass ("duck") in a profile view. Se
 <li>Click the crossing location along the pipe.</li>
 <li>Enter the invert elevation at the crossing low point.</li>
 <li>Four bends and five pipe segments are placed creating the duck profile automatically.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-lateralbeast">
+<strong>LATERALBEAST</strong> -- Lateral Pipe Drafter <span class="badge-new">v1.1.0</span><br>
+Automatically drafts lateral pipes in Civil 3D profile views based on user-selected networks and target layers. Calculates precise geometric offsets from pipe inverts and projects the lateral line until it intersects with the chosen target layer.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>LATERALBEAST</code>.</li>
+<li>Select one or more profile views.</li>
+<li>Select the pipe network the laterals belong to.</li>
+<li>Choose the target line layer (e.g., P-ROW) from the dialog, or access via the <code>Settings</code> keyword.</li>
+<li>The command will automatically find the inverts and draw the laterals based on the specified direction, angle, and gap.</li>
 </ol>
 </div>
 </div>
