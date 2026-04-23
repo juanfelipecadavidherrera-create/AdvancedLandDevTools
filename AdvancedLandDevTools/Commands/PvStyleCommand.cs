@@ -287,9 +287,27 @@ namespace AdvancedLandDevTools.Commands
             ObjectId styleId, Transaction tx, Editor ed)
         {
             // Try collection names in priority order
-            string[] collNames = isPressure
-                ? new[] { "PressurePipeOverrides", "PipeOverrides" }
-                : new[] { isPipe ? "PipeOverrides" : "StructureOverrides" };
+            var collNames = new List<string>();
+            if (isPressure)
+            {
+                collNames.Add("PressurePipeOverrides");
+                collNames.Add("CrossingPressurePipeOverrides");
+                collNames.Add("PipeOverrides");
+                collNames.Add("CrossingPipeOverrides");
+            }
+            else
+            {
+                if (isPipe)
+                {
+                    collNames.Add("PipeOverrides");
+                    collNames.Add("CrossingPipeOverrides");
+                }
+                else
+                {
+                    collNames.Add("StructureOverrides");
+                    collNames.Add("CrossingStructureOverrides");
+                }
+            }
 
             foreach (string collName in collNames)
             {
@@ -323,7 +341,7 @@ namespace AdvancedLandDevTools.Commands
                 var collType = coll.GetType();
 
                 // ID property names to try for matching
-                var idProps   = new[] { "PipeId", "PartId", "EntityId", "StructureId" };
+                var idProps   = new[] { "PipeId", "PartId", "EntityId", "StructureId", "CrossingPipeId", "SourcePipeId", "CrossingId" };
                 // Name property names for fallback match
                 var nameProps = new[] { "PipeName", "Name", "StructureName" };
 

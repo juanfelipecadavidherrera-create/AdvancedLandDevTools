@@ -1,10 +1,11 @@
 using System;
+using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
+using AdvancedLandDevTools.Helpers;
 using CivilDB  = Autodesk.Civil.DatabaseServices;
 using CivilApp = Autodesk.Civil.ApplicationServices;
 using AcApp    = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -16,32 +17,21 @@ namespace AdvancedLandDevTools.Commands
     ///
     /// Workflow:
     ///   1. Click the pressure pipe in the profile view.
-    ///   2. Click the crossing pipe in the profile — both station AND elevation
-    ///      are read from the click (no typing required).
-    ///   3. The command computes 4 bend points, modifies the pressure network,
-    ///      and draws a magenta guide on layer EEEBEND-GUIDE.
+    ///   2. Click near the crossing pipe in the profile — the command auto-detects
+    ///      the crossing pipe's invert and crown via PipeAlignmentIntersector.
+    ///   3. Choose duck direction (Down/Up).
+    ///   4. The command computes 4 bend points and modifies the pressure network.
     ///
     /// Duck geometry (slope 1H : 10V, leg = 11.6 ft):
     ///   Upper-Left  = crossing_sta − 10 ft,   original_elev
-    ///   Lower-Left  = crossing_sta − 10 + ΔH, original_elev − ΔV
-    ///   Lower-Right = crossing_sta + 10 − ΔH, original_elev − ΔV
+    ///   Lower-Left  = crossing_sta − 10 + ΔH, duck_elev
+    ///   Lower-Right = crossing_sta + 10 − ΔH, duck_elev
     ///   Upper-Right = crossing_sta + 10 ft,   original_elev
     /// </summary>
     public class EeeBendCommand
     {
         // ── Duck geometry constants ────────────────────────────────────────────
-        // The user specified "1 ft H : 10 ft V" as PROFILE VIEW units (10x vertical exag).
-        // Real-world slope is 1H:1V.  DiagLegFt is also in profile-view units.
-        private const double HorizOffset   = 10.0;   // ft from crossing centre to upper bends
-        private const double DiagLegFt     = 11.6;   // diagonal leg length in profile-view units
-        private const double SlopeH        = 1.0;    // horizontal slope component (profile view)
-        private const double SlopeV        = 10.0;   // vertical slope component  (profile view)
-        private const double ProfileVExag  = 10.0;   // profile view vertical exaggeration
-        private static readonly double SlopeMag  = Math.Sqrt(SlopeH * SlopeH + SlopeV * SlopeV);
-        private static readonly double LegDeltaH = DiagLegFt * SlopeH / SlopeMag;               // ≈ 1.154 ft real
-        private static readonly double LegDeltaV = DiagLegFt * SlopeV / SlopeMag / ProfileVExag; // ≈ 1.154 ft real
-
-        private const string GuideLayer = "EEEBEND-GUIDE";
+        private const double HorizOffset = 10.0;   // ft from crossing centre to inner bends
 
         // ────────────────────────────────────────────────────────────────────────
         [CommandMethod("EEEBEND", CommandFlags.Modal)]
@@ -79,13 +69,11 @@ namespace AdvancedLandDevTools.Commands
                     if (ent is CivilDB.PressurePipe)
                     {
                         pipeId = per.ObjectId;
-                        // Try to find which profile view the user was clicking in
                         var pv2 = FindProfileViewAtPoint(pickPt, tx, db);
                         if (pv2 != null) { profileViewId = pv2.ObjectId; alignId = pv2.AlignmentId; }
                     }
                     else
                     {
-                        // Clicked the profile view background, a label, or a fitting
                         var pv = ent as CivilDB.ProfileView
                                ?? FindProfileViewAtPoint(pickPt, tx, db);
                         if (pv != null)
@@ -111,14 +99,10 @@ namespace AdvancedLandDevTools.Commands
                     return;
                 }
 
-                // ── Step 2: Click the crossing pipe in the profile ───────────────
-                // Both the STATION and the ELEVATION of the crossing are read from
-                // this single click — no numeric input needed.
-                // For DOWN: click the invert (bottom of ellipse) of the crossing pipe.
-                // For UP  : click the crown (top of ellipse) of the crossing pipe.
-                ed.WriteMessage("\n  Click on the crossing pipe in the profile to set its location and elevation:");
+                // ── Step 2: Click near the crossing pipe ─────────────────────────
+                ed.WriteMessage("\n  Click near the crossing pipe in the profile view:");
                 var ppoPt = new PromptPointOptions(
-                    "\n  Click crossing pipe: ");
+                    "\n  Click crossing location: ");
                 ppoPt.AllowNone = false;
                 var ppr = ed.GetPoint(ppoPt);
                 if (ppr.Status != PromptStatus.OK) { ed.WriteMessage("\n  Cancelled.\n"); return; }
@@ -134,21 +118,19 @@ namespace AdvancedLandDevTools.Commands
                 if (kwdRes.Status == PromptStatus.Cancel) { ed.WriteMessage("\n  Cancelled.\n"); return; }
                 bool goUp = kwdRes.Status == PromptStatus.OK && kwdRes.StringResult == "Up";
 
-                // ── Step 3: Resolve geometry ─────────────────────────────────────
-                double crossingSta     = 0;
-                double crossingInvElev = 0;   // elevation from the click on the crossing pipe
-                double pipeElevAtCross = 0;
-                Point3d pipeOrigStart  = Point3d.Origin;
-                Point3d pipeOrigEnd    = Point3d.Origin;
+                // ── Step 3: Auto-detect crossing pipe and resolve geometry ───────
+                double crossingSta       = 0;
+                double crossingInvElev   = 0;
+                double crossingCrownElev = 0;
+                double pipeElevAtCross   = 0;
+                Point3d pipeOrigStart    = Point3d.Origin;
+                Point3d pipeOrigEnd      = Point3d.Origin;
+                string crossingPipeName  = "";
 
-                Point3d ptUpperLeft  = Point3d.Origin;
-                Point3d ptLowerLeft  = Point3d.Origin;
-                Point3d ptLowerRight = Point3d.Origin;
-                Point3d ptUpperRight = Point3d.Origin;
                 double elevLow = 0;
-                double elevUL  = 0;  // centerline at Upper-Left  bend = original pipe grade at staUL
-                double elevUR  = 0;  // centerline at Upper-Right bend = original pipe grade at staUR
-                double pipeRadius = 0;  // OuterDiameter / 2 of the selected pressure pipe
+                double elevUL  = 0;
+                double elevUR  = 0;
+                double pipeRadius = 0;
                 double staUL = 0, staLL = 0, staLR = 0, staUR = 0;
 
                 using (var tx = db.TransactionManager.StartTransaction())
@@ -158,8 +140,9 @@ namespace AdvancedLandDevTools.Commands
 
                     pipeOrigStart = pipe.StartPoint;
                     pipeOrigEnd   = pipe.EndPoint;
+                    pipeRadius    = pipe.OuterDiameter / 2.0;
 
-                    // Find the profile view that contains the crossing click
+                    // Find the profile view
                     CivilDB.ProfileView? pv = null;
                     if (!profileViewId.IsNull)
                         pv = tx.GetObject(profileViewId, OpenMode.ForRead) as CivilDB.ProfileView;
@@ -185,10 +168,11 @@ namespace AdvancedLandDevTools.Commands
                         return;
                     }
 
-                    // Extract crossing station AND elevation from the user's click
+                    // Get clicked station from profile view
+                    double clickedSta = 0, clickedElev = 0;
                     if (!pv.FindStationAndElevationAtXY(
                             crossingPickPt.X, crossingPickPt.Y,
-                            ref crossingSta, ref crossingInvElev))
+                            ref clickedSta, ref clickedElev))
                     {
                         ed.WriteMessage(
                             "\n  Crossing click is outside the profile view bounds.\n");
@@ -196,68 +180,128 @@ namespace AdvancedLandDevTools.Commands
                         return;
                     }
 
-                    ed.WriteMessage($"\n  Crossing → Station {crossingSta:F2}, Elevation {crossingInvElev:F3} ft");
+                    ed.WriteMessage($"\n  Clicked station: {clickedSta:F2}");
 
-                    // Use alignment.StationOffset on pipe endpoints to get their alignment stations
-                    // (more reliable than pipe.StartStation which may be pipe-local)
+                    // ── Auto-find crossing pipe via PipeAlignmentIntersector ──────
+                    ObjectId pressureNetId = pipe.NetworkId;
+                    PipeAlignmentCrossing? bestCrossing = null;
+                    double bestStaDist = double.MaxValue;
+
+                    var bt2 = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                    var ms2 = tx.GetObject(
+                             bt2![BlockTableRecord.ModelSpace], OpenMode.ForRead)
+                             as BlockTableRecord;
+
+                    foreach (ObjectId id in ms2!)
+                    {
+                        try
+                        {
+                            var obj = tx.GetObject(id, OpenMode.ForRead);
+
+                            bool isPipe = false;
+                            ObjectId objNetId = ObjectId.Null;
+
+                            if (obj is CivilDB.Pipe gp)
+                            {
+                                isPipe   = true;
+                                objNetId = gp.NetworkId;
+                            }
+                            else if (obj is CivilDB.PressurePipe pp)
+                            {
+                                isPipe   = true;
+                                objNetId = pp.NetworkId;
+                                // Skip pipes in the same pressure network
+                                if (!pressureNetId.IsNull && objNetId == pressureNetId)
+                                    continue;
+                            }
+
+                            if (!isPipe) continue;
+
+                            foreach (var c in PipeAlignmentIntersector.FindCrossings(id, aln, tx))
+                            {
+                                double dist = Math.Abs(c.Station - clickedSta);
+                                if (dist < bestStaDist)
+                                {
+                                    bestStaDist = dist;
+                                    bestCrossing = c;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (bestCrossing == null)
+                    {
+                        ed.WriteMessage(
+                            "\n  No crossing pipe found near the clicked location." +
+                            "\n  Make sure a gravity or pressure pipe crosses the alignment.\n");
+                        tx.Abort();
+                        return;
+                    }
+
+                    crossingSta       = bestCrossing.Station;
+                    crossingInvElev   = bestCrossing.InvertElevation;
+                    crossingCrownElev = bestCrossing.CrownElevation;
+                    crossingPipeName  = bestCrossing.PipeName;
+
+                    ed.WriteMessage($"\n  Crossing pipe: {crossingPipeName}");
+                    ed.WriteMessage($"\n  Crossing → Sta {crossingSta:F2}, Inv {crossingInvElev:F3}, Crown {crossingCrownElev:F3} ft");
+
+                    // Pipe stations via alignment
                     double sta1 = 0, off1 = 0, sta2 = 0, off2 = 0;
                     aln.StationOffset(pipeOrigStart.X, pipeOrigStart.Y, ref sta1, ref off1);
                     aln.StationOffset(pipeOrigEnd.X,   pipeOrigEnd.Y,   ref sta2, ref off2);
 
-                    double minSta = Math.Min(sta1, sta2);
-                    double maxSta = Math.Max(sta1, sta2);
-
-                    if (crossingSta < minSta - 1.0 || crossingSta > maxSta + 1.0)
+                    if (crossingSta < Math.Min(sta1, sta2) - 1.0 ||
+                        crossingSta > Math.Max(sta1, sta2) + 1.0)
                         ed.WriteMessage(
-                            $"\n  WARNING: Crossing station {crossingSta:F2} is outside this pipe's range" +
-                            $" [{minSta:F2}–{maxSta:F2}]. Proceeding anyway.");
+                            $"\n  WARNING: Crossing station {crossingSta:F2} is outside pipe range" +
+                            $" [{Math.Min(sta1, sta2):F2}–{Math.Max(sta1, sta2):F2}].");
 
-                    // Interpolate pipe CENTERLINE elevation at crossing station (for display only)
+                    // Pressure pipe CL elevation at crossing station
                     double t = Math.Abs(sta2 - sta1) < 0.001
                                ? 0.5
                                : (crossingSta - sta1) / (sta2 - sta1);
                     t = Math.Max(0.0, Math.Min(1.0, t));
                     pipeElevAtCross = pipeOrigStart.Z + t * (pipeOrigEnd.Z - pipeOrigStart.Z);
 
-                    // Station values of the 4 bend points:
-                    //   Bottom bends (LL, LR) sit at exactly ±HorizOffset from crossing.
-                    //   Upper bends (UL, UR) are LegDeltaH OUTSIDE the bottom bends —
-                    //   the pipe descends from original grade INTO the ±10 ft bottom zone.
-                    staLL = crossingSta - HorizOffset;
-                    staLR = crossingSta + HorizOffset;
-                    staUL = staLL - LegDeltaH;   // outside (lower station)
-                    staUR = staLR + LegDeltaH;   // outside (higher station)
-
-                    pipeRadius = pipe.OuterDiameter / 2.0;
-
+                    // ── Compute duck elevation ───────────────────────────────────
                     if (goUp)
                     {
                         // UP duck — pressure pipe arcs OVER the crossing.
-                        // User clicks the crown (top) of the crossing pipe.
-                        //
-                        // PVIs are inserted at the pressure pipe CENTERLINE, but clearance
-                        // is measured from the pressure pipe INVERT (centerline − pipeRadius).
-                        // Required: pressure_invert ≥ crossingCrown + 1.0
-                        //   → centerline ≥ crossingCrown + 1.0 + pipeRadius
-                        elevLow = crossingInvElev + 1.0 + pipeRadius;  // "elevLow" = inner (high) bends
-                        elevUL  = elevLow - LegDeltaV;  // outer-left  transitions DOWN from high
-                        elevUR  = elevLow - LegDeltaV;  // outer-right transitions DOWN from high
+                        // Clearance = 1.0 ft above crossing crown + full pressure pipe
+                        // outer diameter so that the pipe body fully clears.
+                        // CL = crossingCrown + 1.0 + pipeOuterDiameter
+                        elevLow = crossingCrownElev + 1.0 + pipe.OuterDiameter;
                     }
                     else
                     {
                         // DOWN duck — pressure pipe ducks UNDER the crossing.
-                        // User clicks the invert (bottom) of the crossing pipe.
-                        // Required clearance of 1.0 ft below crossing invert (centerline-based).
-                        elevLow = crossingInvElev - 1.0;
-                        elevUL  = elevLow + LegDeltaV;  // outer-left  transitions UP from low
-                        elevUR  = elevLow + LegDeltaV;  // outer-right transitions UP from low
+                        // Pressure pipe crown (CL + pipeRadius) must clear
+                        // crossing invert by 1.0 ft.
+                        // CL = crossingInvert - 1.0 - pipeRadius
+                        elevLow = crossingInvElev - 1.0 - pipeRadius;
                     }
 
-                    // Convert to 3D world points for the visual guide
-                    ptUpperLeft  = StationElevToPoint3d(aln, staUL, elevUL);   // outer-left
-                    ptLowerLeft  = StationElevToPoint3d(aln, staLL, elevLow);  // inner-left
-                    ptLowerRight = StationElevToPoint3d(aln, staLR, elevLow);  // inner-right
-                    ptUpperRight = StationElevToPoint3d(aln, staUR, elevUR);   // outer-right
+                    // ── Compute duck stations (45 degree intersection) ───────────
+                    staLL = crossingSta - HorizOffset;
+                    staLR = crossingSta + HorizOffset;
+
+                    double m_pipe = Math.Abs(sta2 - sta1) < 0.001 ? 0 : (pipeOrigEnd.Z - pipeOrigStart.Z) / (sta2 - sta1);
+                    double deltaZ = Math.Abs(elevLow - pipeElevAtCross);
+                    double m_pipe_left  = goUp ? -m_pipe : m_pipe;
+                    double m_pipe_right = goUp ? m_pipe : -m_pipe;
+
+                    double L = (deltaZ + HorizOffset) / (1.0 + m_pipe_left);
+                    double R = (deltaZ + HorizOffset) / (1.0 + m_pipe_right);
+
+                    staUL = crossingSta - L;
+                    staUR = crossingSta + R;
+
+                    // Upper bends at original pipe grade
+                    elevUL = pipeElevAtCross + m_pipe * (staUL - crossingSta);
+                    elevUR = pipeElevAtCross + m_pipe * (staUR - crossingSta);
+
 
                     tx.Abort();
                 }
@@ -265,32 +309,31 @@ namespace AdvancedLandDevTools.Commands
                 // ── Step 4: Report geometry ──────────────────────────────────────
                 string duckDir   = goUp ? "UP (over)" : "DOWN (under)";
                 string innerLabel = goUp ? "Top C/L  " : "Bottom C/L";
-                // Clearance measured at the inner span:
-                //   DOWN: crossing_invert − elevLow  = 1.0 ft (centerline to invert of crossing)
-                //   UP  : (elevLow − pipeRadius) − crossingInvElev = 1.0 ft (invert of press − crossing crown)
                 double invertClearance = goUp
-                    ? (elevLow - pipeRadius) - crossingInvElev
-                    : crossingInvElev - elevLow;
+                    ? (elevLow - pipeRadius) - crossingCrownElev
+                    : crossingInvElev - (elevLow + pipeRadius);
 
                 ed.WriteMessage("\n");
                 ed.WriteMessage("\n  ╔══════════════════════════════════════════════════════════╗");
                 ed.WriteMessage($"\n  ║          EEE BEND — DUCK {duckDir,-6} GEOMETRY              ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Pipe C/L at crossing  : {pipeElevAtCross,8:F3} ft                  ║");
-                ed.WriteMessage($"\n  ║  Crossing click elev   : {crossingInvElev,8:F3} ft                  ║");
-                ed.WriteMessage($"\n  ║  {innerLabel} (±1.0 ft)  : {elevLow,8:F3} ft (clr {invertClearance:F2} ft)  ║");
+                ed.WriteMessage($"\n  ║  Crossing pipe        : {crossingPipeName,-30}      ║");
+                ed.WriteMessage($"\n  ║  Crossing invert      : {crossingInvElev,8:F3} ft                  ║");
+                ed.WriteMessage($"\n  ║  Crossing crown       : {crossingCrownElev,8:F3} ft                  ║");
+                ed.WriteMessage($"\n  ║  Pipe C/L at crossing : {pipeElevAtCross,8:F3} ft                  ║");
+                ed.WriteMessage($"\n  ║  {innerLabel} (duck)    : {elevLow,8:F3} ft (clr {invertClearance:F2} ft)  ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
                 ed.WriteMessage($"\n  ║  Outer-Left  Sta {staUL,10:F2} | C/L {elevUL,7:F3} ft            ║");
                 ed.WriteMessage($"\n  ║  Inner-Left  Sta {staLL,10:F2} | C/L {elevLow,7:F3} ft            ║");
                 ed.WriteMessage($"\n  ║  Inner-Right Sta {staLR,10:F2} | C/L {elevLow,7:F3} ft            ║");
                 ed.WriteMessage($"\n  ║  Outer-Right Sta {staUR,10:F2} | C/L {elevUR,7:F3} ft            ║");
                 ed.WriteMessage("\n  ╠══════════════════════════════════════════════════════════╣");
-                ed.WriteMessage($"\n  ║  Inner span ±{HorizOffset:F0} ft  |  Leg ΔH {LegDeltaH:F3} ft               ║");
+                ed.WriteMessage($"\n  ║  Inner span ±{HorizOffset:F0} ft  |  Bend angle 45° (1H:1V)         ║");
                 ed.WriteMessage("\n  ╚══════════════════════════════════════════════════════════╝");
 
                 if (invertClearance < 0.9)
                     ed.WriteMessage(
-                        $"\n  WARNING: Clearance {invertClearance:F3} ft is less than expected — check your click location.");
+                        $"\n  WARNING: Clearance {invertClearance:F3} ft is less than expected — check geometry.");
 
                 // ── Step 5: Modify pressure network ─────────────────────────────
                 bool networkModified = TryApplyDuck(
@@ -299,13 +342,9 @@ namespace AdvancedLandDevTools.Commands
                     elevUL, elevUR, elevLow,
                     ed);
 
-                // ── Step 6: Draw visual guide (always) ──────────────────────────
-                DrawDuckGuide(db, pipeOrigStart, ptUpperLeft, ptLowerLeft,
-                              ptLowerRight, ptUpperRight, pipeOrigEnd, ed);
-
                 ed.WriteMessage(networkModified
-                    ? "\n  Pressure network modified. Duck guide drawn on layer 'EEEBEND-GUIDE'."
-                    : "\n  Guide drawn on layer 'EEEBEND-GUIDE' — apply geometry manually to the network.");
+                    ? "\n  ✓ Pressure network modified — 4 vertical bends inserted."
+                    : "\n  ⚠ Network auto-edit skipped — apply geometry manually.");
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════\n");
             }
             catch (System.Exception ex)
@@ -376,11 +415,11 @@ namespace AdvancedLandDevTools.Commands
                         return false;
                     }
 
-                    // Upper bends at original pipe grade; bottom bends at required clearance depth.
+                    // Upper bends at original pipe grade; inner bends at duck depth/height.
                     // Civil 3D computes the diagonal grade automatically from these PVI elevations.
                     targetRun.AddVerticalBendByPVI(staUL, elevUL);   // Upper-Left  – original grade
-                    targetRun.AddVerticalBendByPVI(staLL, elevLow);  // Lower-Left  – bottom depth
-                    targetRun.AddVerticalBendByPVI(staLR, elevLow);  // Lower-Right – bottom depth
+                    targetRun.AddVerticalBendByPVI(staLL, elevLow);  // Inner-Left  – duck depth
+                    targetRun.AddVerticalBendByPVI(staLR, elevLow);  // Inner-Right – duck depth
                     targetRun.AddVerticalBendByPVI(staUR, elevUR);   // Upper-Right – original grade
 
                     tx.Commit();
@@ -396,78 +435,8 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ════════════════════════════════════════════════════════════════════════
-        //  VISUAL GUIDE — magenta 3D polyline along the full duck path
-        // ════════════════════════════════════════════════════════════════════════
-
-        private static void DrawDuckGuide(
-            Database db,
-            Point3d pipeOrigStart,
-            Point3d ptUpperLeft, Point3d ptLowerLeft,
-            Point3d ptLowerRight, Point3d ptUpperRight,
-            Point3d pipeOrigEnd,
-            Editor  ed)
-        {
-            try
-            {
-                using (var tx = db.TransactionManager.StartTransaction())
-                {
-                    // Ensure guide layer exists (magenta)
-                    var lt = tx.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
-                    if (lt != null && !lt.Has(GuideLayer))
-                    {
-                        lt.UpgradeOpen();
-                        var lr = new LayerTableRecord
-                        {
-                            Name  = GuideLayer,
-                            Color = Color.FromColorIndex(ColorMethod.ByAci, 6)
-                        };
-                        lt.Add(lr);
-                        tx.AddNewlyCreatedDBObject(lr, true);
-                    }
-
-                    var pline = new Polyline3d();
-                    pline.Layer = GuideLayer;
-
-                    var bt = tx.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-                    var ms = tx.GetObject(
-                             bt![BlockTableRecord.ModelSpace], OpenMode.ForWrite)
-                             as BlockTableRecord;
-                    ms!.AppendEntity(pline);
-                    tx.AddNewlyCreatedDBObject(pline, true);
-
-                    foreach (var pt in new[]
-                        { pipeOrigStart, ptUpperLeft, ptLowerLeft,
-                          ptLowerRight,  ptUpperRight, pipeOrigEnd })
-                    {
-                        var v = new PolylineVertex3d(pt);
-                        pline.AppendVertex(v);
-                        tx.AddNewlyCreatedDBObject(v, true);
-                    }
-
-                    tx.Commit();
-                }
-            }
-            catch (System.Exception ex)
-            {
-                ed.WriteMessage($"\n  Guide draw failed: {ex.Message}");
-            }
-        }
-
-        // ════════════════════════════════════════════════════════════════════════
         //  HELPERS
         // ════════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Converts alignment station + elevation to a 3D world point at offset=0.
-        /// Uses Alignment.PointLocation (Civil 3D confirmed API).
-        /// </summary>
-        private static Point3d StationElevToPoint3d(
-            CivilDB.Alignment aln, double station, double elevation)
-        {
-            double x = 0, y = 0;
-            aln.PointLocation(station, 0.0, ref x, ref y);
-            return new Point3d(x, y, elevation);
-        }
 
         /// <summary>
         /// Finds the pressure pipe closest (by elevation) to the pick point within

@@ -367,7 +367,7 @@ namespace AdvancedLandDevTools.Ribbon
                 Size             = RibbonItemSize.Standard,
                 Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildChangeElevationIcon(32),
-                Image            = BuildLateralBeastIcon(16)
+                Image            = BuildChangeElevationIcon(16)
             };
             // ── Pipe Sizing button ────────────────────────────────────────────
             var btnPipeSizing = new RibbonButton
@@ -1687,7 +1687,10 @@ namespace AdvancedLandDevTools.Ribbon
         }
 
         // ═════════════════════════════════════════════════════════════════════
-        //  Change Elevation icon — pipe with bidirectional level arrows
+        //  Change Elevation icon — horizontal pipe with up/down arrows
+        //  Concept: steel-grey pipe running horizontally across the center;
+        //  a bold green ↑ arrow on the left and a bold orange ↓ arrow on the
+        //  right communicate that the user can shift either end's elevation.
         // ═════════════════════════════════════════════════════════════════════
         private static ImageSource BuildChangeElevationIcon(int size)
         {
@@ -1697,71 +1700,85 @@ namespace AdvancedLandDevTools.Ribbon
                 => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
 
-            // Dark blue-gray background
-            Add(new Rectangle { Width = size, Height = size, Fill = C("#0d1520"),
+            // ── Background — deep steel-blue ─────────────────────────────────
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0a1520"),
                 RadiusX = s * 3, RadiusY = s * 3 });
 
-            // Pipe body (sloped from upper-left to lower-right)
-            Add(new Path
+            // ── Horizontal pipe body (grey, centred vertically) ──────────────
+            // Pipe shadow
+            Add(new Rectangle
             {
-                Data = Geometry.Parse(
-                    $"M {s*3},{s*12} L {s*29},{s*20} L {s*29},{s*24} L {s*3},{s*16} Z"),
-                Fill = C("#8B7355"),
-                Stroke = C("#AA9060"), StrokeThickness = s * 1
+                Width = s * 28, Height = s * 7,
+                Fill = C("#1a2a3a"),
+                RadiusX = s * 2, RadiusY = s * 2
             });
+            Canvas.SetLeft(canvas.Children[^1], s * 2);
+            Canvas.SetTop(canvas.Children[^1],  s * 13.5);
 
-            // Pipe highlight
-            Add(new Path
+            // Pipe body
+            Add(new Rectangle
             {
-                Data = Geometry.Parse(
-                    $"M {s*3},{s*12} L {s*29},{s*20} L {s*29},{s*21} L {s*3},{s*13} Z"),
-                Fill = new SolidColorBrush(Color.FromArgb(80, 255, 220, 150))
+                Width = s * 28, Height = s * 6,
+                Fill = C("#607D8B"),
+                Stroke = C("#90A4AE"), StrokeThickness = s * 0.8,
+                RadiusX = s * 2, RadiusY = s * 2
             });
+            Canvas.SetLeft(canvas.Children[^1], s * 2);
+            Canvas.SetTop(canvas.Children[^1],  s * 13);
 
-            // Left elevation marker (horizontal dashed line)
-            Add(new Line { X1 = s*1, Y1 = s*14, X2 = s*10, Y2 = s*14,
-                Stroke = C("#44BBFF"), StrokeThickness = s * 0.8,
-                StrokeDashArray = new DoubleCollection(new[] { 2.0, 1.5 }) });
+            // Pipe highlight (top sheen)
+            Add(new Rectangle
+            {
+                Width = s * 26, Height = s * 1.5,
+                Fill = new SolidColorBrush(Color.FromArgb(70, 200, 230, 255)),
+                RadiusX = s * 1, RadiusY = s * 1
+            });
+            Canvas.SetLeft(canvas.Children[^1], s * 3);
+            Canvas.SetTop(canvas.Children[^1],  s * 13.4);
 
-            // Right elevation marker (horizontal dashed line)
-            Add(new Line { X1 = s*22, Y1 = s*22, X2 = s*31, Y2 = s*22,
-                Stroke = C("#FF6644"), StrokeThickness = s * 0.8,
-                StrokeDashArray = new DoubleCollection(new[] { 2.0, 1.5 }) });
-
-            // Vertical arrow showing level change (center of pipe)
-            Add(new Line { X1 = s*16, Y1 = s*14, X2 = s*16, Y2 = s*22,
-                Stroke = C("#44DD44"), StrokeThickness = s * 1.5 });
-            // Up arrowhead
+            // ── UP arrow (green) — left side ──────────────────────────────────
+            // Shaft
+            Add(new Line
+            {
+                X1 = s * 8, Y1 = s * 12,
+                X2 = s * 8, Y2 = s * 4,
+                Stroke = C("#00E676"), StrokeThickness = s * 2.2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap   = PenLineCap.Flat
+            });
+            // Arrowhead up
             Add(new Polygon
             {
                 Points = new System.Windows.Media.PointCollection(new[]
                 {
-                    new System.Windows.Point(s*16, s*12),
-                    new System.Windows.Point(s*14, s*15),
-                    new System.Windows.Point(s*18, s*15)
+                    new System.Windows.Point(s * 8,   s * 1.5),
+                    new System.Windows.Point(s * 4.5, s * 5.5),
+                    new System.Windows.Point(s * 11.5,s * 5.5)
                 }),
-                Fill = C("#44DD44")
+                Fill = C("#00E676")
             });
-            // Down arrowhead
+
+            // ── DOWN arrow (orange) — right side ─────────────────────────────
+            // Shaft
+            Add(new Line
+            {
+                X1 = s * 24, Y1 = s * 20,
+                X2 = s * 24, Y2 = s * 28,
+                Stroke = C("#FF7043"), StrokeThickness = s * 2.2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap   = PenLineCap.Flat
+            });
+            // Arrowhead down
             Add(new Polygon
             {
                 Points = new System.Windows.Media.PointCollection(new[]
                 {
-                    new System.Windows.Point(s*16, s*24),
-                    new System.Windows.Point(s*14, s*21),
-                    new System.Windows.Point(s*18, s*21)
+                    new System.Windows.Point(s * 24,   s * 30.5),
+                    new System.Windows.Point(s * 20.5, s * 26.5),
+                    new System.Windows.Point(s * 27.5, s * 26.5)
                 }),
-                Fill = C("#44DD44")
+                Fill = C("#FF7043")
             });
-
-            // "=" equals sign (level pipe concept)
-            var eqLabel = new System.Windows.Controls.TextBlock
-            {
-                Text = "=", Foreground = C("#44DD44"),
-                FontSize = s * 6, FontWeight = System.Windows.FontWeights.Bold
-            };
-            Canvas.SetLeft(eqLabel, s * 22); Canvas.SetTop(eqLabel, s * 4);
-            Add(eqLabel);
 
             return RenderToBitmap(canvas, size, size);
         }
