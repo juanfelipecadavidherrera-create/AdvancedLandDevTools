@@ -1,0 +1,34 @@
+<Window x:Class="AdvancedLandDevTools.UI.LayerSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Layer" SizeToContent="Height" Width="360"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AldtBackground}" 
+        FontFamily="Segoe UI"
+        FontSize="13"
+        ResizeMode="NoResize">
+    
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="FluentDarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Select or Type Layer for New Laterals:" Style="{StaticResource FluentFieldLabel}" Margin="0,0,0,5"/>
+        <ComboBox Grid.Row="1" Name="cmbLayers" IsEditable="True" Style="{StaticResource FluentComboBox}" Margin="0,0,0,15"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Width="80" IsCancel="True" Style="{StaticResource FluentSecondaryBtn}" Click="BtnCancel_Click"/>
+            <Button Content="OK" Width="80" IsDefault="True" Style="{StaticResource FluentPrimaryBtn}" Click="BtnOk_Click" Margin="10,0,0,0"/>
+        </StackPanel>
+    </Grid>
+</Window>

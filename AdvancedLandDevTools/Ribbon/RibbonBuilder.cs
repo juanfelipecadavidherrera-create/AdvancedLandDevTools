@@ -144,15 +144,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "LLABELGEN ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildLLabelGenIcon(32),
                 Image            = BuildLLabelGenIcon(16)
             };
-            pvSource.Items.Add(btnLLabelGen);
-
-            pvSource.Items.Add(new RibbonSeparator());
-
             // ── Mark Lines button ───────────────────────────────────────────
             var btnMarkLines = new RibbonButton
             {
@@ -220,15 +216,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "PROFOFF ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildProfOffIcon(32),
                 Image            = BuildProfOffIcon(16)
             };
-            pvSource.Items.Add(btnProfOff);
-
-            pvSource.Items.Add(new RibbonSeparator());
-
             // ── PV Style Override button ──────────────────────────────────────
             var btnPvStyle = new RibbonButton
             {
@@ -246,15 +238,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "PVSTYLE ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildPvStyleIcon(32),
                 Image            = BuildPvStyleIcon(16)
             };
-            pvSource.Items.Add(btnPvStyle);
-
-            pvSource.Items.Add(new RibbonSeparator());
-
             // ── ChopChop button ───────────────────────────────────────────────
             var btnChopChop = new RibbonButton
             {
@@ -272,12 +260,21 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "CHOPCHOP ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildChopChopIcon(32),
                 Image            = BuildChopChopIcon(16)
             };
-            pvSource.Items.Add(btnChopChop);
+
+            var pvRow = new RibbonRowPanel();
+            pvRow.Items.Add(btnLLabelGen);
+            pvRow.Items.Add(new RibbonRowBreak());
+            pvRow.Items.Add(btnProfOff);
+            pvRow.Items.Add(new RibbonRowBreak());
+            pvRow.Items.Add(btnPvStyle);
+            pvRow.Items.Add(new RibbonRowBreak());
+            pvRow.Items.Add(btnChopChop);
+            pvSource.Items.Add(pvRow);
 
             tab.Panels.Add(new RibbonPanel { Source = pvSource });
 
@@ -365,17 +362,13 @@ namespace AdvancedLandDevTools.Ribbon
                     "both ends, making the pipe level.\n\nCommand:  CHANGEELEVATION"),
                 CommandHandler   = new RibbonCommandHandler("CHANGEELEVATION "),
                 CommandParameter = "CHANGEELEVATION ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildChangeElevationIcon(32),
                 Image            = BuildChangeElevationIcon(16)
             };
-            piSource.Items.Add(btnChangeElev);
-
-            piSource.Items.Add(new RibbonSeparator());
-
             // ── Pipe Sizing button ────────────────────────────────────────────
             var btnPipeSizing = new RibbonButton
             {
@@ -418,17 +411,13 @@ namespace AdvancedLandDevTools.Ribbon
                     "then 11.6 ft diagonals at 1H:10V slope.\n\nCommand: EEEBEND"),
                 CommandHandler   = new RibbonCommandHandler("EEEBEND "),
                 CommandParameter = "EEEBEND ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildEeeBendIcon(32),
                 Image            = BuildEeeBendIcon(16)
             };
-            piSource.Items.Add(btnEeeBend);
-
-            piSource.Items.Add(new RibbonSeparator());
-
             // ── Cover Adjust button ───────────────────────────────────────────
             var btnCoverAdjust = new RibbonButton
             {
@@ -447,16 +436,31 @@ namespace AdvancedLandDevTools.Ribbon
                     "sit at the same height.\n\nCommand:  COVERADJUST"),
                 CommandHandler   = new RibbonCommandHandler("COVERADJUST "),
                 CommandParameter = "COVERADJUST ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildCoverAdjustIcon(32),
                 Image            = BuildCoverAdjustIcon(16)
             };
-            piSource.Items.Add(btnCoverAdjust);
-
-            piSource.Items.Add(new RibbonSeparator());
+            // ── Lateral Beast button ───────────────────────────────────────────
+            var btnLateralBeast = new RibbonButton
+            {
+                Id               = "ALDT_BTN_LATERALBEAST",
+                Name             = "Lateral Beast",
+                Text             = "Lateral\nBeast",
+                Description      = "Draws a lateral pipe segment in a profile view from a selected crossing.",
+                ToolTip          = BuildToolTip(
+                    "Lateral Beast",
+                    "Select profile views, pick a network, and input target layer, direction, angle, and gap to draw laterals.\n\nCommand:  LATERALBEAST"),
+                CommandHandler   = new RibbonCommandHandler("LATERALBEAST "),
+                CommandParameter = "LATERALBEAST ",
+                ShowText         = false,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
+                Image            = BuildChangeElevationIcon(16) // Reusing icon for now
+            };
 
             // ── Pressure Count button ─────────────────────────────────────────
             var btnPressCount = new RibbonButton
@@ -474,17 +478,13 @@ namespace AdvancedLandDevTools.Ribbon
                     "fitting location and groups them into a single AutoCAD Group.\n\nCommand: PRESSCOUNT"),
                 CommandHandler   = new RibbonCommandHandler("PRESSCOUNT "),
                 CommandParameter = "PRESSCOUNT ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildPressCountIcon(32),
                 Image            = BuildPressCountIcon(16)
             };
-            piSource.Items.Add(btnPressCount);
-
-            piSource.Items.Add(new RibbonSeparator());
-
             // ── RR Network Check button ─────────────────────────────────────────
             var btnRrNet = new RibbonButton
             {
@@ -500,17 +500,13 @@ namespace AdvancedLandDevTools.Ribbon
                     "reports pass/fail results.\n\nCommand:  RRNETWORKCHECK"),
                 CommandHandler   = new RibbonCommandHandler("RRNETWORKCHECK "),
                 CommandParameter = "RRNETWORKCHECK ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildRrNetworkCheckIcon(32),
                 Image            = BuildRrNetworkCheckIcon(16)
             };
-            piSource.Items.Add(btnRrNet);
-
-            piSource.Items.Add(new RibbonSeparator());
-
             // ── Lateral Manager button ─────────────────────────────────────────
             var btnLatMan = new RibbonButton
             {
@@ -525,14 +521,33 @@ namespace AdvancedLandDevTools.Ribbon
                     "into target profile views (e.g. water main).\n\nCommand:  LATMANAGER"),
                 CommandHandler   = new RibbonCommandHandler("LATMANAGER "),
                 CommandParameter = "LATMANAGER ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildLatManIcon(32),
                 Image            = BuildLatManIcon(16)
             };
-            piSource.Items.Add(btnLatMan);
+
+            piSource.Items.Add(new RibbonSeparator());
+            var piRow1 = new RibbonRowPanel();
+            piRow1.Items.Add(btnChangeElev);
+            piRow1.Items.Add(new RibbonRowBreak());
+            piRow1.Items.Add(btnEeeBend);
+            piRow1.Items.Add(new RibbonRowBreak());
+            piRow1.Items.Add(btnCoverAdjust);
+            piSource.Items.Add(piRow1);
+
+            piSource.Items.Add(new RibbonSeparator());
+            var piRow2 = new RibbonRowPanel();
+            piRow2.Items.Add(btnLateralBeast);
+            piRow2.Items.Add(new RibbonRowBreak());
+            piRow2.Items.Add(btnPressCount);
+            piRow2.Items.Add(new RibbonRowBreak());
+            piRow2.Items.Add(btnRrNet);
+            piRow2.Items.Add(new RibbonRowBreak());
+            piRow2.Items.Add(btnLatMan);
+            piSource.Items.Add(piRow2);
 
             tab.Panels.Add(new RibbonPanel { Source = piSource });
 
@@ -561,10 +576,10 @@ namespace AdvancedLandDevTools.Ribbon
                     "and slope.\n\nCommand: ELEVSLOPE"),
                 CommandHandler   = new RibbonCommandHandler("ELEVSLOPE "),
                 CommandParameter = "ELEVSLOPE ",
-                ShowText         = true,
+                ShowText         = false,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildElevSlopeIcon(32),
                 Image            = BuildElevSlopeIcon(16)
             };
@@ -700,15 +715,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "FLOODZONE ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildFloodZoneIcon(32),
                 Image            = BuildFloodZoneIcon(16)
             };
-            fzSource.Items.Add(btnFloodZone);
-
-            fzSource.Items.Add(new RibbonSeparator());
-
             // ── County Flood Criteria button ────────────────────────────────
             var btnFloodCriteria = new RibbonButton
             {
@@ -726,15 +737,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "FLOODCRITERIA ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildFloodCriteriaIcon(32),
                 Image            = BuildFloodCriteriaIcon(16)
             };
-            fzSource.Items.Add(btnFloodCriteria);
-
-            fzSource.Items.Add(new RibbonSeparator());
-
             // ── Section Lookup (TTRRSS) button ────────────────────────────
             var btnSectionLookup = new RibbonButton
             {
@@ -752,15 +759,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "SECTIONLOOKUP ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildSectionLookupIcon(32),
                 Image            = BuildSectionLookupIcon(16)
             };
-            fzSource.Items.Add(btnSectionLookup);
-
-            fzSource.Items.Add(new RibbonSeparator());
-
             // ── Water Table — Avg May button ─────────────────────────────
             var btnGwMay = new RibbonButton
             {
@@ -779,15 +782,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "GWMAY ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildGroundwaterIcon(32),
                 Image            = BuildGroundwaterIcon(16)
             };
-            fzSource.Items.Add(btnGwMay);
-
-            fzSource.Items.Add(new RibbonSeparator());
-
             // ── Water Table — October 2040 button ────────────────────────
             var btnGwOct = new RibbonButton
             {
@@ -805,12 +804,27 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "GWOCT ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildGroundwaterIcon(32),
                 Image            = BuildGroundwaterIcon(16)
             };
-            fzSource.Items.Add(btnGwOct);
+
+            fzSource.Items.Add(new RibbonSeparator());
+            var fzRow1 = new RibbonRowPanel();
+            fzRow1.Items.Add(btnFloodZone);
+            fzRow1.Items.Add(new RibbonRowBreak());
+            fzRow1.Items.Add(btnFloodCriteria);
+            fzRow1.Items.Add(new RibbonRowBreak());
+            fzRow1.Items.Add(btnSectionLookup);
+            fzSource.Items.Add(fzRow1);
+
+            fzSource.Items.Add(new RibbonSeparator());
+            var fzRow2 = new RibbonRowPanel();
+            fzRow2.Items.Add(btnGwMay);
+            fzRow2.Items.Add(new RibbonRowBreak());
+            fzRow2.Items.Add(btnGwOct);
+            fzSource.Items.Add(fzRow2);
 
             tab.Panels.Add(new RibbonPanel { Source = fzSource });
 
@@ -909,15 +923,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "ALDTTOOLBAR ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildMiniToolbarIcon(32),
                 Image            = BuildMiniToolbarIcon(16)
             };
-            qaSource.Items.Add(btnMiniToolbar);
-
-
-
             // ── Area Manager button ────────────────────────────────────────
             var btnAreaManager = new RibbonButton
             {
@@ -935,13 +945,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "AREAMANAGER ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildAreaManagerIcon(32),
                 Image            = BuildAreaManagerIcon(16)
             };
-            qaSource.Items.Add(btnAreaManager);
-
             // ── EXF Trench Manager button ─────────────────────────────────
             var btnTrenchManager = new RibbonButton
             {
@@ -959,15 +967,11 @@ namespace AdvancedLandDevTools.Ribbon
                 CommandParameter = "EXF ",
                 ShowText         = true,
                 ShowImage        = true,
-                Size             = RibbonItemSize.Large,
-                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
                 LargeImage       = BuildTrenchManagerIcon(32),
                 Image            = BuildTrenchManagerIcon(16)
             };
-            qaSource.Items.Add(btnTrenchManager);
-
-            qaSource.Items.Add(new RibbonSeparator());
-
             // ── Help button ────────────────────────────────────────────────
             var btnHelp = new RibbonButton
             {
@@ -991,16 +995,22 @@ namespace AdvancedLandDevTools.Ribbon
             };
             qaSource.Items.Add(btnHelp);
 
+
+            qaSource.Items.Add(new RibbonSeparator());
+            var qaRow = new RibbonRowPanel();
+            qaRow.Items.Add(btnMiniToolbar);
+            qaRow.Items.Add(new RibbonRowBreak());
+            qaRow.Items.Add(btnAreaManager);
+            qaRow.Items.Add(new RibbonRowBreak());
+            qaRow.Items.Add(btnTrenchManager);
+            qaSource.Items.Add(qaRow);
+
             tab.Panels.Add(new RibbonPanel { Source = qaSource });
 
             // ═══════════════════════════════════════════════════════════════
             //  Panel — Sections
             // ═══════════════════════════════════════════════════════════════
-            var secSource = new RibbonPanelSource
-            {
-                Id    = "ALDT_PANEL_SECTIONS",
-                Title = "Sections"
-            };
+            
 
             var btnSecDraw = new RibbonButton
             {
@@ -1024,9 +1034,9 @@ namespace AdvancedLandDevTools.Ribbon
                 LargeImage       = BuildSectionDrawerIcon(32),
                 Image            = BuildSectionDrawerIcon(16)
             };
-            secSource.Items.Add(btnSecDraw);
+            
 
-            tab.Panels.Add(new RibbonPanel { Source = secSource });
+            
 
             // ═══════════════════════════════════════════════════════════════
             //  Panel — As-Builts
@@ -1034,7 +1044,7 @@ namespace AdvancedLandDevTools.Ribbon
             var abSource = new RibbonPanelSource
             {
                 Id    = "ALDT_PANEL_ASBUILTS",
-                Title = "As-Builts"
+                Title = " "
             };
 
             var btnCoralAsBuilt = new RibbonButton
@@ -1065,7 +1075,10 @@ namespace AdvancedLandDevTools.Ribbon
                 LargeImage       = BuildCoralAsBuiltIcon(32),
                 Image            = BuildCoralAsBuiltIcon(16)
             };
+            
             abSource.Items.Add(btnCoralAsBuilt);
+            abSource.Items.Add(btnSecDraw);
+
 
             abSource.Items.Add(new RibbonSeparator());
 

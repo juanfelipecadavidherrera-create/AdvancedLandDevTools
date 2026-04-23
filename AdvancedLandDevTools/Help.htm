@@ -71,7 +71,8 @@
   <a href="#cmd-getparent">GETPARENT</a>
   <a href="#cmd-pipemagic">PIPEMAGIC</a>
   <a href="#cmd-llabelgen">LLABELGEN <span class="sidebar-badge">NEW</span></a>
-  <a href="#cmd-marklines">MARKLINES</a>
+    <a href="#cmd-marklines">MARKLINES</a>
+  <a href="#cmd-markfittings">MARKFITTINGS <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-profoff">PROFOFF</a>
   <a href="#cmd-pvstyle">PVSTYLE</a>
   <a href="#cmd-chopchop">CHOPCHOP <span class="sidebar-badge">NEW</span></a>
@@ -83,7 +84,8 @@
   <a href="#cmd-invertpullup">INVERTPULLUP</a>
   <a href="#cmd-changeelevation">CHANGEELEVATION</a>
   <a href="#cmd-pipesizing">PIPESIZING</a>
-  <a href="#cmd-eeebend">EEEBEND</a>
+    <a href="#cmd-eeebend">EEEBEND</a>
+  <a href="#cmd-coveradjust">COVERADJUST <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-presscount">PRESSCOUNT</a>
   <a href="#cmd-rrnetworkcheck">RRNETWORKCHECK <span class="sidebar-badge-beta">BETA</span></a>
   <a href="#cmd-latmanager">LATMANAGER <span class="sidebar-badge">NEW</span></a>
@@ -94,7 +96,8 @@
   <a href="#cmd-texttosurface">TEXTTOSURFACE</a>
   <a href="#cmd-lowrim">LOWRIM</a>
 
-  <h3>Property Info</h3>
+    <h3>Property Info</h3>
+  <a href="#cmd-folio">FOLIO <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-floodzone">FLOODZONE</a>
   <a href="#cmd-floodcriteria">FLOODCRITERIA</a>
   <a href="#cmd-sectionlookup">SECTIONLOOKUP</a>
@@ -105,13 +108,41 @@
   <a href="#cmd-areamanager">AREAMANAGER</a>
   <a href="#cmd-exf">EXF</a>
 
-  <h3>Sections</h3>
-  <a href="#cmd-secdraw">SECDRAW</a>
+  <h3>As-Builts & Sections</h3>
+    <a href="#cmd-secdraw">SECDRAW</a>
+  <a href="#cmd-coralasbuilt">CORALASBUILT <span class="sidebar-badge">NEW</span></a>
+  <a href="#cmd-tabledraw">TABLEDRAW <span class="sidebar-badge">NEW</span></a>
 
-  <h3>Vehicle Tracking</h3>
+  <div class="cmd" id="cmd-coralasbuilt">
+<strong>CORALASBUILT</strong> -- Coral Gables Sewer As-Built <span class="badge-new">v1.1.0</span><br>
+Queries the Coral Gables Sewer GIS within 1000 ft of a picked point and draws gravity mains, force mains, manholes, and laterals into model space.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>CORALASBUILT</code>.</li>
+<li>Pick a center point in the drawing.</li>
+<li>The tool queries the Coral Gables Sewer ArcGIS FeatureServer and draws all sewer features within the specified radius directly into model space.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-tabledraw">
+<strong>TABLEDRAW</strong> -- Table Drawer <span class="badge-new">v1.1.0</span><br>
+Design Excel-like tables with merged cells, free text, and live links to Civil 3D entities. Draws a grid into model space and auto-updates when linked entities change.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>TABLEDRAW</code>.</li>
+<li>Define rows, columns, and cell content (free text or live links).</li>
+<li>Click Draw and select an insertion point.</li>
+<li>Linked cells will update automatically when the associated Civil 3D entity changes.</li>
+</ol>
+</div>
+</div>
+
+<h3>Vehicle Tracking</h3>
   <a href="#cmd-vtpanel">VTPANEL</a>
   <a href="#cmd-vtsweep">VTSWEEP</a>
-  <a href="#cmd-vtdrive">VTDRIVE</a>
+    <a href="#cmd-vtdrive">VTDRIVE</a>
+  <a href="#cmd-vtedit">VTEDIT <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-vtpark">VTPARK</a>
 
   <h3>Quick Access</h3>
@@ -198,6 +229,18 @@ Automatically places 3D Profile View Station Elevation Labels at crossing pipe i
 <li>Select a network to exclude, or enter 0 to keep all.</li>
 <li>Choose your desired Station Elevation Label Style and Marker Style from the dialog.</li>
 <li>The tool automatically generates the 3D labels at all pipe crossing inverts.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-markfittings">
+<strong>MARKFITTINGS</strong> -- Mark Pressure Fittings <span class="badge-new">v1.1.0</span><br>
+Draws dashed vertical marker lines in a profile view for pressure fittings. Select a profile view, and the tool automatically detects pressure fittings within it and draws dashed vertical marker lines from top to bottom.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>MARKFITTINGS</code>.</li>
+<li>Select a profile view in the drawing.</li>
+<li>The tool will automatically detect pressure fittings and draw dashed vertical lines.</li>
 </ol>
 </div>
 </div>
@@ -351,6 +394,18 @@ Automates the placement of a pressure pipe bypass ("duck") in a profile view. Se
 </div>
 </div>
 
+<div class="cmd" id="cmd-coveradjust">
+<strong>COVERADJUST</strong> -- Pressure Duck Cover Adjust <span class="badge-new">v1.1.0</span><br>
+Moves both PVIs of a pressure duck (4 bends) vertically to adjust cover. Select a pressure pipe duck inside a profile view. The tool auto-detects the ground-surface elevation from the alignment's surface profile, computes the minimum depth that gives both fittings at least 4 ft of crown cover, and moves both PVIs to that elevation so they sit at the same height.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>COVERADJUST</code>.</li>
+<li>Select a pressure pipe duck in a profile view.</li>
+<li>The PVIs are adjusted to maintain minimum cover automatically.</li>
+</ol>
+</div>
+</div>
+
 <div class="cmd" id="cmd-presscount">
 <strong>PRESSCOUNT</strong> -- Pressure Network Count<br>
 Scans the drawing, lets you select a pressure network, calculates total 3D pipe length, assigns sequential numbers to every fitting, and optionally places MText labels at each fitting location in plan view. All labels are grouped into a single named AutoCAD Group.
@@ -451,6 +506,18 @@ Scans selected Civil 3D structures and identifies the one with the lowest rim el
 
 <h3>Property Information</h3>
 
+<div class="cmd" id="cmd-folio">
+<strong>FOLIO</strong> -- Property Appraiser Lookup <span class="badge-new">v1.1.0</span><br>
+Queries the Miami-Dade County Property Appraiser (MDC GIS) to retrieve property information including folio, owner name, and address.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>FOLIO</code>.</li>
+<li>Pick a point in the drawing.</li>
+<li>Property information is retrieved and displayed.</li>
+</ol>
+</div>
+</div>
+
 <div class="cmd" id="cmd-floodzone">
 <strong>FLOODZONE</strong> -- FEMA Flood Zone Lookup<br>
 Queries the FEMA National Flood Hazard Layer (NFHL) in real time and returns the flood zone designation (AE, X, AH, etc.), base flood elevation (BFE), SFHA status, and FIRM panel number for any point you pick. Optionally places results as an MText label.
@@ -539,7 +606,7 @@ A dockable palette for tracking exfiltration trench lengths across a project. Se
 </div>
 </div>
 
-<h3>Cross Sections</h3>
+<h3>As-Builts &amp; Sections</h3>
 
 <div class="cmd" id="cmd-secdraw">
 <strong>SECDRAW</strong> -- Section Drawer<br>
@@ -550,6 +617,31 @@ Opens a designer window where you build a cross-section by chaining slope segmen
 <li>Add segments by entering width and slope for each element.</li>
 <li>Preview the section profile in the window.</li>
 <li>Click Draw and pick an insertion point in model space.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-coralasbuilt">
+<strong>CORALASBUILT</strong> -- Coral Gables Sewer As-Built <span class="badge-new">v1.1.0</span><br>
+Queries the Coral Gables Sewer GIS within 1000 ft of a picked point and draws gravity mains, force mains, manholes, and laterals into model space.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>CORALASBUILT</code>.</li>
+<li>Pick a center point in the drawing.</li>
+<li>The tool queries the Coral Gables Sewer ArcGIS FeatureServer and draws all sewer features within the specified radius directly into model space.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-tabledraw">
+<strong>TABLEDRAW</strong> -- Table Drawer <span class="badge-new">v1.1.0</span><br>
+Design Excel-like tables with merged cells, free text, and live links to Civil 3D entities. Draws a grid into model space and auto-updates when linked entities change.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>TABLEDRAW</code>.</li>
+<li>Define rows, columns, and cell content (free text or live links).</li>
+<li>Click Draw and select an insertion point.</li>
+<li>Linked cells will update automatically when the associated Civil 3D entity changes.</li>
 </ol>
 </div>
 </div>
@@ -589,6 +681,18 @@ Steer a vehicle through a maneuver in real time using the keyboard or mouse. The
 <li>Run <code>VTDRIVE</code> and click a starting position and direction.</li>
 <li>Use arrow keys or mouse to steer. The swept path draws in real time.</li>
 <li>Press Enter to finish and keep the path.</li>
+</ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-vtedit">
+<strong>VTEDIT</strong> -- Edit Vehicle Path <span class="badge-new">v1.1.0</span><br>
+Click on or near an existing Vehicle Tracking path or X marker to edit the maneuver. Hides the old geometry, shows a live jig preview, and redraws the updated path on finish.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>VTEDIT</code>.</li>
+<li>Click on or near a VT path or X marker.</li>
+<li>Adjust the waypoints and press Enter to save changes.</li>
 </ol>
 </div>
 </div>
@@ -646,7 +750,7 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>LATMANAGER</strong> -- dockable palette to save 2D lateral profile crossing data and project it automatically into other profile views; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. All new commands added to ribbon and Mini Toolbar.</td></tr>
+<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>LATMANAGER</strong> -- dockable palette to save 2D lateral profile crossing data and project it automatically into other profile views; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. All new commands added to ribbon and Mini Toolbar. Includes MARKFITTINGS, COVERADJUST, FOLIO, CORALASBUILT, TABLEDRAW, and VTEDIT.</td></tr>
 <tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>
