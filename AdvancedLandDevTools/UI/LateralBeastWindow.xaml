@@ -36,8 +36,8 @@
 
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Direction:" Style="{StaticResource FluentFieldLabel}" Margin="0,0,10,0"/>
         <ComboBox Grid.Row="1" Grid.Column="1" Name="cmbDirection" Style="{StaticResource FluentComboBox}" Margin="0,5">
-            <ComboBoxItem Content="Left" IsSelected="True"/>
-            <ComboBoxItem Content="Right"/>
+            <ComboBoxItem Content="Left"/>
+            <ComboBoxItem Content="Right" IsSelected="True"/>
         </ComboBox>
 
         <TextBlock Grid.Row="2" Grid.Column="0" Text="Angle (deg):" Style="{StaticResource FluentFieldLabel}" Margin="0,0,10,0"/>

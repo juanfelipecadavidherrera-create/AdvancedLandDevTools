@@ -13,9 +13,15 @@ namespace AdvancedLandDevTools.UI
         {
             InitializeComponent();
             foreach (var layer in availableLayers)
-            {
                 cmbTargetLayer.Items.Add(layer);
-            }
+
+            // When IsEditable="True", WPF updates SelectedItem but doesn't always
+            // sync the editable text box visually — force it on every selection change.
+            cmbTargetLayer.SelectionChanged += (s, e) =>
+            {
+                if (cmbTargetLayer.SelectedItem != null)
+                    cmbTargetLayer.Text = cmbTargetLayer.SelectedItem.ToString();
+            };
         }
 
         private void BtnOk_Click(object sender, RoutedEventArgs e)

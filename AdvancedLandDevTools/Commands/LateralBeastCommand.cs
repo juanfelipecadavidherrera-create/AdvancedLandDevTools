@@ -21,6 +21,31 @@ namespace AdvancedLandDevTools.Commands
         private static string _targetLayer = "0";
 
         // ─────────────────────────────────────────────────────────────────────
+        //  Report types
+        // ─────────────────────────────────────────────────────────────────────
+        private enum LateralStatus
+        {
+            Drawn,
+            SkippedNoIntersection,  // probe / adjusted ray found no target-line hit
+            SkippedInfeasible,      // constraint resolution loop declared infeasible
+            SkippedValidationFailed,// final re-check of surface+pipes failed
+            SkippedNoTarget         // FindTargetLines returned empty for the whole PV
+        }
+
+        private struct LateralReport
+        {
+            public string        PvName;
+            public double        Station;
+            public LateralStatus Status;
+            public double        ActualStartY;
+            public double        MinStartY;
+            public double        SurfaceStartY;    // NaN = not found
+            public double        DeltaY;           // actualStartY - minStartY; NaN when skipped
+            public string        ActiveConstraints; // e.g. "SurfaceCover|AbovePipe"
+            public string        FailReason;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
         //  Candidate entity found on the target layer inside a profile view.
         // ─────────────────────────────────────────────────────────────────────
         private struct TargetLineCandidate
@@ -152,88 +177,9 @@ namespace AdvancedLandDevTools.Commands
 
             double pvMidX = (xMin + xMax) / 2.0;
 
-            // ── Pass 1: host model space ──────────────────────────────────────
+            // Host model space only — this command always operates within the
+            // current document.  Target lines must live in the host drawing.
             var candidates = CollectTargetCandidates(tx, btr, layer, xMin, xMax, yMin, yMax);
-
-            // ── Pass 2: XREF databases (fallback when nothing found in host) ──
-            if (candidates.Count == 0)
-            {
-                try
-                {
-                    var bt = (BlockTable)tx.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    foreach (ObjectId btrId in bt)
-                    {
-                        BlockTableRecord btrDef = null;
-                        try { btrDef = tx.GetObject(btrId, OpenMode.ForRead) as BlockTableRecord; }
-                        catch { continue; }
-                        if (btrDef == null || !btrDef.IsFromExternalReference) continue;
-
-                        // Retrieve the insertion transform so we can map XREF coords → host WCS.
-                        var xform = Matrix3d.Identity;
-                        try
-                        {
-                            foreach (ObjectId refId in btrDef.GetBlockReferenceIds(false, true))
-                            {
-                                var bref = tx.GetObject(refId, OpenMode.ForRead) as BlockReference;
-                                if (bref != null) { xform = bref.BlockTransform; break; }
-                            }
-                        }
-                        catch { }
-
-                        Database xDb = null;
-                        try { xDb = btrDef.GetXrefDatabase(false); }
-                        catch { continue; }
-                        if (xDb == null) continue;
-
-                        try
-                        {
-                            // Map the PV bounds into XREF space using the inverse transform.
-                            var invXform = xform.Inverse();
-                            var p1h = new Point3d(xMin, yMin, 0).TransformBy(invXform);
-                            var p2h = new Point3d(xMax, yMax, 0).TransformBy(invXform);
-                            double xMinX = Math.Min(p1h.X, p2h.X);
-                            double xMaxX = Math.Max(p1h.X, p2h.X);
-                            double xMinY = Math.Min(p1h.Y, p2h.Y);
-                            double xMaxY = Math.Max(p1h.Y, p2h.Y);
-
-                            using (var xTx = xDb.TransactionManager.StartTransaction())
-                            {
-                                var xBt = (BlockTable)xTx.GetObject(xDb.BlockTableId, OpenMode.ForRead);
-                                var xMs = (BlockTableRecord)xTx.GetObject(
-                                              xBt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-                                var xCands = CollectTargetCandidates(
-                                    xTx, xMs, layer, xMinX, xMaxX, xMinY, xMaxY);
-
-                                // We can't return XREF entities for IntersectWith in the host tx.
-                                // Instead, materialise each candidate as a temporary host-space Line
-                                // spanning the full view height at the entity's MidX (transformed).
-                                foreach (var xc in xCands)
-                                {
-                                    double midXHost = new Point3d(xc.MidX, 0, 0).TransformBy(xform).X;
-                                    // Construct a proxy Line in host drawing space.
-                                    var proxy = new Line(
-                                        new Point3d(midXHost, yMin, 0),
-                                        new Point3d(midXHost, yMax, 0));
-                                    candidates.Add(new TargetLineCandidate
-                                    {
-                                        Entity = proxy,
-                                        MinX   = midXHost, MaxX = midXHost,
-                                        MinY   = yMin,     MaxY = yMax,
-                                        Length = yMax - yMin,
-                                        MidX   = midXHost
-                                    });
-                                }
-                                xTx.Abort();
-                            }
-                        }
-                        catch { }
-
-                        if (candidates.Count > 0) break;
-                    }
-                }
-                catch { }
-            }
 
             if (candidates.Count == 0)
             {
@@ -290,6 +236,8 @@ namespace AdvancedLandDevTools.Commands
         // ─────────────────────────────────────────────────────────────────────
         //  Scan model space for pipes from networks OTHER than selectedNetworkId
         //  that cross the alignment within [stationMin, stationMax].
+        //  Host-only — this command always operates on profile views, alignments
+        //  and pipes that live in the current document (no XREF support).
         // ─────────────────────────────────────────────────────────────────────
         private static List<LateralCrossing> CollectLateralCrossings(
             Transaction tx,
@@ -375,6 +323,39 @@ namespace AdvancedLandDevTools.Commands
             return result;
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        //  Decide whether a crossing pipe should be treated as ABOVE the
+        //  lateral (push lateral DOWN) or BELOW the lateral (push lateral UP).
+        //
+        //  Two regimes:
+        //   1. No vertical overlap → simple center comparison (cheap, correct).
+        //   2. Overlap (clash already) → pick the side requiring less movement
+        //      to clear, factoring in the asymmetric clearances
+        //      (1.055 ft above-clearance vs 0.555 ft below-clearance).
+        //
+        //  The center-only check that this replaces consistently picked the
+        //  wrong side when a big crossing pipe straddled the lateral, leading
+        //  to spurious infeasibility verdicts.
+        // ─────────────────────────────────────────────────────────────────────
+        private const double ClearAboveDu = 10.55;  // 1.055 ft × 10× V.E.
+        private const double ClearBelowDu =  5.55;  // 0.555 ft × 10× V.E.
+
+        private static bool IsCrossingAboveLateral(
+            double latBot, double latTop,
+            double cyInv,  double cyCrn)
+        {
+            bool overlaps = latTop > cyInv && latBot < cyCrn;
+            if (!overlaps)
+                return ((cyInv + cyCrn) * 0.5) > ((latBot + latTop) * 0.5);
+
+            // Overlap regime: distance to clear (with clearance baked in) on each side.
+            //   pushDown = how much latTop must drop to land at (pipe invert − above-clear)
+            //   pushUp   = how much latBot must rise to land at (pipe crown  + below-clear)
+            double pushDown = (latTop - cyInv) + ClearAboveDu;
+            double pushUp   = (cyCrn  - latBot) + ClearBelowDu;
+            return pushDown <= pushUp;
+        }
+
         // Parameter t (0–1) of crossPt projected onto pipe axis in plan.
         private static double ParamT(Point3d crossPt, Point3d pipeStart, Point3d pipeEnd)
         {
@@ -388,13 +369,13 @@ namespace AdvancedLandDevTools.Commands
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Surface elevation: host alignment first, then XREF databases.
+        //  Surface elevation: host PV → host alignment → host profiles.
         //  Returns real-world elevation in ft, or NaN when nothing is found.
+        //  Host-only — no XREF traversal.
         // ─────────────────────────────────────────────────────────────────────
         private static double GetSurfaceElevation(
             Transaction tx, Database hostDb, ObjectId pvId, double station)
         {
-            // 1. Host: pv → alignment → profiles
             try
             {
                 var pv  = tx.GetObject(pvId, OpenMode.ForRead) as CivilDB.ProfileView;
@@ -402,65 +383,7 @@ namespace AdvancedLandDevTools.Commands
                           ? tx.GetObject(pv.AlignmentId, OpenMode.ForRead) as CivilDB.Alignment
                           : null;
                 if (aln != null)
-                {
-                    double r = ScanProfilesForElevation(aln.GetProfileIds(), tx, station);
-                    if (!double.IsNaN(r)) return r;
-                }
-            }
-            catch { }
-
-            // 2. XREF databases: find an alignment whose station range covers 'station'
-            try
-            {
-                var bt = (BlockTable)tx.GetObject(hostDb.BlockTableId, OpenMode.ForRead);
-                foreach (ObjectId btrId in bt)
-                {
-                    BlockTableRecord btrDef = null;
-                    try { btrDef = tx.GetObject(btrId, OpenMode.ForRead) as BlockTableRecord; }
-                    catch { continue; }
-                    if (btrDef == null || !btrDef.IsFromExternalReference) continue;
-
-                    Database xDb = null;
-                    try { xDb = btrDef.GetXrefDatabase(false); }
-                    catch { continue; }
-                    if (xDb == null) continue;
-
-                    double r = ScanXrefForSurface(xDb, station);
-                    if (!double.IsNaN(r)) return r;
-                }
-            }
-            catch { }
-
-            return double.NaN;
-        }
-
-        private static double ScanXrefForSurface(Database xDb, double station)
-        {
-            try
-            {
-                using (var xTx = xDb.TransactionManager.StartTransaction())
-                {
-                    var xBt = (BlockTable)xTx.GetObject(xDb.BlockTableId, OpenMode.ForRead);
-                    var xMs = (BlockTableRecord)xTx.GetObject(
-                                  xBt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    foreach (ObjectId xId in xMs)
-                    {
-                        CivilDB.Alignment xAln = null;
-                        try { xAln = xTx.GetObject(xId, OpenMode.ForRead) as CivilDB.Alignment; }
-                        catch { continue; }
-                        if (xAln == null) continue;
-                        try
-                        {
-                            if (station < xAln.StartingStation - 0.5 ||
-                                station > xAln.EndingStation   + 0.5)
-                                continue;
-                        }
-                        catch { continue; }
-                        double r = ScanProfilesForElevation(xAln.GetProfileIds(), xTx, station);
-                        if (!double.IsNaN(r)) { xTx.Abort(); return r; }
-                    }
-                    xTx.Abort();
-                }
+                    return ScanProfilesForElevation(aln.GetProfileIds(), tx, station);
             }
             catch { }
             return double.NaN;
@@ -698,7 +621,18 @@ namespace AdvancedLandDevTools.Commands
                         tx.AddNewlyCreatedDBObject(newLayer, true);
                     }
 
+                    // Ensure the SEWERP layer exists for the wye symbol.
+                    const string SewerpLayer = "SEWERP";
+                    if (!lt.Has(SewerpLayer))
+                    {
+                        if (!lt.IsWriteEnabled) lt.UpgradeOpen();
+                        var sewL = new LayerTableRecord { Name = SewerpLayer };
+                        lt.Add(sewL);
+                        tx.AddNewlyCreatedDBObject(sewL, true);
+                    }
+
                     int lateralsDrawn = 0;
+                    var reports = new List<LateralReport>();
 
                     foreach (var pvId in profileViewIds)
                     {
@@ -754,6 +688,15 @@ namespace AdvancedLandDevTools.Commands
                             {
                                 ed.WriteMessage(
                                     $"\n  ⚠ No intersection with target line at Sta {cp.Station:F2}.");
+                                reports.Add(new LateralReport
+                                {
+                                    PvName = pv.Name, Station = cp.Station,
+                                    Status = LateralStatus.SkippedNoIntersection,
+                                    ActualStartY = double.NaN, MinStartY = minStartY,
+                                    SurfaceStartY = double.NaN, DeltaY = double.NaN,
+                                    ActiveConstraints = "",
+                                    FailReason = "No intersection with target line at probe elevation"
+                                });
                                 continue;
                             }
 
@@ -832,54 +775,60 @@ namespace AdvancedLandDevTools.Commands
                                             ref dummy, ref cyCrn))
                                         continue;
 
-                                    double latBot    = actualStartY + dx_c * tanAngle;
-                                    double latTop    = latBot + verticalOffset;
-                                    double latCtr    = (latBot + latTop)  / 2.0;
-                                    double crssCtr   = (cyInv  + cyCrn)   / 2.0;
-                                    bool   aboveLat  = crssCtr > latCtr;
+                                    // Compute BOTH candidate destinations up front, so we can pick
+                                    // whichever side of the pipe is actually feasible. The old
+                                    // logic chose a side first and then asked whether it was
+                                    // feasible — which lost laterals that had perfectly good room
+                                    // on the other side.
+                                    //
+                                    //   • "Pipe-above"  → lateral TOP ≤ pipe INVERT − 1.055
+                                    //                    ⇒ actualStartY ≤ maxStartIfAbove
+                                    //   • "Pipe-below"  → lateral BOT ≥ pipe CROWN + 0.555
+                                    //                    ⇒ actualStartY ≥ minStartIfBelow
+                                    double cyReqAbove = 0, cyReqBelow = 0;
+                                    if (!pv.FindXYAtStationAndElevation(
+                                            lc.Station, lc.InvertElev - 1.055,
+                                            ref dummy, ref cyReqAbove)) continue;
+                                    if (!pv.FindXYAtStationAndElevation(
+                                            lc.Station, lc.InvertElev + lc.OuterDiam + 0.555,
+                                            ref dummy, ref cyReqBelow)) continue;
+
+                                    double dxTan = dx_c * tanAngle;
+                                    double maxStartIfAbove = cyReqAbove - verticalOffset - dxTan;
+                                    double minStartIfBelow = cyReqBelow - dxTan;
+
+                                    bool downOk = maxStartIfAbove >= minStartY - 0.001;
+                                    bool upOk   = double.IsNaN(surfaceStartY)
+                                               || minStartIfBelow <= surfaceStartY + 0.001;
+
+                                    // No feasible side → resolution truly cannot place the lateral.
+                                    if (!downOk && !upOk) { resolveOk = false; break; }
+
+                                    // Decide which side to apply.  Preference:
+                                    //   1. If only one is feasible, use it.
+                                    //   2. If both are feasible, fall back to the geometric
+                                    //      classifier (cheap; matches user expectation when
+                                    //      both sides have room).
+                                    double latBot = actualStartY + dxTan;
+                                    double latTop = latBot + verticalOffset;
+                                    bool aboveLat;
+                                    if (downOk && !upOk)      aboveLat = true;
+                                    else if (upOk && !downOk) aboveLat = false;
+                                    else aboveLat = IsCrossingAboveLateral(latBot, latTop, cyInv, cyCrn);
 
                                     if (aboveLat)
                                     {
-                                        // Lateral invert must stay ≥ 1 ft (10 drawing units) below
-                                        // crossing invert — measured invert-to-invert.
-                                        double cyReq = 0;
-                                        if (!pv.FindXYAtStationAndElevation(
-                                                lc.Station, lc.InvertElev - 1.0,
-                                                ref dummy, ref cyReq))
-                                            continue;
-                                        // latBot = actualStartY + dx_c*tan ≤ cyReq
-                                        double maxStart = cyReq - dx_c * tanAngle;
-                                        if (actualStartY > maxStart + 0.001)
+                                        if (actualStartY > maxStartIfAbove + 0.001)
                                         {
-                                            actualStartY = maxStart;
-                                            if (actualStartY < minStartY - 0.001)
-                                            {
-                                                resolveOk = false; break;
-                                            }
-                                            actualStartY = Math.Max(actualStartY, minStartY);
+                                            actualStartY = Math.Max(maxStartIfAbove, minStartY);
                                             changed = true;
                                         }
                                     }
                                     else
                                     {
-                                        // Lateral invert must stay ≥ 0.5 ft (5 drawing units) above
-                                        // crossing invert — measured invert-to-invert.
-                                        double cyReq = 0;
-                                        if (!pv.FindXYAtStationAndElevation(
-                                                lc.Station, lc.InvertElev + 0.5,
-                                                ref dummy, ref cyReq))
-                                            continue;
-                                        // latBot = actualStartY + dx_c*tan ≥ cyReq
-                                        double minStart = cyReq - dx_c * tanAngle;
-                                        if (actualStartY < minStart - 0.001)
+                                        if (actualStartY < minStartIfBelow - 0.001)
                                         {
-                                            // Must go UP — only valid if still within surface limit.
-                                            if (!double.IsNaN(surfaceStartY) &&
-                                                minStart > surfaceStartY + 0.001)
-                                            {
-                                                resolveOk = false; break;
-                                            }
-                                            actualStartY = minStart;
+                                            actualStartY = minStartIfBelow;
                                             changed = true;
                                         }
                                     }
@@ -892,6 +841,17 @@ namespace AdvancedLandDevTools.Commands
                                 ed.WriteMessage(
                                     $"\n  ✗ Sta {cp.Station:F2}: no valid position satisfies all" +
                                     " constraints — red X drawn, skipped.");
+                                reports.Add(new LateralReport
+                                {
+                                    PvName = pv.Name, Station = cp.Station,
+                                    Status = LateralStatus.SkippedInfeasible,
+                                    ActualStartY = actualStartY, MinStartY = minStartY,
+                                    SurfaceStartY = surfaceStartY, DeltaY = double.NaN,
+                                    ActiveConstraints = "",
+                                    FailReason = resolveOk
+                                        ? "actualStartY fell below minStartY after resolution"
+                                        : "Constraint resolution loop declared infeasible"
+                                });
                                 continue;
                             }
 
@@ -917,31 +877,25 @@ namespace AdvancedLandDevTools.Commands
                                             ref dummy, ref cyCrn))
                                         continue;
 
-                                    double latBot   = actualStartY + dx_c * tanAngle;
-                                    double latTop   = latBot + verticalOffset;
-                                    double latCtr   = (latBot + latTop) / 2.0;
-                                    double crssCtr  = (cyInv  + cyCrn) / 2.0;
-                                    bool   aboveLat = crssCtr > latCtr;
+                                    double latBot = actualStartY + dx_c * tanAngle;
 
-                                    double cyReq = 0;
-                                    if (aboveLat)
-                                    {
-                                        // Invert-to-invert: lateral invert ≥ 1 ft below crossing invert
-                                        if (pv.FindXYAtStationAndElevation(
-                                                lc.Station, lc.InvertElev - 1.0,
-                                                ref dummy, ref cyReq)
-                                            && latBot > cyReq + 0.01)
-                                        { finalOk = false; break; }
-                                    }
-                                    else
-                                    {
-                                        // Invert-to-invert: lateral invert ≥ 0.5 ft above crossing invert
-                                        if (pv.FindXYAtStationAndElevation(
-                                                lc.Station, lc.InvertElev + 0.5,
-                                                ref dummy, ref cyReq)
-                                            && latBot < cyReq - 0.01)
-                                        { finalOk = false; break; }
-                                    }
+                                    // Symmetric check: the lateral validates against this
+                                    // crossing if it clears it from EITHER side.
+                                    //   • "Above-pipe" clear: latBot ≤ (invert − 1.055) − verticalOffset
+                                    //   • "Below-pipe" clear: latBot ≥ (crown  + 0.555)
+                                    double cyAbove = 0, cyBelow = 0;
+                                    bool gotA = pv.FindXYAtStationAndElevation(
+                                                    lc.Station, lc.InvertElev - 1.055,
+                                                    ref dummy, ref cyAbove);
+                                    bool gotB = pv.FindXYAtStationAndElevation(
+                                                    lc.Station, lc.InvertElev + lc.OuterDiam + 0.555,
+                                                    ref dummy, ref cyBelow);
+
+                                    bool clearsAbove = gotA && latBot <= (cyAbove - verticalOffset) + 0.01;
+                                    bool clearsBelow = gotB && latBot >= cyBelow - 0.01;
+
+                                    if (!clearsAbove && !clearsBelow)
+                                    { finalOk = false; break; }
                                 }
                             }
 
@@ -951,6 +905,15 @@ namespace AdvancedLandDevTools.Commands
                                 ed.WriteMessage(
                                     $"\n  ✗ Sta {cp.Station:F2}: final validation failed" +
                                     " — red X drawn, skipped.");
+                                reports.Add(new LateralReport
+                                {
+                                    PvName = pv.Name, Station = cp.Station,
+                                    Status = LateralStatus.SkippedValidationFailed,
+                                    ActualStartY = actualStartY, MinStartY = minStartY,
+                                    SurfaceStartY = surfaceStartY, DeltaY = double.NaN,
+                                    ActiveConstraints = "",
+                                    FailReason = "Final validation check failed (surface or crossing constraint)"
+                                });
                                 continue;
                             }
 
@@ -958,7 +921,11 @@ namespace AdvancedLandDevTools.Commands
                             // Both bottom and top shift by the same deltaY → whole symbol moves.
                             double deltaY = actualStartY - minStartY;
 
-                            Point3d bottomStart = new Point3d(startX,  actualStartY, 0);
+                            // actualStartY includes 1 drawing unit of downward slack added to
+                            // minStartY for constraint resolution.  The drawn bottom line sits
+                            // 1 unit above it so the visual gap to the top line equals exactly
+                            // verticalOffset (the user-configured pipe gap).
+                            Point3d bottomStart = new Point3d(startX, actualStartY + 1.0, 0);
                             Point3d topStart    = new Point3d(topOffX,
                                                      cp.DrawingY + bottomDy + verticalOffset + deltaY, 0);
 
@@ -996,23 +963,369 @@ namespace AdvancedLandDevTools.Commands
                             {
                                 ed.WriteMessage(
                                     $"\n  ⚠ No intersection after adjustment at Sta {cp.Station:F2}.");
+                                reports.Add(new LateralReport
+                                {
+                                    PvName = pv.Name, Station = cp.Station,
+                                    Status = LateralStatus.SkippedNoIntersection,
+                                    ActualStartY = actualStartY, MinStartY = minStartY,
+                                    SurfaceStartY = surfaceStartY, DeltaY = double.NaN,
+                                    ActiveConstraints = "",
+                                    FailReason = "No ray intersection after position adjustment"
+                                });
                                 continue;
                             }
 
-                            var lineB = new Line(bottomStart, bestB.Value) { Layer = _targetLayer };
+                            // xDir drives mirroring for both the bottom extension and wye symbol.
+                            double xDir = isLeft ? -1.0 : 1.0;
+
+                            // ── Pre-compute connector intersection points (when lateral was
+                            //    pushed up). These become the START of the lateral lines so
+                            //    the 1:10 connectors meet the parallel lines flush — no gap.
+                            //    Connector eq:  Y = pipeY + xDir·10·(X − cp.DrawingX)
+                            //    Lateral eq:    Y = lineStartY + tanAngle·(X − lineStartX)
+                            const double Slope            = 10.0;
+                            const double PipeOuterDiamDu  = 8.0 / 12.0 * 10.0; // 6.6667 du
+                            double cpInvertY = cp.DrawingY;
+                            double cpCrownY  = cp.DrawingY + PipeOuterDiamDu;
+
+                            Point3d lineBStart = bottomStart;
+                            Point3d lineTStart = topStart;
+                            bool    drawConnectors = deltaY > 0.001;
+
+                            double xBot = 0, yBot = 0, xTop = 0, yTop = 0;
+                            if (drawConnectors)
+                            {
+                                double denom = xDir * Slope - tanAngle;
+                                xBot = (bottomStart.Y - cpInvertY
+                                        - tanAngle * bottomStart.X
+                                        + xDir * Slope * cp.DrawingX) / denom;
+                                yBot = cpInvertY + xDir * Slope * (xBot - cp.DrawingX);
+
+                                xTop = (topStart.Y - cpCrownY
+                                        - tanAngle * topStart.X
+                                        + xDir * Slope * cp.DrawingX) / denom;
+                                yTop = cpCrownY + xDir * Slope * (xTop - cp.DrawingX);
+
+                                lineBStart = new Point3d(xBot, yBot, 0);
+                                lineTStart = new Point3d(xTop, yTop, 0);
+                            }
+
+                            // Bottom line: extend past the target-line hit point by the
+                            // standard diagonal (4.7902 horizontal, 0.4745 vertical).
+                            var bExtEnd = new Point3d(
+                                bestB.Value.X + xDir * 4.7902,
+                                bestB.Value.Y + 0.4745,
+                                0);
+                            var lineB = new Line(lineBStart, bExtEnd) { Layer = _targetLayer };
                             btr.AppendEntity(lineB);
                             tx.AddNewlyCreatedDBObject(lineB, true);
 
-                            var lineT = new Line(topStart, bestT.Value) { Layer = _targetLayer };
+                            var lineT = new Line(lineTStart, bestT.Value) { Layer = _targetLayer };
                             btr.AppendEntity(lineT);
                             tx.AddNewlyCreatedDBObject(lineT, true);
+
+                            // ── Service wye symbol at the top-line intersection ────────────
+                            // Shape is anchored at bestT (where the top ray hits the target
+                            // line). All offsets are in drawing units; mirror horizontally
+                            // for left-going laterals and flip arc directions accordingly.
+                            //
+                            //  idx  dx_right    dy        bulge_right   bulge_left
+                            //   0    0.0000    0.0000        0             0
+                            //   1    4.8365    0.4944       -0.5902       +0.5902
+                            //   2    4.8365   -2.0056       +0.6039       -0.6039
+                            //   3    4.7902   -4.5364       +0.5914       -0.5914
+                            //   4    4.8118   -2.0056        0             0
+                            var wyeDx  = new double[] { 0.0000, 4.8365, 4.8365, 4.7902, 4.8118 };
+                            var wyeDy  = new double[] { 0.0000, 0.4944,-2.0056,-4.5364,-2.0056 };
+                            var wyeBlg = new double[] { 0,     -0.5902, 0.6039, 0.5914, 0      };
+
+                            var wyePl = new Polyline();
+                            wyePl.Layer      = _targetLayer;
+                            wyePl.LineWeight = LineWeight.LineWeight035;
+                            wyePl.Elevation  = 0.0;
+                            wyePl.Normal     = Vector3d.ZAxis;
+                            wyePl.Closed     = false;
+
+                            for (int vi = 0; vi < wyeDx.Length; vi++)
+                            {
+                                wyePl.AddVertexAt(vi,
+                                    new Point2d(bestT.Value.X + xDir * wyeDx[vi],
+                                                bestT.Value.Y +         wyeDy[vi]),
+                                    wyeBlg[vi] * xDir,   // flip arc direction when mirroring
+                                    0.0, 0.0);
+                            }
+
+                            btr.AppendEntity(wyePl);
+                            tx.AddNewlyCreatedDBObject(wyePl, true);
+
+                            // ── Vertical pipe-stub + U-cap symbol ─────────────────────────
+                            // Two vertical lines rise from bestT up to the cap bottom.
+                            // The U-cap top always touches the surface profile at this station.
+                            // Structure extends LEFT of anchor for right laterals, RIGHT for left
+                            // laterals → use mult = -xDir for all horizontal offsets.
+                            //
+                            // IMPORTANT: all geometry is fully validated BEFORE any entity is
+                            // appended to the btr.  A partially-registered entity can corrupt the
+                            // outer transaction and prevent tx.Commit() — which would silently
+                            // discard the already-drawn lateral lines.
+                            try
+                            {
+                                double topStation  = cp.Station + (bestT.Value.X - cp.DrawingX);
+                                double capSurfElev = GetSurfaceElevation(tx, db, pvId, topStation);
+
+                                if (double.IsNaN(capSurfElev) || !double.IsFinite(capSurfElev))
+                                {
+                                    ed.WriteMessage(
+                                        $"\n  ⚠ No surface at Sta {topStation:F2}" +
+                                        " — cap symbol skipped.");
+                                }
+                                else
+                                {
+                                    double sx2 = 0, capTopY = 0;
+                                    bool cvtOk = pv.FindXYAtStationAndElevation(
+                                                     topStation, capSurfElev, ref sx2, ref capTopY);
+
+                                    // Guard 1: coordinate conversion must succeed and be finite.
+                                    if (!cvtOk || !double.IsFinite(capTopY))
+                                    {
+                                        ed.WriteMessage(
+                                            $"\n  ⚠ Sta {cp.Station:F2}: could not convert surface" +
+                                            " elevation to drawing Y — cap symbol skipped.");
+                                    }
+                                    else
+                                    {
+                                        double capStepY   = capTopY  - 0.1875;   // inner ledge
+                                        double capBottomY = capTopY  - 2.0625;   // top of vert lines
+
+                                        // The top lateral line is diagonal, so its Y at xInnerR/L
+                                        // differs from bestT.Value.Y by (ΔX × tanAngle).
+                                        // Compute each stub's bottom independently so they meet
+                                        // the top line exactly at their respective X positions.
+                                        double mult       = -xDir;
+                                        double xInnerR    = bestT.Value.X + mult * 2.2500;
+                                        double xInnerL    = bestT.Value.X + mult * 2.7500;
+                                        double vertBotYR  = bestT.Value.Y + (xInnerR - bestT.Value.X) * tanAngle;
+                                        double vertBotYL  = bestT.Value.Y + (xInnerL - bestT.Value.X) * tanAngle;
+
+                                        // Guard 2: surface must sit strictly above the top-line
+                                        // intersection; otherwise the stubs would have zero or
+                                        // inverted length → bad geometry that corrupts the transaction.
+                                        if (capBottomY <= vertBotYR)
+                                        {
+                                            ed.WriteMessage(
+                                                $"\n  ⚠ Sta {cp.Station:F2}: surface too close to" +
+                                                " lateral top line — cap symbol skipped.");
+                                        }
+                                        else
+                                        {
+                                            // ── X positions (fixed offsets, mirrored by -xDir) ──
+                                            double xMidR   = bestT.Value.X + mult * 1.7500;
+                                            double xMidL   = bestT.Value.X + mult * 3.2500;
+                                            double xOuterR = bestT.Value.X + mult * 1.3750;
+                                            double xOuterL = bestT.Value.X + mult * 3.6250;
+
+                                            // ── Two vertical lines ────────────────────────────
+                                            // Each stub bottom is computed at its own X so it
+                                            // meets the diagonal top line exactly (no gap).
+                                            var vLineR = new Line(
+                                                new Point3d(xInnerR, vertBotYR, 0),
+                                                new Point3d(xInnerR, capBottomY, 0));
+                                            vLineR.Layer      = _targetLayer;
+                                            vLineR.LineWeight = LineWeight.LineWeight035;
+                                            btr.AppendEntity(vLineR);
+                                            tx.AddNewlyCreatedDBObject(vLineR, true);
+
+                                            var vLineL = new Line(
+                                                new Point3d(xInnerL, vertBotYL, 0),
+                                                new Point3d(xInnerL, capBottomY, 0));
+                                            vLineL.Layer      = _targetLayer;
+                                            vLineL.LineWeight = LineWeight.LineWeight035;
+                                            btr.AppendEntity(vLineL);
+                                            tx.AddNewlyCreatedDBObject(vLineL, true);
+
+                                            // ── U-cap polyline (10 vertices, no arcs) ─────────
+                                            //  idx  X           Y
+                                            //   0   xInnerR     capBottomY
+                                            //   1   xMidR       capBottomY
+                                            //   2   xMidR       capStepY
+                                            //   3   xOuterR     capStepY
+                                            //   4   xOuterR     capTopY    ← surface touch right
+                                            //   5   xOuterL     capTopY    ← surface touch left
+                                            //   6   xOuterL     capStepY
+                                            //   7   xMidL       capStepY
+                                            //   8   xMidL       capBottomY
+                                            //   9   xInnerL     capBottomY
+                                            var capVerts = new (double x, double y)[]
+                                            {
+                                                (xInnerR, capBottomY),
+                                                (xMidR,   capBottomY),
+                                                (xMidR,   capStepY),
+                                                (xOuterR, capStepY),
+                                                (xOuterR, capTopY),
+                                                (xOuterL, capTopY),
+                                                (xOuterL, capStepY),
+                                                (xMidL,   capStepY),
+                                                (xMidL,   capBottomY),
+                                                (xInnerL, capBottomY),
+                                            };
+
+                                            var capPl = new Polyline();
+                                            capPl.Layer      = _targetLayer;
+                                            capPl.LineWeight = LineWeight.LineWeight035;
+                                            capPl.Elevation  = 0.0;
+                                            capPl.Normal     = Vector3d.ZAxis;
+                                            capPl.Closed     = false;
+
+                                            for (int vi = 0; vi < capVerts.Length; vi++)
+                                                capPl.AddVertexAt(vi,
+                                                    new Point2d(capVerts[vi].x, capVerts[vi].y),
+                                                    0.0, 0.0, 0.0);
+
+                                            btr.AppendEntity(capPl);
+                                            tx.AddNewlyCreatedDBObject(capPl, true);
+                                        }
+                                    }
+                                }
+                            }
+                            catch (System.Exception capEx)
+                            {
+                                ed.WriteMessage(
+                                    $"\n  ⚠ Cap symbol error at Sta {cp.Station:F2}: {capEx.Message}");
+                            }
+
+                            // ── Pipe-to-lateral connector lines ───────────────────────────
+                            // Drawn ONLY when the lateral was pushed up from its absolute
+                            // lowest position (deltaY > 0).  Two diagonals visually link the
+                            // existing pipe (selected network) to the lateral lines:
+                            //   • Bottom connector: pipe INVERT  → bottom lateral line
+                            //   • Top connector:    pipe CROWN   → top lateral line
+                            // Slope is 1 du H : 10 du V (= 45° in real space, 10× V.E.).
+                            // Endpoints (xBot/yBot, xTop/yTop) were computed earlier so the
+                            // lateral lines start exactly there → no gap with the connectors.
+                            if (drawConnectors)
+                            {
+                                try
+                                {
+                                    var connBot = new Line(
+                                        new Point3d(cp.DrawingX, cpInvertY, 0),
+                                        new Point3d(xBot, yBot, 0));
+                                    connBot.Layer      = _targetLayer;
+                                    connBot.LineWeight = LineWeight.LineWeight035;
+                                    btr.AppendEntity(connBot);
+                                    tx.AddNewlyCreatedDBObject(connBot, true);
+
+                                    var connTop = new Line(
+                                        new Point3d(cp.DrawingX, cpCrownY, 0),
+                                        new Point3d(xTop, yTop, 0));
+                                    connTop.Layer      = _targetLayer;
+                                    connTop.LineWeight = LineWeight.LineWeight035;
+                                    btr.AppendEntity(connTop);
+                                    tx.AddNewlyCreatedDBObject(connTop, true);
+                                }
+                                catch (System.Exception connEx)
+                                {
+                                    ed.WriteMessage(
+                                        $"\n  ⚠ Connector error at Sta {cp.Station:F2}: {connEx.Message}");
+                                }
+                            }
+
+                            // ── Build active-constraints string (post-hoc, no branching) ──
+                            var constraintParts = new List<string>();
+                            if (!double.IsNaN(surfaceStartY)) constraintParts.Add("SurfaceCover");
+                            bool sawAbove = false, sawBelow = false;
+                            foreach (var lc2 in otherCrossings)
+                            {
+                                double dx2 = lc2.DrawingX - startX;
+                                double dummy2 = 0, cyI2 = 0, cyC2 = 0;
+                                if (!pv.FindXYAtStationAndElevation(lc2.Station, lc2.InvertElev, ref dummy2, ref cyI2)) continue;
+                                if (!pv.FindXYAtStationAndElevation(lc2.Station, lc2.InvertElev + lc2.OuterDiam, ref dummy2, ref cyC2)) continue;
+                                double lb2  = actualStartY + dx2 * tanAngle;
+                                double lt2  = lb2 + verticalOffset;
+                                bool isAbove = IsCrossingAboveLateral(lb2, lt2, cyI2, cyC2);
+                                if (isAbove  && !sawAbove) { constraintParts.Add("AbovePipe"); sawAbove = true; }
+                                else if (!isAbove && !sawBelow) { constraintParts.Add("BelowPipe"); sawBelow = true; }
+                            }
+
+                            reports.Add(new LateralReport
+                            {
+                                PvName = pv.Name, Station = cp.Station,
+                                Status = LateralStatus.Drawn,
+                                ActualStartY = actualStartY, MinStartY = minStartY,
+                                SurfaceStartY = surfaceStartY, DeltaY = deltaY,
+                                ActiveConstraints = string.Join("|", constraintParts),
+                                FailReason = ""
+                            });
 
                             lateralsDrawn++;
                         }
                     }
 
                     tx.Commit();
-                    ed.WriteMessage($"\n  ✓ LATERALBEAST complete. {lateralsDrawn} laterals drawn.\n");
+
+                    // ── Print structured report ────────────────────────────────────────
+                    int rDrawn   = reports.Count(r => r.Status == LateralStatus.Drawn);
+                    int rSkipped = reports.Count - rDrawn;
+                    int rSurface = reports.Count(r => r.Status == LateralStatus.Drawn && !double.IsNaN(r.SurfaceStartY));
+                    int rShifted = reports.Count(r => r.Status == LateralStatus.Drawn && r.DeltaY > 0.001);
+
+                    ed.WriteMessage("\n");
+                    ed.WriteMessage("\n--- LATERAL BEAST REPORT -------------------------------------------");
+                    ed.WriteMessage($"\n  Profile views processed : {profileViewIds.Count}");
+                    ed.WriteMessage($"\n  Laterals drawn          : {rDrawn}");
+                    ed.WriteMessage($"\n  Laterals skipped        : {rSkipped}");
+                    ed.WriteMessage($"\n  With surface cover      : {rSurface}");
+                    ed.WriteMessage($"\n  Shifted by pipe constr. : {rShifted}");
+                    ed.WriteMessage("\n--------------------------------------------------------------------");
+
+                    // Group by PV
+                    var pvNames = new Dictionary<string, List<LateralReport>>();
+                    foreach (var r in reports)
+                    {
+                        if (!pvNames.ContainsKey(r.PvName)) pvNames[r.PvName] = new List<LateralReport>();
+                        pvNames[r.PvName].Add(r);
+                    }
+
+                    foreach (var kvp in pvNames)
+                    {
+                        string pvN   = kvp.Key;
+                        var    rList = kvp.Value;
+                        int pvDrawn  = rList.Count(r => r.Status == LateralStatus.Drawn);
+                        int pvSkip   = rList.Count - pvDrawn;
+
+                        ed.WriteMessage($"\n\n  PV: {pvN}");
+                        ed.WriteMessage($"\n  {rList.Count} crossing(s) — {pvDrawn} drawn, {pvSkip} skipped");
+                        ed.WriteMessage("\n  +-----------+--------+-----------+-----------+------------------+----------------------+");
+                        ed.WriteMessage("\n  | Station   | Status | ActStartY | DeltaY    | Constraints      | Note                 |");
+                        ed.WriteMessage("\n  +-----------+--------+-----------+-----------+------------------+----------------------+");
+
+                        foreach (var r in rList)
+                        {
+                            string staSt  = double.IsNaN(r.Station)      ? "    N/A  " : $"{r.Station,9:F2}";
+                            string stSt   = r.Status switch
+                            {
+                                LateralStatus.Drawn                  => "DRAWN ",
+                                LateralStatus.SkippedNoIntersection  => "SKIP-N",
+                                LateralStatus.SkippedInfeasible      => "SKIP-I",
+                                LateralStatus.SkippedValidationFailed=> "SKIP-V",
+                                LateralStatus.SkippedNoTarget        => "SKIP-T",
+                                _                                    => "??????"
+                            };
+                            string aSt = double.IsNaN(r.ActualStartY) ? "      N/A" : $"{r.ActualStartY,9:F4}";
+                            string dSt = double.IsNaN(r.DeltaY)       ? "      N/A" : $"{r.DeltaY,9:F4}";
+                            string cSt = string.IsNullOrEmpty(r.ActiveConstraints) ? "none" : r.ActiveConstraints;
+                            if (cSt.Length > 16) cSt = cSt.Substring(0, 16);
+                            string nSt = r.Status == LateralStatus.Drawn ? "ok" : r.FailReason;
+                            if (nSt.Length > 20) nSt = nSt.Substring(0, 20);
+
+                            ed.WriteMessage(
+                                $"\n  | {staSt} | {stSt} | {aSt} | {dSt} | {cSt,-16} | {nSt,-20} |");
+                        }
+
+                        ed.WriteMessage("\n  +-----------+--------+-----------+-----------+------------------+----------------------+");
+                    }
+
+                    ed.WriteMessage("\n--------------------------------------------------------------------");
+                    ed.WriteMessage($"\n  Done. {lateralsDrawn} lateral(s) drawn.\n");
                 }
             }
             catch (System.Exception ex)
