@@ -54,7 +54,6 @@ namespace AdvancedLandDevTools.Engine
             ObjectId styleId, layerId, labelSetId;
             double crossStartStation;
             double endStation;
-            int crossVertexCount;
             string crossAlignName;
 
             using (Transaction readTx = db.TransactionManager.StartTransaction())
@@ -83,8 +82,7 @@ namespace AdvancedLandDevTools.Engine
                         throw new InvalidOperationException(
                             "Cross alignment has fewer than 2 vertices.");
 
-                    crossVertexCount = crossVertices.Count;
-                    result.AddInfo($"Cross alignment vertices: {crossVertexCount}");
+                    result.AddInfo($"Cross alignment vertices: {crossVertices.Count}");
 
                     Point2d crossFirst = crossVertices[0];
                     Point2d crossLast  = crossVertices[crossVertices.Count - 1];
@@ -231,6 +229,7 @@ namespace AdvancedLandDevTools.Engine
                 {
                     try { tx.Abort(); } catch { }
                     tx.Dispose();
+                    tx = null;
                 }
                 return result;
             }
@@ -265,9 +264,11 @@ namespace AdvancedLandDevTools.Engine
             try
             {
                 var pts = new Point3dCollection();
+                var xyPlane = new Plane(Point3d.Origin, Vector3d.ZAxis);
                 ((Entity)mainAl).IntersectWith(
                     (Entity)crossAl,
                     Intersect.OnBothOperands,
+                    xyPlane,
                     pts,
                     IntPtr.Zero,
                     IntPtr.Zero);

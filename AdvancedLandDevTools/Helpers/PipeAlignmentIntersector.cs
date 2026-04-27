@@ -61,6 +61,12 @@ namespace AdvancedLandDevTools.Helpers
         private const double OffsetTolerance  = 1.0;   // ft max offset for a valid crossing
         private const double ZeroOffset       = 0.01;  // ft — treat as "on" the alignment
 
+        // Horizontal projection plane — IntersectWith is 3D by default, but
+        // alignments live at Z=0 and pipes at their real elevation, so a raw
+        // 3D call finds no hits.  The Plane overload projects both entities
+        // onto this plane before computing intersections.
+        private static readonly Plane XYPlane = new Plane(Point3d.Origin, Vector3d.ZAxis);
+
         // ─────────────────────────────────────────────────────────────
         //  Primary API: find all crossings for a single pipe
         // ─────────────────────────────────────────────────────────────
@@ -195,6 +201,7 @@ namespace AdvancedLandDevTools.Helpers
                 alEntity.IntersectWith(
                     pipeEntity,
                     Intersect.OnBothOperands,
+                    XYPlane,
                     intersections,
                     IntPtr.Zero,
                     IntPtr.Zero);
@@ -267,6 +274,7 @@ namespace AdvancedLandDevTools.Helpers
                 alEntity.IntersectWith(
                     pipeEntity,
                     Intersect.OnBothOperands,
+                    XYPlane,
                     intersections,
                     IntPtr.Zero,
                     IntPtr.Zero);
