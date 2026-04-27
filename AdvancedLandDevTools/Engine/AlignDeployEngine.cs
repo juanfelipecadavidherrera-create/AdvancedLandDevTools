@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
-using Autodesk.AutoCAD.EditorInput;
 using CivilApp = Autodesk.Civil.ApplicationServices;
 using CivilDB  = Autodesk.Civil.DatabaseServices;
 
@@ -27,6 +26,8 @@ namespace AdvancedLandDevTools.Engine
     // ─────────────────────────────────────────────────────────────────────────
     public static class AlignDeployEngine
     {
+        private const int BatchSize = 20;
+
         /// <summary>
         /// Main entry point – called by AlignDeployCommand after validation.
         /// </summary>
@@ -46,156 +47,241 @@ namespace AdvancedLandDevTools.Engine
 
             Database db  = doc.Database;
 
-            using (Transaction trans = db.TransactionManager.StartTransaction())
+            // ── Pre-compute all template data in a read-only transaction ─────
+            double intersectStation;
+            double θ0;
+            List<(double vx, double vy)> localVectors;
+            ObjectId styleId, layerId, labelSetId;
+            double crossStartStation;
+            double endStation;
+            int crossVertexCount;
+            string crossAlignName;
+
+            using (Transaction readTx = db.TransactionManager.StartTransaction())
             {
                 try
                 {
                     CivilApp.CivilDocument civDoc =
                         CivilApp.CivilDocument.GetCivilDocument(db);
 
-                    var mainAl  = trans.GetObject(mainAlignId,  OpenMode.ForRead) as CivilDB.Alignment;
-                    var crossAl = trans.GetObject(crossAlignId, OpenMode.ForRead) as CivilDB.Alignment;
+                    var mainAl  = readTx.GetObject(mainAlignId,  OpenMode.ForRead) as CivilDB.Alignment;
+                    var crossAl = readTx.GetObject(crossAlignId, OpenMode.ForRead) as CivilDB.Alignment;
 
                     if (mainAl == null || crossAl == null)
                         throw new InvalidOperationException("Could not open one or both alignments.");
 
-                    // ── 1. Find intersection station on main alignment ────────────
-                    double intersectStation = FindIntersectionStation(mainAl, crossAl);
+                    // 1. Find intersection station
+                    intersectStation = FindIntersectionStation(mainAl, crossAl);
                     result.AddInfo($"Intersection at station {FormatStation(intersectStation)}");
 
-                    // ── 2. Reference angle at intersection ───────────────────────
-                    double θ0 = GetTangentAngle(mainAl, intersectStation);
+                    // 2. Reference angle at intersection
+                    θ0 = GetTangentAngle(mainAl, intersectStation);
 
-                    // ── 3. Extract ALL vertices from cross alignment ──────────────
-                    //
-                    //  A cross alignment with a PI has multiple tangent entities.
-                    //  We iterate Entities in order and collect the ordered vertex
-                    //  list: [start of entity 0, end of entity 0, end of entity 1, ...]
-                    //  For a straight line (no PI) this gives exactly 2 points.
-                    //  For one PI this gives 3 points, two PIs → 4 points, etc.
-                    //
+                    // 3. Extract vertices from cross alignment
                     var crossVertices = ExtractVertices(crossAl);
                     if (crossVertices.Count < 2)
                         throw new InvalidOperationException(
                             "Cross alignment has fewer than 2 vertices.");
 
-                    result.AddInfo($"Cross alignment vertices: {crossVertices.Count}");
+                    crossVertexCount = crossVertices.Count;
+                    result.AddInfo($"Cross alignment vertices: {crossVertexCount}");
 
-                    // Compute midpoint of the whole cross alignment (first → last vertex)
-                    // Used as the pivot point for rotation in local space.
                     Point2d crossFirst = crossVertices[0];
                     Point2d crossLast  = crossVertices[crossVertices.Count - 1];
                     Point2d crossMid   = new Point2d(
                         (crossFirst.X + crossLast.X) / 2.0,
                         (crossFirst.Y + crossLast.Y) / 2.0);
 
-                    // Convert vertices to local vectors relative to midpoint
-                    var localVectors = new List<(double vx, double vy)>();
+                    localVectors = new List<(double vx, double vy)>();
                     foreach (var pt in crossVertices)
                         localVectors.Add((pt.X - crossMid.X, pt.Y - crossMid.Y));
 
-                    // ── 4. Resolve style/layer/site from cross alignment ──────────
-                    ObjectId styleId          = crossAl.StyleId;
-                    ObjectId layerId          = crossAl.LayerId;
-                    ObjectId siteId           = crossAl.SiteId;
-                    double   crossStartStation = crossAl.StartingStation; // preserve e.g. -0+57
+                    // 4. Resolve style/layer/name from cross alignment
+                    styleId          = crossAl.StyleId;
+                    layerId          = crossAl.LayerId;
+                    crossStartStation = crossAl.StartingStation;
+                    crossAlignName    = crossAl.Name;
 
-                    // Resolve alignment label set from document styles
-                    ObjectId labelSetId = ResolveAlignmentLabelSet(civDoc, trans);
-
-                    // ── 5. Loop along main alignment ─────────────────────────────
-                    double currentStation = intersectStation + offset;
-                    double endStation     = mainAl.EndingStation;
-                    int    copyIndex      = 1;
-
-                    while (currentStation <= endStation + 0.001)
-                    {
-                        try
-                        {
-                            // Point on main alignment at this station
-                            double px = 0, py = 0;
-                            mainAl.PointLocation(currentStation, 0, ref px, ref py);
-                            Point2d deployPt = new Point2d(px, py);
-
-                            // Rotation delta from reference angle
-                            double θn    = GetTangentAngle(mainAl, currentStation);
-                            double delta = θn - θ0;
-
-                            // Transform ALL vertices
-                            var transformedPts = new List<Point2d>();
-                            foreach (var (vx, vy) in localVectors)
-                                transformedPts.Add(RotateAndTranslate(vx, vy, delta, deployPt));
-
-                            // Name: CrossName-STA12+34.56
-                            string name = $"{crossAl.Name}-{FormatStation(currentStation)}";
-                            name = EnsureUniqueName(name, civDoc, trans);
-
-                            // Create new alignment
-                            ObjectId newAlId = CivilDB.Alignment.Create(
-                                civDoc, name, siteId, layerId, styleId, labelSetId);
-
-                            var newAl = trans.GetObject(newAlId, OpenMode.ForWrite)
-                                        as CivilDB.Alignment
-                                        ?? throw new InvalidOperationException("Failed to open new alignment for write.");
-
-                            // Add a fixed line segment between each consecutive vertex pair
-                            // This correctly reproduces PIs: 2 pts = 1 segment,
-                            // 3 pts = 2 segments (one PI), 4 pts = 3 segments, etc.
-                            for (int vi = 0; vi < transformedPts.Count - 1; vi++)
-                            {
-                                newAl.Entities.AddFixedLine(
-                                    new Point3d(transformedPts[vi].X,     transformedPts[vi].Y,     0),
-                                    new Point3d(transformedPts[vi+1].X,   transformedPts[vi+1].Y,   0));
-                            }
-
-                            // Match starting station of original cross alignment (e.g. -0+57)
-                            // StartingStation is read-only; ReferencePointStation shifts the datum.
-                            newAl.ReferencePointStation = crossStartStation;
-
-                            result.AddSuccess(
-                                $"{name}  @ station {FormatStation(currentStation)}  " +
-                                $"({transformedPts[0].X:F1},{transformedPts[0].Y:F1}) → " +
-                                $"({transformedPts[transformedPts.Count-1].X:F1}," +
-                                $"{transformedPts[transformedPts.Count-1].Y:F1})  " +
-                                $"[{transformedPts.Count} pts, {transformedPts.Count-1} seg(s)]");
-
-                            copyIndex++;
-                        }
-                        catch (System.Exception ex)
-                        {
-                            result.AddFailure(
-                                $"Station {FormatStation(currentStation)}: {ex.Message}");
-                        }
-
-                        currentStation += offset;
-                    }
-
-                    result.AddInfo(
-                        $"Total copies created: {result.CreatedCount}  |  " +
-                        $"Interval: {offset:F2}ft  |  " +
-                        $"From sta {FormatStation(intersectStation + offset)} " +
-                        $"to sta {FormatStation(currentStation - offset)}");
-
-                    trans.Commit();
+                    labelSetId = ResolveAlignmentLabelSet(civDoc, readTx);
+                    endStation = mainAl.EndingStation;
                 }
                 catch (System.Exception ex)
                 {
                     result.AddFailure($"Fatal: {ex.Message}");
-                    trans.Abort();
+                    readTx.Abort();
+                    return result;
+                }
+                readTx.Abort(); // read-only
+            }
+
+            // ── Build name set once (avoids O(n²) rescanning) ────────────────
+            var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (Transaction nameTx = db.TransactionManager.StartTransaction())
+            {
+                try
+                {
+                    var civDoc = CivilApp.CivilDocument.GetCivilDocument(db);
+                    foreach (ObjectId id in civDoc.GetAlignmentIds())
+                    {
+                        try
+                        {
+                            var al = nameTx.GetObject(id, OpenMode.ForRead) as CivilDB.Alignment;
+                            if (al != null) usedNames.Add(al.Name);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+                nameTx.Abort();
+            }
+
+            // ── Create alignments in batches ─────────────────────────────────
+            double currentStation = intersectStation + offset;
+            int    batchCount     = 0;
+            Transaction tx        = null;
+            CivilApp.CivilDocument batchCivDoc = null;
+
+            try
+            {
+                while (currentStation <= endStation + 0.001)
+                {
+                    // Start a new batch transaction if needed
+                    if (tx == null)
+                    {
+                        tx = db.TransactionManager.StartTransaction();
+                        batchCivDoc = CivilApp.CivilDocument.GetCivilDocument(db);
+                        batchCount = 0;
+                    }
+
+                    try
+                    {
+                        var mainAl = tx.GetObject(mainAlignId, OpenMode.ForRead)
+                                     as CivilDB.Alignment;
+                        if (mainAl == null) throw new InvalidOperationException("Cannot open main alignment.");
+
+                        // Point on main alignment at this station
+                        double px = 0, py = 0;
+                        mainAl.PointLocation(currentStation, 0, ref px, ref py);
+                        Point2d deployPt = new Point2d(px, py);
+
+                        // Rotation delta from reference angle
+                        double θn    = GetTangentAngle(mainAl, currentStation);
+                        double delta = θn - θ0;
+
+                        // Transform vertices
+                        var transformedPts = new List<Point2d>();
+                        foreach (var (vx, vy) in localVectors)
+                            transformedPts.Add(RotateAndTranslate(vx, vy, delta, deployPt));
+
+                        // Build unique name without rescanning all alignments
+                        string baseName = $"{crossAlignName}-{FormatStation(currentStation)}";
+                        string name = MakeUniqueName(baseName, usedNames);
+                        usedNames.Add(name);
+
+                        // Use ObjectId.Null for site to avoid topology rebuild per alignment
+                        ObjectId newAlId = CivilDB.Alignment.Create(
+                            batchCivDoc, name, ObjectId.Null, layerId, styleId, labelSetId);
+
+                        var newAl = tx.GetObject(newAlId, OpenMode.ForWrite)
+                                    as CivilDB.Alignment
+                                    ?? throw new InvalidOperationException("Failed to open new alignment for write.");
+
+                        for (int vi = 0; vi < transformedPts.Count - 1; vi++)
+                        {
+                            newAl.Entities.AddFixedLine(
+                                new Point3d(transformedPts[vi].X,     transformedPts[vi].Y,     0),
+                                new Point3d(transformedPts[vi + 1].X, transformedPts[vi + 1].Y, 0));
+                        }
+
+                        newAl.ReferencePointStation = crossStartStation;
+
+                        result.AddSuccess(
+                            $"{name}  @ station {FormatStation(currentStation)}  " +
+                            $"({transformedPts[0].X:F1},{transformedPts[0].Y:F1}) → " +
+                            $"({transformedPts[transformedPts.Count - 1].X:F1}," +
+                            $"{transformedPts[transformedPts.Count - 1].Y:F1})  " +
+                            $"[{transformedPts.Count} pts, {transformedPts.Count - 1} seg(s)]");
+
+                        batchCount++;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        result.AddFailure(
+                            $"Station {FormatStation(currentStation)}: {ex.Message}");
+                    }
+
+                    currentStation += offset;
+
+                    // Commit batch to free Civil 3D's undo buffer
+                    if (batchCount >= BatchSize || currentStation > endStation + 0.001)
+                    {
+                        tx.Commit();
+                        tx.Dispose();
+                        tx = null;
+
+                        // Let Civil 3D process events between batches
+                        System.Windows.Forms.Application.DoEvents();
+                    }
                 }
             }
+            catch (System.Exception ex)
+            {
+                result.AddFailure($"Fatal: {ex.Message}");
+                if (tx != null)
+                {
+                    try { tx.Abort(); } catch { }
+                    tx.Dispose();
+                }
+                return result;
+            }
+            finally
+            {
+                if (tx != null)
+                {
+                    try { tx.Commit(); } catch { try { tx.Abort(); } catch { } }
+                    tx.Dispose();
+                }
+            }
+
+            result.AddInfo(
+                $"Total copies created: {result.CreatedCount}  |  " +
+                $"Interval: {offset:F2}ft  |  " +
+                $"From sta {FormatStation(intersectStation + offset)} " +
+                $"to sta {FormatStation(currentStation - offset)}");
 
             return result;
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Find the station on mainAl closest to where crossAl crosses it
+        //  Find the station on mainAl closest to where crossAl crosses it.
+        //  Uses Entity.IntersectWith for an exact answer, with a brute-force
+        //  fallback if the API call fails.
         // ─────────────────────────────────────────────────────────────────────
         private static double FindIntersectionStation(
             CivilDB.Alignment mainAl,
             CivilDB.Alignment crossAl)
         {
-            // Sample both alignments and find closest approach in XY
+            // Try exact geometric intersection first
+            try
+            {
+                var pts = new Point3dCollection();
+                ((Entity)mainAl).IntersectWith(
+                    (Entity)crossAl,
+                    Intersect.OnBothOperands,
+                    pts,
+                    IntPtr.Zero,
+                    IntPtr.Zero);
+
+                if (pts.Count > 0)
+                {
+                    double station = 0, offset = 0;
+                    mainAl.StationOffset(pts[0].X, pts[0].Y, ref station, ref offset);
+                    return station;
+                }
+            }
+            catch { }
+
+            // Fallback: sampling approach
             int    samples  = 500;
             double bestDist = double.MaxValue;
             double bestSta  = mainAl.StartingStation;
@@ -203,7 +289,6 @@ namespace AdvancedLandDevTools.Engine
             double mainLen  = mainAl.EndingStation  - mainAl.StartingStation;
             double crossLen = crossAl.EndingStation - crossAl.StartingStation;
 
-            // Sample cross alignment at several points
             var crossPts = new List<Point2d>();
             for (int ci = 0; ci <= 20; ci++)
             {
@@ -213,7 +298,6 @@ namespace AdvancedLandDevTools.Engine
                 crossPts.Add(new Point2d(cx, cy));
             }
 
-            // Sample main alignment and find station closest to any cross point
             for (int mi = 0; mi <= samples; mi++)
             {
                 double mSta = mainAl.StartingStation + (mainLen * mi / (double)samples);
@@ -265,48 +349,40 @@ namespace AdvancedLandDevTools.Engine
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Station formatting  →  "12+34.56"
+        //  Station formatting  →  "12+34.56"  (handles negative stations)
         // ─────────────────────────────────────────────────────────────────────
         private static string FormatStation(double station)
         {
-            int    hundreds = (int)(station / 100);
-            double remainder = station - hundreds * 100.0;
-            return $"{hundreds}+{remainder:00.00}";
+            string sign = "";
+            double abs  = station;
+            if (station < 0)
+            {
+                sign = "-";
+                abs  = -station;
+            }
+            int    hundreds  = (int)(abs / 100);
+            double remainder = abs - hundreds * 100.0;
+            return $"{sign}{hundreds}+{remainder:00.00}";
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Ensure name is unique within the Civil document
+        //  Build a unique name from the pre-built set (O(1) per call)
         // ─────────────────────────────────────────────────────────────────────
-        private static string EnsureUniqueName(
-            string baseName,
-            CivilApp.CivilDocument civDoc,
-            Transaction trans)
+        private static string MakeUniqueName(string baseName, HashSet<string> usedNames)
         {
-            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (ObjectId id in civDoc.GetAlignmentIds())
-            {
-                try
-                {
-                    var al = trans.GetObject(id, OpenMode.ForRead) as CivilDB.Alignment;
-                    if (al != null) existing.Add(al.Name);
-                }
-                catch { }
-            }
+            if (!usedNames.Contains(baseName)) return baseName;
 
-            if (!existing.Contains(baseName)) return baseName;
-
-            for (int i = 2; i < 999; i++)
+            for (int i = 2; i < 9999; i++)
             {
                 string candidate = $"{baseName}({i})";
-                if (!existing.Contains(candidate)) return candidate;
+                if (!usedNames.Contains(candidate)) return candidate;
             }
             return baseName + Guid.NewGuid().ToString("N")[..6];
         }
+
         // ─────────────────────────────────────────────────────────────────────
         //  Extract ordered vertices from an alignment (handles PIs)
         //  Returns [start, PI1, PI2, ..., end] as Point2d list.
-        //  AlignmentEntity has no StartPoint/EndPoint – we use StartStation/
-        //  EndStation and call PointLocation on the parent alignment.
         // ─────────────────────────────────────────────────────────────────────
         private static List<Point2d> ExtractVertices(CivilDB.Alignment al)
         {
@@ -314,18 +390,12 @@ namespace AdvancedLandDevTools.Engine
 
             try
             {
-                // AlignmentEntity exposes no useful geometry properties in Civil 3D 2026.
-                // Instead: sample the alignment at fine intervals and detect PI locations
-                // by finding where the tangent angle changes by more than a threshold.
-                // For a straight alignment: 2 points. One PI: 3 points. Two PIs: 4, etc.
-
                 double start  = al.StartingStation;
                 double end    = al.EndingStation;
                 double length = end - start;
-                int    steps  = Math.Max(500, (int)(length / 0.5)); // sample every 0.5ft
+                int    steps  = Math.Max(500, (int)(length / 0.5));
                 double step   = length / steps;
 
-                // Always include the start point
                 double x0 = 0, y0 = 0;
                 al.PointLocation(start, 0, ref x0, ref y0);
                 pts.Add(new Point2d(x0, y0));
@@ -337,21 +407,17 @@ namespace AdvancedLandDevTools.Engine
                     double sta   = start + i * step;
                     double angle = GetTangentAngle(al, sta);
 
-                    // Normalise angle difference to [-π, π]
                     double diff = angle - prevAngle;
                     while (diff >  Math.PI) diff -= 2 * Math.PI;
                     while (diff < -Math.PI) diff += 2 * Math.PI;
 
-                    // Angle change > 0.5° means we crossed a PI
                     if (Math.Abs(diff) > 0.5 * Math.PI / 180.0)
                     {
-                        // Walk back to find exact PI location (bisection)
                         double piSta = sta - step;
                         double x = 0, y = 0;
                         al.PointLocation(piSta, 0, ref x, ref y);
                         Point2d piPt = new Point2d(x, y);
 
-                        // Only add if not too close to last point
                         if (pts[pts.Count - 1].GetDistanceTo(piPt) > 0.1)
                             pts.Add(piPt);
                     }
@@ -359,7 +425,6 @@ namespace AdvancedLandDevTools.Engine
                     prevAngle = angle;
                 }
 
-                // Always include the end point
                 double xe = 0, ye = 0;
                 al.PointLocation(end, 0, ref xe, ref ye);
                 Point2d endPt = new Point2d(xe, ye);
@@ -394,7 +459,6 @@ namespace AdvancedLandDevTools.Engine
                     {
                         var obj = trans.GetObject(id, OpenMode.ForRead);
                         if (obj == null) continue;
-                        // Prefer "No Labels" style to avoid cluttering the drawing
                         if (obj is CivilDB.Styles.StyleBase sb &&
                             sb.Name.Contains("No Label", StringComparison.OrdinalIgnoreCase))
                             return id;
@@ -404,7 +468,7 @@ namespace AdvancedLandDevTools.Engine
                 }
             }
             catch { }
-            return fallback; // ObjectId.Null is acceptable – Civil 3D uses default
+            return fallback;
         }
     }
 }
