@@ -221,6 +221,25 @@ namespace AdvancedLandDevTools.Ribbon
                 LargeImage       = BuildProfOffIcon(32),
                 Image            = BuildProfOffIcon(16)
             };
+            // ── Off PV button ─────────────────────────────────────────────────
+            var btnOffPv = new RibbonButton
+            {
+                Id               = "ALDT_BTN_OFFPV",
+                Name             = "Off PV",
+                Text             = "Off\nPV",
+                Description      = "Turn off network parts in a profile view — keep selected pipes, hide the rest.",
+                ToolTip          = BuildToolTip(
+                    "Off PV",
+                    "Turn off network parts in a profile view — keep selected pipes, hide the rest.\n\nCommand: OFFPV"),
+                CommandHandler   = new RibbonCommandHandler("OFFPV "),
+                CommandParameter = "OFFPV ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Standard,
+                Orientation      = System.Windows.Controls.Orientation.Horizontal,
+                LargeImage       = BuildOffPvIcon(32),
+                Image            = BuildOffPvIcon(16)
+            };
             // ── PV Style Override button ──────────────────────────────────────
             var btnPvStyle = new RibbonButton
             {
@@ -270,6 +289,8 @@ namespace AdvancedLandDevTools.Ribbon
             pvRow.Items.Add(btnLLabelGen);
             pvRow.Items.Add(new RibbonRowBreak());
             pvRow.Items.Add(btnProfOff);
+            pvRow.Items.Add(new RibbonRowBreak());
+            pvRow.Items.Add(btnOffPv);
             pvRow.Items.Add(new RibbonRowBreak());
             pvRow.Items.Add(btnPvStyle);
             pvRow.Items.Add(new RibbonRowBreak());
@@ -1113,6 +1134,40 @@ namespace AdvancedLandDevTools.Ribbon
             abSource.Items.Add(btnTableDraw);
 
             tab.Panels.Add(new RibbonPanel { Source = abSource });
+
+            // ══════════════════════════════════════════════════════════════════
+            //  Panel 11 — CAD Tools
+            // ══════════════════════════════════════════════════════════════════
+            var cadSource = new RibbonPanelSource
+            {
+                Id    = "ALDT_PANEL_CADTOOLS",
+                Title = "CAD Tools"
+            };
+
+            // ── CAD Dim button ────────────────────────────────────────────────
+            var btnCadDim = new RibbonButton
+            {
+                Id               = "ALDT_BTN_CADDIM",
+                Name             = "CAD Dim",
+                Text             = "CAD\nDim",
+                Description      = "Linear dimensions between two reference lines, with " +
+                                   "sub-dimensions for any crossing lines.",
+                ToolTip          = BuildToolTip(
+                    "CAD Dim",
+                    "Linear dimensions between two reference lines, with sub-dimensions " +
+                    "for any crossing lines.\n\nCommand:  CAD"),
+                CommandHandler   = new RibbonCommandHandler("CAD "),
+                CommandParameter = "CAD ",
+                ShowText         = true,
+                ShowImage        = true,
+                Size             = RibbonItemSize.Large,
+                Orientation      = System.Windows.Controls.Orientation.Vertical,
+                LargeImage       = BuildCadDimIcon(32),
+                Image            = BuildCadDimIcon(16)
+            };
+            cadSource.Items.Add(btnCadDim);
+
+            tab.Panels.Add(new RibbonPanel { Source = cadSource });
 
             ribbon.Tabs.Add(tab);
         }
@@ -3401,6 +3456,120 @@ namespace AdvancedLandDevTools.Ribbon
             Add(new Line { X1 = s*(cx+r), Y1 = s*(cy-r), X2 = s*(cx-r), Y2 = s*(cy+r),
                 Stroke = C("#EF5350"), StrokeThickness = s * 2.2,
                 StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  Off PV icon — profile view with one solid pipe kept and others dashed off
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildOffPvIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark background
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1520"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Profile view grid (light grey lines) ──────────────────────────
+            foreach (double y in new[] { 8.0, 16.0, 24.0 })
+                Add(new Line { X1 = s*3, Y1 = s*y, X2 = s*29, Y2 = s*y,
+                    Stroke = C("#2A3A4A"), StrokeThickness = s * 0.7 });
+            foreach (double x in new[] { 3.0, 10.3, 17.6, 24.9 })
+                Add(new Line { X1 = s*x, Y1 = s*4, X2 = s*x, Y2 = s*28,
+                    Stroke = C("#2A3A4A"), StrokeThickness = s * 0.7 });
+
+            // ── Profile view border ────────────────────────────────────────────
+            Add(new Rectangle { Width = s*26, Height = s*24,
+                Stroke = C("#546E8A"), StrokeThickness = s * 1.0,
+                Fill = C("Transparent"), RadiusX = s*1, RadiusY = s*1 });
+            Canvas.SetLeft(canvas.Children[canvas.Children.Count-1], s*3);
+            Canvas.SetTop(canvas.Children[canvas.Children.Count-1],  s*4);
+
+            // ── Pipe segment 1 (top, dashed grey — turned off) ────────────────
+            Add(new Line { X1 = s*5, Y1 = s*10, X2 = s*27, Y2 = s*10,
+                Stroke = C("#5A6470"), StrokeThickness = s * 2.0,
+                StrokeDashArray = new DoubleCollection { 2.0, 1.5 },
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                Opacity = 0.7 });
+
+            // ── Pipe segment 2 (middle, solid gold — kept) ────────────────────
+            Add(new Line { X1 = s*5, Y1 = s*17, X2 = s*27, Y2 = s*17,
+                Stroke = C("#FFD54F"), StrokeThickness = s * 2.6,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            // ── Pipe segment 3 (bottom, dashed grey — turned off) ─────────────
+            Add(new Line { X1 = s*5, Y1 = s*24, X2 = s*27, Y2 = s*24,
+                Stroke = C("#5A6470"), StrokeThickness = s * 2.0,
+                StrokeDashArray = new DoubleCollection { 2.0, 1.5 },
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                Opacity = 0.7 });
+
+            return RenderToBitmap(canvas, size, size);
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  CAD Dim icon — two parallel reference lines with a perpendicular
+        //  dimension (arrowheads at both ends) and a crossing obstacle line
+        // ═════════════════════════════════════════════════════════════════════
+        private static ImageSource BuildCadDimIcon(int size)
+        {
+            double s = size / 32.0;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            SolidColorBrush C(string hex)
+                => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            void Add(System.Windows.UIElement el) => canvas.Children.Add(el);
+
+            // Dark navy background (matches OffPv palette)
+            Add(new Rectangle { Width = size, Height = size, Fill = C("#0D1520"),
+                RadiusX = s * 3, RadiusY = s * 3 });
+
+            // ── Top reference line (thin, blue) ──────────────────────────────
+            Add(new Line { X1 = s * 3,  Y1 = s * 6,  X2 = s * 29, Y2 = s * 6,
+                Stroke = C("#4FC3F7"), StrokeThickness = s * 1.4,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            // ── Bottom reference line (thin, blue) ───────────────────────────
+            Add(new Line { X1 = s * 3,  Y1 = s * 26, X2 = s * 29, Y2 = s * 26,
+                Stroke = C("#4FC3F7"), StrokeThickness = s * 1.4,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            // ── Crossing obstacle line (short stroke crossing the dim line) ──
+            Add(new Line { X1 = s * 10, Y1 = s * 16, X2 = s * 22, Y2 = s * 16,
+                Stroke = C("#EF5350"), StrokeThickness = s * 1.6,
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+
+            // ── Vertical dimension line connecting the two reference lines ──
+            Add(new Line { X1 = s * 16, Y1 = s * 6, X2 = s * 16, Y2 = s * 26,
+                Stroke = C("#FFD54F"), StrokeThickness = s * 1.6 });
+
+            // ── Top arrowhead (pointing up at the top reference line) ───────
+            Add(new System.Windows.Shapes.Polygon
+            {
+                Points = new PointCollection
+                {
+                    new System.Windows.Point(s * 16,   s * 6),
+                    new System.Windows.Point(s * 13.5, s * 10),
+                    new System.Windows.Point(s * 18.5, s * 10)
+                },
+                Fill = C("#FFD54F")
+            });
+
+            // ── Bottom arrowhead (pointing down at the bottom reference line) ─
+            Add(new System.Windows.Shapes.Polygon
+            {
+                Points = new PointCollection
+                {
+                    new System.Windows.Point(s * 16,   s * 26),
+                    new System.Windows.Point(s * 13.5, s * 22),
+                    new System.Windows.Point(s * 18.5, s * 22)
+                },
+                Fill = C("#FFD54F")
+            });
 
             return RenderToBitmap(canvas, size, size);
         }

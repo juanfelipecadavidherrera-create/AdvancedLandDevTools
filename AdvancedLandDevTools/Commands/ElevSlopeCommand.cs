@@ -14,6 +14,12 @@ namespace AdvancedLandDevTools.Commands
 {
     public class ElevSlopeCommand
     {
+        // Session-persistent slope (in %).  First run defaults to 2.0; each
+        // time the user changes the slope via the "Slope" keyword, the new
+        // value sticks for the rest of the AutoCAD session (until the
+        // process is restarted).
+        private static double _sessionSlope = 2.0;
+
         [CommandMethod("ELEVSLOPE")]
         public void Execute()
         {
@@ -114,7 +120,10 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage($"\n  Surface elevation: {startElev:F3}\n");
 
                 // ── Step 3: Slope + new point location ────────────────
-                double slope = 2.0;
+                // Carry the slope from the last invocation in this session.
+                double slope = _sessionSlope;
+                ed.WriteMessage($"\n  Current session slope: {slope:F2}% " +
+                                "(use the Slope keyword to change)\n");
 
                 var ptOpt = new PromptPointOptions(
                     $"\n  Pick new point location (slope={slope:F2}%) [Slope]: ");
@@ -140,9 +149,13 @@ namespace AdvancedLandDevTools.Commands
 
                         var slopeRes = ed.GetDouble(slopeOpt);
                         if (slopeRes.Status == PromptStatus.OK)
-                            slope = slopeRes.Value;
+                        {
+                            slope         = slopeRes.Value;
+                            _sessionSlope = slope;   // persist for the session
+                        }
 
-                        ed.WriteMessage($"\n  Slope set to {slope:F2}%\n");
+                        ed.WriteMessage(
+                            $"\n  Slope set to {slope:F2}% (saved as session default)\n");
 
                         // Update prompt text with new slope
                         ptOpt = new PromptPointOptions(

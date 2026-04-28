@@ -73,6 +73,7 @@
   <a href="#cmd-llabelgen">LLABELGEN <span class="sidebar-badge">NEW</span></a>
     <a href="#cmd-marklines">MARKLINES</a>
   <a href="#cmd-markfittings">MARKFITTINGS <span class="sidebar-badge">NEW</span></a>
+  <a href="#cmd-offpv">OFFPV <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-profoff">PROFOFF</a>
   <a href="#cmd-pvstyle">PVSTYLE</a>
   <a href="#cmd-chopchop">CHOPCHOP <span class="sidebar-badge">NEW</span></a>
@@ -114,32 +115,10 @@
   <a href="#cmd-coralasbuilt">CORALASBUILT <span class="sidebar-badge">NEW</span></a>
   <a href="#cmd-tabledraw">TABLEDRAW <span class="sidebar-badge">NEW</span></a>
 
-  <div class="cmd" id="cmd-coralasbuilt">
-<strong>CORALASBUILT</strong> -- Coral Gables Sewer As-Built <span class="badge-new">v1.1.0</span><br>
-Queries the Coral Gables Sewer GIS within 1000 ft of a picked point and draws gravity mains, force mains, manholes, and laterals into model space.
-<div class="workflow"><strong>How to use:</strong>
-<ol>
-<li>Run <code>CORALASBUILT</code>.</li>
-<li>Pick a center point in the drawing.</li>
-<li>The tool queries the Coral Gables Sewer ArcGIS FeatureServer and draws all sewer features within the specified radius directly into model space.</li>
-</ol>
-</div>
-</div>
+  <h3>Annotation</h3>
+  <a href="#cmd-cad">CAD <span class="sidebar-badge">NEW</span></a>
 
-<div class="cmd" id="cmd-tabledraw">
-<strong>TABLEDRAW</strong> -- Table Drawer <span class="badge-new">v1.1.0</span><br>
-Design Excel-like tables with merged cells, free text, and live links to Civil 3D entities. Draws a grid into model space and auto-updates when linked entities change.
-<div class="workflow"><strong>How to use:</strong>
-<ol>
-<li>Run <code>TABLEDRAW</code>.</li>
-<li>Define rows, columns, and cell content (free text or live links).</li>
-<li>Click Draw and select an insertion point.</li>
-<li>Linked cells will update automatically when the associated Civil 3D entity changes.</li>
-</ol>
-</div>
-</div>
-
-<h3>Vehicle Tracking</h3>
+  <h3>Vehicle Tracking</h3>
   <a href="#cmd-vtpanel">VTPANEL</a>
   <a href="#cmd-vtsweep">VTSWEEP</a>
     <a href="#cmd-vtdrive">VTDRIVE</a>
@@ -256,6 +235,21 @@ Finds every point where selected lines or polylines cross an alignment and draws
 <li>Pick profile views one by one in the drawing (press Enter when done).</li>
 <li>Vertical marker lines are drawn at every crossing station across all selected views.</li>
 </ol>
+</div>
+</div>
+
+<div class="cmd" id="cmd-offpv">
+<strong>OFFPV</strong> -- Turn Off Network Parts in a Profile View <span class="badge-new">v1.1.0</span><br>
+Turn off network parts in a profile view -- keep selected pipes. Click any pipe or structure drawn in a profile view to identify the network and the profile view, then select the parts you want to keep visible. Every other part of the same network in that profile view is removed via Civil 3D's <code>RemoveFromProfileView</code>. Works on both gravity networks (pipes + structures) and pressure networks (pipes + fittings + appurtenances). Affects only the picked profile view -- other profile views that show the same network are untouched.
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>OFFPV</code>.</li>
+<li>Click any pipe or structure drawn in a profile view to identify the network and the profile view.</li>
+<li>Select (window/pick) the parts you want to KEEP visible, then press Enter to finish.</li>
+<li>Pressing Enter without selecting anything turns OFF the entire network in that profile view.</li>
+<li>Every other part of the same network in that profile view is removed automatically.</li>
+</ol>
+<em>Note: Not reversible by the plugin -- use AutoCAD undo, or manually re-add parts to the profile view through Civil 3D.</em>
 </div>
 </div>
 
@@ -661,6 +655,23 @@ Design Excel-like tables with merged cells, free text, and live links to Civil 3
 </div>
 </div>
 
+<h3>Annotation</h3>
+
+<div class="cmd" id="cmd-cad">
+<strong>CAD</strong> -- Linear dimensions between two reference lines + sub-dims for crossing lines <span class="badge-new">v1.1.0</span><br>
+Pick two reference lines (at any angle) and an anchor point on line 1. The command builds a perpendicular measurement axis from that anchor through both lines, places one main <code>AlignedDimension</code> from line 1 to line 2 offset 5 drawing units perpendicular to the path, and 5 drawing units further out adds a sub-row of dimensions broken at every other line that crosses the path (line 1 -- obstacle 1 -- obstacle 2 -- ... -- line 2).
+<div class="workflow"><strong>How to use:</strong>
+<ol>
+<li>Run <code>CAD</code>.</li>
+<li>Pick the first reference line (line 1).</li>
+<li>Pick the second reference line (line 2).</li>
+<li>Pick an anchor point on line 1 -- the measurement path passes through this point perpendicular to line 1's direction.</li>
+<li>The main aligned dimension and the sub-row of obstacle dimensions are placed automatically.</li>
+</ol>
+<em>Note: Obstacle detection considers Line entities in current-space that cross the measurement path strictly between the two reference lines. Polylines are picked segment-by-segment.</em>
+</div>
+</div>
+
 <h3>Vehicle Tracking</h3>
 
 <div class="cmd" id="cmd-vtpanel">
@@ -765,7 +776,7 @@ Opens this help document in a resizable window directly inside Civil 3D. All com
 <div class="section">
 <table>
 <tr><th>Version</th><th>Changes</th></tr>
-<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>LATMANAGER</strong> -- dockable palette to save 2D lateral profile crossing data and project it automatically into other profile views; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. All new commands added to ribbon and Mini Toolbar. Includes MARKFITTINGS, COVERADJUST, FOLIO, CORALASBUILT, TABLEDRAW, and VTEDIT.</td></tr>
+<tr><td>1.1.0</td><td>New commands: PROFOFF -- remove pipes/structures from a profile view; PVSTYLE -- change per-profile-view style override without touching the global style; <strong>CHOPCHOP</strong> -- subdivide a profile view into smaller views (equal or custom intervals, horizontal layout below original); <strong>LLABELGEN</strong> -- automatically place 3D station elevation labels at crossing pipe inverts with style selection UI; <strong>LATMANAGER</strong> -- dockable palette to save 2D lateral profile crossing data and project it automatically into other profile views; <strong>RRNETWORKCHECK</strong> (beta) -- pressure network clearance check with surface auto-detection and bend suggestion logic. CHANGEELEVATION updated to support direct pipe selection from inside a profile view. ALDTHELP command added with sidebar navigation. All new commands added to ribbon and Mini Toolbar. Includes MARKFITTINGS, COVERADJUST, FOLIO, CORALASBUILT, TABLEDRAW, VTEDIT, and <strong>OFFPV</strong> -- turn off all parts of a network in a profile view, keeping only the user-selected pipes (works on both gravity and pressure networks). <strong>CAD</strong> -- linear dimensions between two reference lines with a sub-row of dimensions broken at every other line crossing the measurement path.</td></tr>
 <tr><td>1.0.0</td><td>Initial release. Commands: BULKSUR, ALIGNDEPLOY, PIPEMAGIC (with Pressure Fitting Detector and Manhole Mode), INVERTPULLUP, MARKLINES, VPCUT, GETPARENT, CHANGEELEVATION, FLOODZONE, FLOODCRITERIA, SECTIONLOOKUP, GWMAY, GWOCT, AREAMANAGER, EXF, ELEVSLOPE, BLOCKTOSURFACE, TEXTTOSURFACE, LOWRIM, PIPESIZING, EEEBEND, PRESSCOUNT, SECDRAW, VTDRIVE, VTPANEL, VTSWEEP, VTPARK, ALDTTOOLBAR. Supports Civil 3D 2025 / 2026 / 2027.</td></tr>
 </table>
 </div>

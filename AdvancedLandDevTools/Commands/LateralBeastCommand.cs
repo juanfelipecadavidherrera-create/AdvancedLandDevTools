@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -43,6 +44,69 @@ namespace AdvancedLandDevTools.Commands
             public double        DeltaY;           // actualStartY - minStartY; NaN when skipped
             public string        ActiveConstraints; // e.g. "SurfaceCover|AbovePipe"
             public string        FailReason;
+            public string        CrossingsInfo;     // multi-line dump of every crossing
+                                                   // pipe seen at this lateral — included in
+                                                   // the printed report so the user can paste
+                                                   // it back for diagnosis.
+        }
+
+        // Build a multi-line dump of every crossing seen by a lateral.  Each line
+        // includes alignment station, outer diameter, host-WCS X, real invert
+        // elevation and the corresponding drawing-Y values for invert and crown.
+        private static string BuildCrossingsInfo(
+            CivilDB.ProfileView pv,
+            List<LateralCrossing> crossings,
+            double startX,
+            double tanAngle,
+            double actualStartY,
+            double verticalOffset)
+        {
+            if (crossings == null || crossings.Count == 0)
+                return "      (no other-network crossings)";
+            var sb = new StringBuilder();
+            for (int i = 0; i < crossings.Count; i++)
+            {
+                var lc = crossings[i];
+                double dummy = 0, cyInv = double.NaN, cyCrn = double.NaN;
+                bool okI = false, okC = false;
+                try
+                {
+                    okI = pv.FindXYAtStationAndElevation(
+                              lc.Station, lc.InvertElev,
+                              ref dummy, ref cyInv);
+                    okC = pv.FindXYAtStationAndElevation(
+                              lc.Station, lc.InvertElev + lc.OuterDiam,
+                              ref dummy, ref cyCrn);
+                }
+                catch { }
+
+                double dx_c  = lc.DrawingX - startX;
+                double latBot = double.IsNaN(actualStartY) ? double.NaN
+                                : actualStartY + dx_c * tanAngle;
+                double latTop = double.IsNaN(actualStartY) ? double.NaN
+                                : latBot + verticalOffset;
+                string side = "n/a";
+                if (okI && okC && !double.IsNaN(latBot))
+                    side = IsCrossingAboveLateral(latBot, latTop, cyInv, cyCrn)
+                           ? "LATERAL-PASSES-BELOW-PIPE (above-rule, 0.555ft clear above lat)"
+                           : "LATERAL-PASSES-ABOVE-PIPE (below-rule, 1.055ft clear below lat)";
+
+                sb.Append("      • [").Append(i + 1).Append("] ");
+                sb.Append("Sta=").Append(lc.Station.ToString("F2"));
+                sb.Append("  Ø=").Append(lc.OuterDiam.ToString("F2")).Append("ft");
+                sb.Append("  X=").Append(lc.DrawingX.ToString("F2"));
+                sb.Append("  Inv=").Append(lc.InvertElev.ToString("F2")).Append("ft");
+                sb.Append("  InvY=").Append(okI ? cyInv.ToString("F2") : "?");
+                sb.Append("  CrnY=").Append(okC ? cyCrn.ToString("F2") : "?");
+                if (!double.IsNaN(latBot))
+                {
+                    sb.Append("  latBotY=").Append(latBot.ToString("F2"));
+                    sb.Append("  latTopY=").Append(latTop.ToString("F2"));
+                }
+                sb.Append("  side=").Append(side);
+                if (i < crossings.Count - 1) sb.AppendLine();
+            }
+            return sb.ToString();
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -337,23 +401,35 @@ namespace AdvancedLandDevTools.Commands
         //  wrong side when a big crossing pipe straddled the lateral, leading
         //  to spurious infeasibility verdicts.
         // ─────────────────────────────────────────────────────────────────────
-        private const double ClearAboveDu = 10.55;  // 1.055 ft × 10× V.E.
-        private const double ClearBelowDu =  5.55;  // 0.555 ft × 10× V.E.
+        // Asymmetric pads, lateral-centric:
+        //   ClearAboveDu — gap between LATERAL TOP and PIPE INVERT when the lateral
+        //                  passes BELOW the crossing pipe.  Small pad: 0.555 ft.
+        //   ClearBelowDu — gap between LATERAL BOTTOM and PIPE CROWN when the lateral
+        //                  passes ABOVE the crossing pipe.  Big pad:   1.055 ft.
+        private const double ClearAboveDu =  5.55;  // 0.555 ft × 10× V.E.  (lat below pipe)
+        private const double ClearBelowDu = 10.55;  // 1.055 ft × 10× V.E.  (lat above pipe)
 
+        // Minimum vertical drawing-distance between the surface (top of the
+        // structure / cap) and the VISIBLE BOTTOM LATERAL LINE at the structure
+        // station.  The user requires 30 drawing units of cover at the structure.
+        private const double StructureCoverDu = 30.0;
+
+        // Strict geometric classifier — no clearance bias.
+        //   • Lateral fully BELOW the pipe invert  → pipe is ABOVE  → return true
+        //     (this is a "from-below" crossing; above-rule, ClearAboveDu applies).
+        //   • Lateral fully ABOVE the pipe crown   → pipe is BELOW  → return false
+        //     (this is a "from-above" crossing; below-rule, ClearBelowDu applies).
+        //   • Overlap regime → fall back to midpoint comparison (no clearance bias),
+        //     so the asymmetric pads can no longer flip the verdict.
         private static bool IsCrossingAboveLateral(
             double latBot, double latTop,
             double cyInv,  double cyCrn)
         {
-            bool overlaps = latTop > cyInv && latBot < cyCrn;
-            if (!overlaps)
-                return ((cyInv + cyCrn) * 0.5) > ((latBot + latTop) * 0.5);
-
-            // Overlap regime: distance to clear (with clearance baked in) on each side.
-            //   pushDown = how much latTop must drop to land at (pipe invert − above-clear)
-            //   pushUp   = how much latBot must rise to land at (pipe crown  + below-clear)
-            double pushDown = (latTop - cyInv) + ClearAboveDu;
-            double pushUp   = (cyCrn  - latBot) + ClearBelowDu;
-            return pushDown <= pushUp;
+            if (latTop <= cyInv) return true;   // lateral entirely below pipe invert
+            if (latBot >= cyCrn) return false;  // lateral entirely above pipe crown
+            double latMid  = 0.5 * (latBot + latTop);
+            double pipeMid = 0.5 * (cyInv  + cyCrn);
+            return pipeMid > latMid;            // pipe centre above lateral centre → above-rule
         }
 
         // Parameter t (0–1) of crossPt projected onto pipe axis in plan.
@@ -716,18 +792,37 @@ namespace AdvancedLandDevTools.Commands
                             double tanAngle = Math.Abs(dir.X) > 1e-9 ? dir.Y / dir.X : 0.0;
 
                             // ── Step 1: surface cover → initial starting position ───────────
-                            double checkX       = isLeft ? probeHit.Value.X + 2.5
-                                                         : probeHit.Value.X - 2.5;
+                            // Hard rule: the VISIBLE BOTTOM LATERAL LINE at the structure
+                            // station must be at least StructureCoverDu (30 du) below the
+                            // surface (i.e. below the top of the cap/structure).
+                            //
+                            // The visible bottom line at any X equals
+                            //   visBottomY(X) = (actualStartY + 1.0) + (X − startX)·tanAngle
+                            // (the +1.0 du is the slack offset between actualStartY and the
+                            // line that's actually drawn).  We anchor the cover check at the
+                            // structure end, which is exactly where the top ray hits the
+                            // target line — approximated here by probeHit.Value.X (the
+                            // structure stub is drawn within ~3 du of that X).
+                            double checkX       = probeHit.Value.X;
                             double checkStation = cp.Station + (checkX - cp.DrawingX);
 
                             double surfaceElev   = GetSurfaceElevation(tx, db, pvId, checkStation);
                             double surfaceStartY = double.NaN; // upper limit from cover
                             if (!double.IsNaN(surfaceElev))
                             {
-                                double cx2 = 0, cy2 = 0;
+                                double cxSurf = 0, cySurf = 0;
                                 if (pv.FindXYAtStationAndElevation(
-                                        checkStation, surfaceElev - 3.0, ref cx2, ref cy2))
-                                    surfaceStartY = cy2 - (checkX - startX) * tanAngle;
+                                        checkStation, surfaceElev, ref cxSurf, ref cySurf))
+                                {
+                                    // Solve for the upper bound on actualStartY:
+                                    //   visBottomY(checkX) ≤ cySurf − StructureCoverDu
+                                    //   (actualStartY + 1.0) + (checkX − startX)·tanAngle
+                                    //                                 ≤ cySurf − StructureCoverDu
+                                    surfaceStartY = cySurf
+                                                  - StructureCoverDu
+                                                  - 1.0
+                                                  - (checkX - startX) * tanAngle;
+                                }
                             }
                             else
                             {
@@ -754,85 +849,95 @@ namespace AdvancedLandDevTools.Commands
                                 Math.Abs(a.DrawingX - startX)
                                     .CompareTo(Math.Abs(b.DrawingX - startX)));
 
-                            // ── Step 3: iterative downward resolution ───────────────────────
-                            bool resolveOk = true;
-                            bool changed   = true;
-                            int  maxIter   = (otherCrossings.Count + 1) * 3;
-                            int  iter      = 0;
+                            // ── Step 3: Interval-intersection feasibility solver ────────────
+                            //
+                            // For each crossing, the lateral position must satisfy
+                            //   actualStartY ≤ maxStartIfAbove   (lateral passes UNDER pipe)
+                            //   OR  actualStartY ≥ minStartIfBelow   (lateral passes OVER pipe)
+                            // i.e. it must avoid the open forbidden interval
+                            //   (maxStartIfAbove, minStartIfBelow).
+                            //
+                            // We start with the global feasible region [minStartY, surfaceStartY]
+                            // and subtract each crossing's forbidden interval from it.  The result
+                            // is a (possibly multi-piece) feasible set.  If non-empty we pick the
+                            // highest point — minimising lateral depth — except when no surface
+                            // profile was found, in which case we keep the lateral deep (original
+                            // behaviour).
+                            //
+                            // This replaces the older sequential-push loop, which oscillated when
+                            // two crossings forced opposing sides and could declare infeasibility
+                            // on the first per-crossing both-sides-blocked verdict before
+                            // considering whether the OVERALL region was non-empty.
 
-                            while (changed && resolveOk && iter++ < maxIter)
+                            bool   resolveOk    = true;
+                            string failReason   = "";
+                            const double NoSurfacePad = 1000.0; // unbounded above when surface missing
+                            double upperBound = double.IsNaN(surfaceStartY)
+                                                ? minStartY + NoSurfacePad
+                                                : surfaceStartY;
+
+                            var feasible = new List<(double Lo, double Hi)>
+                                { (minStartY, upperBound) };
+
+                            foreach (var lc in otherCrossings)
                             {
-                                changed = false;
-                                foreach (var lc in otherCrossings)
+                                double dx_c   = lc.DrawingX - startX;
+                                double dummy  = 0, cyReqAbove = 0, cyReqBelow = 0;
+                                // Lateral-below-pipe (above-rule): lat top must clear pipe invert
+                                // by 0.555 ft.  Lateral-above-pipe (below-rule): lat bottom must
+                                // clear pipe crown by 1.055 ft.
+                                if (!pv.FindXYAtStationAndElevation(
+                                        lc.Station, lc.InvertElev - 0.555,
+                                        ref dummy, ref cyReqAbove)) continue;
+                                if (!pv.FindXYAtStationAndElevation(
+                                        lc.Station, lc.InvertElev + lc.OuterDiam + 1.055,
+                                        ref dummy, ref cyReqBelow)) continue;
+
+                                double dxTan           = dx_c * tanAngle;
+                                double maxStartIfAbove = cyReqAbove - verticalOffset - dxTan;
+                                double minStartIfBelow = cyReqBelow - dxTan;
+
+                                // Subtract the open forbidden interval from each piece.
+                                var next = new List<(double Lo, double Hi)>();
+                                foreach (var iv in feasible)
                                 {
-                                    double dx_c = lc.DrawingX - startX;
-                                    double dummy = 0, cyInv = 0, cyCrn = 0;
-                                    if (!pv.FindXYAtStationAndElevation(
-                                            lc.Station, lc.InvertElev, ref dummy, ref cyInv))
-                                        continue;
-                                    if (!pv.FindXYAtStationAndElevation(
-                                            lc.Station, lc.InvertElev + lc.OuterDiam,
-                                            ref dummy, ref cyCrn))
-                                        continue;
-
-                                    // Compute BOTH candidate destinations up front, so we can pick
-                                    // whichever side of the pipe is actually feasible. The old
-                                    // logic chose a side first and then asked whether it was
-                                    // feasible — which lost laterals that had perfectly good room
-                                    // on the other side.
-                                    //
-                                    //   • "Pipe-above"  → lateral TOP ≤ pipe INVERT − 1.055
-                                    //                    ⇒ actualStartY ≤ maxStartIfAbove
-                                    //   • "Pipe-below"  → lateral BOT ≥ pipe CROWN + 0.555
-                                    //                    ⇒ actualStartY ≥ minStartIfBelow
-                                    double cyReqAbove = 0, cyReqBelow = 0;
-                                    if (!pv.FindXYAtStationAndElevation(
-                                            lc.Station, lc.InvertElev - 1.055,
-                                            ref dummy, ref cyReqAbove)) continue;
-                                    if (!pv.FindXYAtStationAndElevation(
-                                            lc.Station, lc.InvertElev + lc.OuterDiam + 0.555,
-                                            ref dummy, ref cyReqBelow)) continue;
-
-                                    double dxTan = dx_c * tanAngle;
-                                    double maxStartIfAbove = cyReqAbove - verticalOffset - dxTan;
-                                    double minStartIfBelow = cyReqBelow - dxTan;
-
-                                    bool downOk = maxStartIfAbove >= minStartY - 0.001;
-                                    bool upOk   = double.IsNaN(surfaceStartY)
-                                               || minStartIfBelow <= surfaceStartY + 0.001;
-
-                                    // No feasible side → resolution truly cannot place the lateral.
-                                    if (!downOk && !upOk) { resolveOk = false; break; }
-
-                                    // Decide which side to apply.  Preference:
-                                    //   1. If only one is feasible, use it.
-                                    //   2. If both are feasible, fall back to the geometric
-                                    //      classifier (cheap; matches user expectation when
-                                    //      both sides have room).
-                                    double latBot = actualStartY + dxTan;
-                                    double latTop = latBot + verticalOffset;
-                                    bool aboveLat;
-                                    if (downOk && !upOk)      aboveLat = true;
-                                    else if (upOk && !downOk) aboveLat = false;
-                                    else aboveLat = IsCrossingAboveLateral(latBot, latTop, cyInv, cyCrn);
-
-                                    if (aboveLat)
+                                    double lo = iv.Lo, hi = iv.Hi;
+                                    // Forbidden lies entirely outside this piece — keep as-is.
+                                    if (minStartIfBelow <= lo + 0.001 ||
+                                        maxStartIfAbove >= hi - 0.001)
                                     {
-                                        if (actualStartY > maxStartIfAbove + 0.001)
-                                        {
-                                            actualStartY = Math.Max(maxStartIfAbove, minStartY);
-                                            changed = true;
-                                        }
+                                        next.Add((lo, hi));
+                                        continue;
                                     }
-                                    else
-                                    {
-                                        if (actualStartY < minStartIfBelow - 0.001)
-                                        {
-                                            actualStartY = minStartIfBelow;
-                                            changed = true;
-                                        }
-                                    }
+                                    // Lower fragment that survives: [lo, maxStartIfAbove]
+                                    if (maxStartIfAbove > lo + 0.001)
+                                        next.Add((lo, maxStartIfAbove));
+                                    // Upper fragment that survives: [minStartIfBelow, hi]
+                                    if (minStartIfBelow < hi - 0.001)
+                                        next.Add((minStartIfBelow, hi));
                                 }
+                                feasible = next;
+
+                                if (feasible.Count == 0)
+                                {
+                                    resolveOk = false;
+                                    failReason =
+                                        $"Crossing at Sta {lc.Station:F2} (Ø{lc.OuterDiam:F2}ft) " +
+                                        $"blocks the envelope: need actualStartY ≤ " +
+                                        $"{maxStartIfAbove:F2} or ≥ {minStartIfBelow:F2} within " +
+                                        $"[{minStartY:F2}, {upperBound:F2}]";
+                                    break;
+                                }
+                            }
+
+                            if (resolveOk)
+                            {
+                                // Highest feasible point if surface profile is known
+                                // (minimises lateral depth).  Lowest if not (stay deep).
+                                actualStartY = double.IsNaN(surfaceStartY)
+                                               ? feasible.Min(iv => iv.Lo)
+                                               : feasible.Max(iv => iv.Hi);
+                                if (actualStartY < minStartY) actualStartY = minStartY;
                             }
 
                             if (!resolveOk || actualStartY < minStartY - 0.001)
@@ -850,7 +955,10 @@ namespace AdvancedLandDevTools.Commands
                                     ActiveConstraints = "",
                                     FailReason = resolveOk
                                         ? "actualStartY fell below minStartY after resolution"
-                                        : "Constraint resolution loop declared infeasible"
+                                        : failReason,
+                                    CrossingsInfo = BuildCrossingsInfo(
+                                        pv, otherCrossings, startX, tanAngle,
+                                        actualStartY, verticalOffset)
                                 });
                                 continue;
                             }
@@ -881,14 +989,16 @@ namespace AdvancedLandDevTools.Commands
 
                                     // Symmetric check: the lateral validates against this
                                     // crossing if it clears it from EITHER side.
-                                    //   • "Above-pipe" clear: latBot ≤ (invert − 1.055) − verticalOffset
-                                    //   • "Below-pipe" clear: latBot ≥ (crown  + 0.555)
+                                    //   • Lateral-below-pipe clear: latTop ≤ invert − 0.555
+                                    //     (rewritten in terms of latBot:
+                                    //      latBot ≤ (invert − 0.555) − verticalOffset)
+                                    //   • Lateral-above-pipe clear: latBot ≥ crown + 1.055
                                     double cyAbove = 0, cyBelow = 0;
                                     bool gotA = pv.FindXYAtStationAndElevation(
-                                                    lc.Station, lc.InvertElev - 1.055,
+                                                    lc.Station, lc.InvertElev - 0.555,
                                                     ref dummy, ref cyAbove);
                                     bool gotB = pv.FindXYAtStationAndElevation(
-                                                    lc.Station, lc.InvertElev + lc.OuterDiam + 0.555,
+                                                    lc.Station, lc.InvertElev + lc.OuterDiam + 1.055,
                                                     ref dummy, ref cyBelow);
 
                                     bool clearsAbove = gotA && latBot <= (cyAbove - verticalOffset) + 0.01;
@@ -912,7 +1022,10 @@ namespace AdvancedLandDevTools.Commands
                                     ActualStartY = actualStartY, MinStartY = minStartY,
                                     SurfaceStartY = surfaceStartY, DeltaY = double.NaN,
                                     ActiveConstraints = "",
-                                    FailReason = "Final validation check failed (surface or crossing constraint)"
+                                    FailReason = "Final validation check failed (surface or crossing constraint)",
+                                    CrossingsInfo = BuildCrossingsInfo(
+                                        pv, otherCrossings, startX, tanAngle,
+                                        actualStartY, verticalOffset)
                                 });
                                 continue;
                             }
@@ -970,7 +1083,10 @@ namespace AdvancedLandDevTools.Commands
                                     ActualStartY = actualStartY, MinStartY = minStartY,
                                     SurfaceStartY = surfaceStartY, DeltaY = double.NaN,
                                     ActiveConstraints = "",
-                                    FailReason = "No ray intersection after position adjustment"
+                                    FailReason = "No ray intersection after position adjustment",
+                                    CrossingsInfo = BuildCrossingsInfo(
+                                        pv, otherCrossings, startX, tanAngle,
+                                        actualStartY, verticalOffset)
                                 });
                                 continue;
                             }
@@ -1084,6 +1200,10 @@ namespace AdvancedLandDevTools.Commands
                                     double sx2 = 0, capTopY = 0;
                                     bool cvtOk = pv.FindXYAtStationAndElevation(
                                                      topStation, capSurfElev, ref sx2, ref capTopY);
+
+                                    // Lift the cap top a small pad above the surface so the
+                                    // structure visibly sits proud of the ground line.
+                                    if (cvtOk) capTopY += 0.116;
 
                                     // Guard 1: coordinate conversion must succeed and be finite.
                                     if (!cvtOk || !double.IsFinite(capTopY))
@@ -1242,8 +1362,10 @@ namespace AdvancedLandDevTools.Commands
                                 double lb2  = actualStartY + dx2 * tanAngle;
                                 double lt2  = lb2 + verticalOffset;
                                 bool isAbove = IsCrossingAboveLateral(lb2, lt2, cyI2, cyC2);
-                                if (isAbove  && !sawAbove) { constraintParts.Add("AbovePipe"); sawAbove = true; }
-                                else if (!isAbove && !sawBelow) { constraintParts.Add("BelowPipe"); sawBelow = true; }
+                                // "LatBelowPipe" = lateral passes BELOW the crossing pipe (above-rule).
+                                // "LatAbovePipe" = lateral passes ABOVE the crossing pipe (below-rule).
+                                if (isAbove  && !sawAbove) { constraintParts.Add("LatBelowPipe"); sawAbove = true; }
+                                else if (!isAbove && !sawBelow) { constraintParts.Add("LatAbovePipe"); sawBelow = true; }
                             }
 
                             reports.Add(new LateralReport
@@ -1253,7 +1375,10 @@ namespace AdvancedLandDevTools.Commands
                                 ActualStartY = actualStartY, MinStartY = minStartY,
                                 SurfaceStartY = surfaceStartY, DeltaY = deltaY,
                                 ActiveConstraints = string.Join("|", constraintParts),
-                                FailReason = ""
+                                FailReason = "",
+                                CrossingsInfo = BuildCrossingsInfo(
+                                    pv, otherCrossings, startX, tanAngle,
+                                    actualStartY, verticalOffset)
                             });
 
                             lateralsDrawn++;
@@ -1319,6 +1444,15 @@ namespace AdvancedLandDevTools.Commands
 
                             ed.WriteMessage(
                                 $"\n  | {staSt} | {stSt} | {aSt} | {dSt} | {cSt,-16} | {nSt,-20} |");
+                            if (!string.IsNullOrEmpty(r.CrossingsInfo))
+                            {
+                                ed.WriteMessage("\n    crossings (other-network pipes intersecting this lateral):");
+                                foreach (var ln in r.CrossingsInfo.Split(
+                                             new[] { "\r\n", "\n" }, StringSplitOptions.None))
+                                {
+                                    ed.WriteMessage("\n" + ln);
+                                }
+                            }
                         }
 
                         ed.WriteMessage("\n  +-----------+--------+-----------+-----------+------------------+----------------------+");

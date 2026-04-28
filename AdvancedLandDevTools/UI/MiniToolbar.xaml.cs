@@ -28,6 +28,7 @@ namespace AdvancedLandDevTools.UI
             ("MARKLINES ",       "Mark Lines",            "PROFILES",  "\xED63", "#FFB74D", "Mark"),
             ("MARKFITTINGS ",    "Mark Fittings",         "PROFILES",  "\xE81E", "#FF8A65", "MkFit"),
             ("PROFOFF ",         "Profile Off",           "PROFILES",  "\xE738", "#EF5350", "PrOff"),
+            ("OFFPV ",           "Off PV",                "PROFILES",  "\xE71F", "#F06292", "OffPV"),
             ("PVSTYLE ",         "PV Style Override",     "PROFILES",  "\xE771", "#CE93D8", "Style"),
             ("CHOPCHOP ",        "ChopChop",              "PROFILES",  "\xE8C6", "#FF7043", "Chop"),
 
@@ -66,6 +67,9 @@ namespace AdvancedLandDevTools.UI
 
             // SECTIONS
             ("SECDRAW ",         "Section Drawer",        "SECTIONS",  "\xE8A0", "#00897B", "SecDr"),
+
+            // CAD
+            ("CAD ",             "CAD Dim",               "CAD",       "\xE9C2", "#26C6DA", "CADDim"),
 
             // VEHICLE
             ("VTDRIVE ",         "Interactive Drive",     "VEHICLE",   "\xE7BA", "#66BB6A", "Drive"),
