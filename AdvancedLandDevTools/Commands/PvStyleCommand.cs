@@ -323,6 +323,8 @@ namespace AdvancedLandDevTools.Commands
 
         /// <summary>
         /// Attempts to find and update one named override collection on the ProfileView.
+        /// If no entry exists for the part, attempts to add one (this is the common case
+        /// the first time a part's style is overridden in a given profile view).
         /// Returns true if the override was applied.
         /// </summary>
         private static bool TryOverrideOneCollection(
@@ -340,52 +342,16 @@ namespace AdvancedLandDevTools.Commands
 
                 var collType = coll.GetType();
 
-                // ID property names to try for matching
                 var idProps   = new[] { "PipeId", "PartId", "EntityId", "StructureId", "CrossingPipeId", "SourcePipeId", "CrossingId" };
-                // Name property names for fallback match
                 var nameProps = new[] { "PipeName", "Name", "StructureName" };
 
-                object? entry = null;
+                object? entry = FindOverrideEntry(coll, collType, partId, partName, idProps, nameProps, flags);
 
-                var getEnum    = collType.GetMethod("GetObjectEnumerator", flags, null, Type.EmptyTypes, null);
-                var enumerator = getEnum?.Invoke(coll, null) as IEnumerator;
-
-                while (enumerator != null && enumerator.MoveNext())
+                if (entry == null)
                 {
-                    var item = enumerator.Current;
-                    if (item == null) continue;
-                    var itemType = item.GetType();
-
-                    // Tier 1: ObjectId match
-                    foreach (string idp in idProps)
-                    {
-                        var prop = itemType.GetProperty(idp, flags);
-                        if (prop?.PropertyType != typeof(ObjectId)) continue;
-                        try
-                        {
-                            if ((ObjectId)prop.GetValue(item)! == partId)
-                            { entry = item; break; }
-                        }
-                        catch { }
-                    }
-                    if (entry != null) break;
-
-                    // Tier 2: name match (handles proxy-ID mismatch)
-                    foreach (string np in nameProps)
-                    {
-                        var prop = itemType.GetProperty(np, flags);
-                        if (prop?.PropertyType != typeof(string)) continue;
-                        try
-                        {
-                            if ((string?)prop.GetValue(item) == partName)
-                            { entry = item; break; }
-                        }
-                        catch { }
-                    }
-                    if (entry != null) break;
+                    entry = TryAddOverrideEntry(coll, collType, partId, idProps, flags, ed, collPropName);
+                    if (entry == null) return false;
                 }
-
-                if (entry == null) return false;
 
                 var entryType = entry.GetType();
                 var oidProp   = entryType.GetProperty("OverrideStyleId",  flags);
@@ -411,6 +377,101 @@ namespace AdvancedLandDevTools.Commands
                     $"\n  [DIAG] {collPropName}: {inner.GetType().Name}: {inner.Message}");
                 return false;
             }
+        }
+
+        /// <summary>Walks the override collection looking for an entry that matches partId or partName.</summary>
+        private static object? FindOverrideEntry(
+            object coll, Type collType, ObjectId partId, string partName,
+            string[] idProps, string[] nameProps, BindingFlags flags)
+        {
+            var getEnum    = collType.GetMethod("GetObjectEnumerator", flags, null, Type.EmptyTypes, null);
+            var enumerator = getEnum?.Invoke(coll, null) as IEnumerator;
+            if (enumerator == null && coll is IEnumerable raw)
+                enumerator = raw.GetEnumerator();
+
+            while (enumerator != null && enumerator.MoveNext())
+            {
+                var item = enumerator.Current;
+                if (item == null) continue;
+                var itemType = item.GetType();
+
+                // Tier 1: ObjectId match
+                foreach (string idp in idProps)
+                {
+                    var prop = itemType.GetProperty(idp, flags);
+                    if (prop?.PropertyType != typeof(ObjectId)) continue;
+                    try
+                    {
+                        if ((ObjectId)prop.GetValue(item)! == partId)
+                            return item;
+                    }
+                    catch { }
+                }
+
+                // Tier 2: name match
+                if (!string.IsNullOrEmpty(partName))
+                {
+                    foreach (string np in nameProps)
+                    {
+                        var prop = itemType.GetProperty(np, flags);
+                        if (prop?.PropertyType != typeof(string)) continue;
+                        try
+                        {
+                            if ((string?)prop.GetValue(item) == partName)
+                                return item;
+                        }
+                        catch { }
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// First-time override: ask the collection to create a new entry for the given part.
+        /// Tries common Civil 3D method names with an ObjectId parameter. If the method is
+        /// void, re-scans the collection to find the freshly-added entry.
+        /// </summary>
+        private static object? TryAddOverrideEntry(
+            object coll, Type collType, ObjectId partId,
+            string[] idProps, BindingFlags flags, Editor ed, string collPropName)
+        {
+            string[] addNames = { "Add", "AddOverride", "CreateOverride", "Create", "AddNew" };
+
+            foreach (string mName in addNames)
+            {
+                foreach (var m in collType.GetMethods(flags).Where(x => x.Name == mName))
+                {
+                    var ps = m.GetParameters();
+                    if (ps.Length != 1 || ps[0].ParameterType != typeof(ObjectId)) continue;
+
+                    try
+                    {
+                        var result = m.Invoke(coll, new object[] { partId });
+                        if (result != null)
+                        {
+                            ed.WriteMessage($"\n  [DIAG] Created new override via {collPropName}.{mName}(ObjectId).");
+                            return result;
+                        }
+
+                        // void Add — re-scan for the freshly added entry by ObjectId
+                        var entry = FindOverrideEntry(coll, collType, partId, "", idProps, Array.Empty<string>(), flags);
+                        if (entry != null)
+                        {
+                            ed.WriteMessage($"\n  [DIAG] Created new override via void {collPropName}.{mName}(ObjectId).");
+                            return entry;
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        var inner = ex.InnerException ?? ex;
+                        ed.WriteMessage($"\n  [DIAG] {collPropName}.{mName}(ObjectId) threw {inner.GetType().Name}: {inner.Message}");
+                    }
+                }
+            }
+
+            ed.WriteMessage($"\n  [DIAG] No usable Add(ObjectId) on {collType.Name}.");
+            return null;
         }
 
         // ─────────────────────────────────────────────────────────────────────

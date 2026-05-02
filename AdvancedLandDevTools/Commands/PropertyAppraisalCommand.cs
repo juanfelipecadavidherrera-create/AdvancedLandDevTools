@@ -57,8 +57,27 @@ namespace AdvancedLandDevTools.Commands
                 ed.WriteMessage("\n  ╚══════════════════════════════════════════════════╝");
                 ed.WriteMessage("\n═══════════════════════════════════════════════════════════\n");
 
-                // Draw parcel lines
-                PropertyAppraisalEngine.DrawParcelsInRadius(doc, ppr.Value, 1000.0);
+                // Ask the user whether to draw nearby parcel lines before doing the work.
+                var pko = new PromptKeywordOptions("\n  Draw nearby parcel lines? [Yes/No] <Yes>: ");
+                pko.Keywords.Add("Yes");
+                pko.Keywords.Add("No");
+                pko.Keywords.Default = "Yes";
+                pko.AllowNone = true;
+
+                var pkr = ed.GetKeywords(pko);
+                bool drawParcels = pkr.Status == PromptStatus.OK
+                    ? !string.Equals(pkr.StringResult, "No", StringComparison.OrdinalIgnoreCase)
+                    : pkr.Status == PromptStatus.None; // Enter = default Yes
+
+                if (drawParcels)
+                {
+                    ed.WriteMessage("\n  Drawing parcel lines within 1000 ft...\n");
+                    PropertyAppraisalEngine.DrawParcelsInRadius(doc, ppr.Value, 1000.0);
+                }
+                else
+                {
+                    ed.WriteMessage("\n  Parcel lines skipped.\n");
+                }
             }
             catch (System.Exception ex)
             {
